@@ -1,0 +1,1285 @@
+<script lang="ts">
+  import { page } from '$app/stores';
+  import { onMount } from 'svelte';
+  import Modal from '$lib/components/Modal.svelte';
+  
+  let projectId = $page.params.id;
+  let project: any = null;
+  let apis: any[] = [];
+  let isLoading = true;
+  let isUploading = false;
+  
+  // Modals state
+  let showAddApiModal = false;
+  let showEditApiModal = false;
+  let showDeleteApiModal = false;
+  let showImportModeModal = false;
+  let showAddModeModal = false;
+  
+  // API Reference for Edit/Delete
+  let selectedApi: any = null;
+
+  // Form State for manual ADD/EDIT
+  let apiForm = {
+    folder: '',
+    name: '',
+    method: 'GET',
+    url: '',
+    headers: '[]',
+    body: '{}',
+    parameters: '[]',
+    expected_status_code: 200,
+    interval: 60
+  };
+
+  // KV Arrays for Form Toggles
+  let headerMode: 'json' | 'kv' = 'json';
+  let bodyMode: 'json' | 'kv' = 'json';
+  let paramMode: 'json' | 'kv' = 'json';
+
+  let headersKV: { key: string, value: string }[] = [{ key: '', value: '' }];
+  let bodyKV: { key: string, value: string }[] = [{ key: '', value: '' }];
+  let paramsKV: { key: string, value: string }[] = [{ key: '', value: '' }];
+
+  function parseJSONSafe(str: string): any {
+    try {
+      return JSON.parse(str);
+    } catch {
+      return null;
+    }
+  }
+
+  function objectToKVArray(obj: any): { key: string, value: string }[] {
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return [{ key: '', value: '' }];
+    const entries = Object.entries(obj);
+    if (entries.length === 0) return [{ key: '', value: '' }];
+    return entries.map(([key, value]) => ({ key, value: String(value) }));
+  }
+
+  function parseToKVArray(str: string): { key: string, value: string }[] {
+    const parsed = parseJSONSafe(str);
+    if (!parsed) return [{ key: '', value: '' }];
+    
+    if (Array.isArray(parsed)) {
+      if (parsed.length > 0 && typeof parsed[0] === 'object' && 'key' in parsed[0]) {
+        return parsed;
+      }
+      return [{ key: '', value: '' }];
+    }
+    return objectToKVArray(parsed);
+  }
+
+  function kvArrayToMapString(kvArray: { key: string, value: string }[]): string {
+    const obj: Record<string, string> = {};
+    let hasKeys = false;
+    for (const item of kvArray) {
+      if (item.key.trim()) {
+        obj[item.key.trim()] = item.value;
+        hasKeys = true;
+      }
+    }
+    return hasKeys ? JSON.stringify(obj, null, 2) : "{}";
+  }
+
+  function kvArrayToArrayString(kvArray: { key: string, value: string }[]): string {
+    const arr = kvArray.filter(item => item.key.trim() !== '');
+    if (arr.length === 0) return "[]";
+    return JSON.stringify(arr);
+  }
+
+  function syncKVToJSON() {
+    if (headerMode === 'kv') apiForm.headers = kvArrayToArrayString(headersKV);
+    if (bodyMode === 'kv') apiForm.body = kvArrayToMapString(bodyKV);
+    if (paramMode === 'kv') apiForm.parameters = kvArrayToArrayString(paramsKV);
+  }
+
+  // Temp state for handling file before asking import mode
+  let pendingFile: File | null = null;
+  
+  let customFolders: string[] = [];
+  let showFolderModal = false;
+  let newFolderName = '';
+  
+  // Folder Edit/Delete state
+  let showEditFolderModal = false;
+  let showDeleteFolderModal = false;
+  let selectedFolderToEdit = '';
+  let selectedFolderToDelete = '';
+  let editFolderName = '';
+  
+  // Drag & Drop State
+  let draggingApiId: number | null = null;
+  let dragOverItem: { folder: string, index: number } | null = null;
+
+  // Derived state to group APIs by Folder
+  $: groupedApis = (() => {
+    const groups: Record<string, any[]> = {};
+    
+    // Initialize custom folders empty
+    customFolders.forEach(f => groups[f] = []);
+
+    apis.sort((a,b) => a.order_index - b.order_index).forEach(api => {
+      const folder = api.folder || 'Uncategorized';
+      if (!groups[folder]) groups[folder] = [];
+      groups[folder].push(api);
+    });
+
+    // Make sure 'Uncategorized' defaults first or last
+    if (!groups['Uncategorized'] && Object.keys(groups).length === 0) {
+      groups['Uncategorized'] = [];
+    }
+
+    return groups;
+  })();
+
+  function handleAddFolder() {
+    if (newFolderName.trim() && !customFolders.includes(newFolderName.trim())) {
+      customFolders = [...customFolders, newFolderName.trim()];
+    }
+    showFolderModal = false;
+    newFolderName = '';
+  }
+
+  function openEditFolder(folder: string) {
+    selectedFolderToEdit = folder;
+    editFolderName = folder;
+    showEditFolderModal = true;
+  }
+
+  function openDeleteFolder(folder: string) {
+    selectedFolderToDelete = folder;
+    showDeleteFolderModal = true;
+  }
+
+  async function handleEditFolderSubmit() {
+    const newName = editFolderName.trim();
+    if (!newName || newName === selectedFolderToEdit || newName === 'Uncategorized') return;
+    
+    if (customFolders.includes(selectedFolderToEdit)) {
+        customFolders = customFolders.map(f => f === selectedFolderToEdit ? newName : f);
+    } else if (!customFolders.includes(newName)) {
+        customFolders = [...customFolders, newName];
+    }
+    
+    let updatedApis = apis.filter(a => a.folder === selectedFolderToEdit);
+    updatedApis.forEach(a => a.folder = newName);
+    apis = [...apis];
+    
+    showEditFolderModal = false;
+    if (updatedApis.length > 0) {
+        await saveReorder(updatedApis);
+    }
+  }
+
+  async function handleDeleteFolderSubmit() {
+    customFolders = customFolders.filter(f => f !== selectedFolderToDelete);
+    
+    let updatedApis = apis.filter(a => a.folder === selectedFolderToDelete);
+    updatedApis.forEach(a => a.folder = "Uncategorized");
+    
+    apis = [...apis];
+    let uncategorizedApis = apis.filter(a => a.folder === 'Uncategorized').sort((a,b) => a.order_index - b.order_index);
+    uncategorizedApis.forEach((fa, idx) => fa.order_index = idx);
+    apis = [...apis];
+    
+    showDeleteFolderModal = false;
+    if (uncategorizedApis.length > 0) {
+        await saveReorder(uncategorizedApis);
+    }
+  }
+
+  // --- Drag & Drop Reordering Logic --- //
+  function handleDragStart(e: DragEvent, apiId: number) {
+    draggingApiId = apiId;
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', apiId.toString());
+    }
+  }
+
+  function handleDragOver(e: DragEvent, folder: string, index: number = -1) {
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    dragOverItem = { folder, index };
+  }
+
+  function handleDragLeave() {
+    dragOverItem = null;
+  }
+
+  async function handleDrop(e: DragEvent, targetFolder: string, targetIndex: number) {
+    e.preventDefault();
+    dragOverItem = null;
+    if (!draggingApiId) return;
+
+    const sourceIndex = apis.findIndex(a => a.id === draggingApiId);
+    if (sourceIndex === -1) return;
+
+    const api = apis[sourceIndex];
+    let newApis = [...apis];
+    
+    newApis.splice(sourceIndex, 1);
+    api.folder = targetFolder;
+    
+    const folderApis = newApis.filter(a => a.folder === targetFolder).sort((a,b) => a.order_index - b.order_index);
+    
+    if (targetIndex === -1) {
+        folderApis.push(api);
+    } else {
+        folderApis.splice(targetIndex, 0, api);
+    }
+    
+    folderApis.forEach((fa, idx) => fa.order_index = idx);
+    newApis = newApis.filter(a => a.folder !== targetFolder).concat(folderApis);
+    
+    apis = newApis;
+    draggingApiId = null;
+    
+    await saveReorder(folderApis);
+  }
+
+  async function saveReorder(reorderedConfigs: any[]) {
+    try {
+      const token = localStorage.getItem('monitor_token');
+      const payload = reorderedConfigs.map(a => ({
+        id: a.id,
+        folder: a.folder,
+        order_index: a.order_index
+      }));
+      
+      const res = await fetch(`http://localhost:5273/api/v1/apis/reorder/${projectId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+    } catch(err) {
+      console.error('Failed to save reorder', err);
+    }
+  }
+
+  onMount(async () => {
+    await fetchProjectDetails();
+  });
+
+  async function fetchProjectDetails() {
+    isLoading = true;
+    try {
+      const token = localStorage.getItem('monitor_token');
+      
+      const [projRes, apisRes] = await Promise.all([
+        fetch(`http://localhost:5273/api/v1/projects/${projectId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        fetch(`http://localhost:5273/api/v1/apis?project_id=${projectId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+      ]);
+      
+      if (projRes.ok) project = await projRes.json();
+      if (apisRes.ok) apis = await apisRes.json();
+      
+    } catch (err) {
+      console.error(err);
+    } finally {
+      isLoading = false;
+    }
+  }
+
+  // --- Postman Import Handlers --- //
+  function handleFileSelect(event: Event) {
+    const target = event.target as HTMLInputElement;
+    if (!target.files || target.files.length === 0) return;
+    
+    pendingFile = target.files[0];
+    target.value = ''; // Reset input so same file can be selected again
+    
+    if (apis.length > 0) {
+      showImportModeModal = true;
+    } else {
+      executePostmanUpload('append'); // default if empty
+    }
+  }
+
+  async function executePostmanUpload(mode: 'append' | 'replace') {
+    if (!pendingFile) return;
+    showImportModeModal = false;
+    isUploading = true;
+    
+    try {
+      const token = localStorage.getItem('monitor_token');
+      const formData = new FormData();
+      formData.append('collection', pendingFile);
+      
+      const res = await fetch(`http://localhost:5273/api/v1/apis/import-postman?project_id=${projectId}&mode=${mode}`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+      
+      if (res.ok) {
+        await fetchProjectDetails();
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      isUploading = false;
+      pendingFile = null;
+    }
+  }
+
+  // --- Manual Add API Handlers --- //
+  function openAddApiModal() {
+    apiForm = {
+      folder: '',
+      name: '',
+      method: 'GET',
+      url: '',
+      headers: '[]',
+      body: '{}',
+      parameters: '[]',
+      expected_status_code: 200,
+      interval: 60
+    };
+    headerMode = 'json'; bodyMode = 'json'; paramMode = 'json';
+    headersKV = [{ key: '', value: '' }];
+    bodyKV = [{ key: '', value: '' }];
+    paramsKV = [{ key: '', value: '' }];
+    showAddApiModal = true;
+  }
+
+  function openEditApiModal(api: any) {
+    selectedApi = api;
+    apiForm = {
+      folder: api.folder || '',
+      name: api.name,
+      method: api.method,
+      url: api.url,
+      headers: api.headers || '[]',
+      body: api.body || '{}',
+      parameters: api.parameters || '[]',
+      expected_status_code: api.expected_status_code || 200,
+      interval: api.interval || 60
+    };
+    
+    // Parse into KV states
+    headersKV = parseToKVArray(apiForm.headers);
+    bodyKV = parseToKVArray(apiForm.body);
+    paramsKV = parseToKVArray(apiForm.parameters);
+    
+    headerMode = 'json'; bodyMode = 'json'; paramMode = 'json';
+    showEditApiModal = true;
+  }
+
+  function openDeleteApiModal(api: any) {
+    selectedApi = api;
+    showDeleteApiModal = true;
+  }
+
+  // --- Schedule Config Modal Handlers --- //
+  let showScheduleModal = false;
+  let scheduleConfig: any = {
+    mode: 'Minute timer',
+    value: 1,
+    day: 'Every day',
+    time: '4:00 PM'
+  };
+
+  const scheduleModes = ['Minute timer', 'Hour timer', 'Week timer'];
+  const weekDays = ['Every day', 'Every weekday (Monday-Friday)', 'Every Monday', 'Every Tuesday', 'Every Wednesday', 'Every Thursday', 'Every Friday', 'Every Saturday', 'Every Sunday'];
+  const timeOptions = Array.from({length: 24}, (_, i) => {
+    const hour = i % 12 || 12;
+    const ampm = i < 12 ? 'AM' : 'PM';
+    return `${hour}:00 ${ampm}`;
+  });
+
+  function openScheduleModal(api: any) {
+    selectedApi = api;
+    if (api.schedule_config) {
+      try {
+        scheduleConfig = JSON.parse(api.schedule_config);
+      } catch(e) {
+        console.error(e);
+      }
+    } else {
+      scheduleConfig = {
+        mode: 'Minute timer',
+        value: Math.max(1, Math.floor((api.interval || 60) / 60)),
+        day: 'Every day',
+        time: '4:00 PM'
+      };
+    }
+    showScheduleModal = true;
+  }
+
+  async function handleScheduleSubmit() {
+    showScheduleModal = false;
+    let intervalSeconds = 60;
+    if (scheduleConfig.mode === 'Minute timer') {
+      intervalSeconds = scheduleConfig.value * 60;
+    } else if (scheduleConfig.mode === 'Hour timer') {
+      intervalSeconds = scheduleConfig.value * 3600;
+    } else {
+      intervalSeconds = 86400; // fallback daily
+    }
+
+    try {
+      const token = localStorage.getItem('monitor_token');
+      const res = await fetch(`http://localhost:5273/api/v1/apis/${selectedApi.id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          project_id: parseInt(projectId),
+          folder: selectedApi.folder,
+          name: selectedApi.name,
+          method: selectedApi.method,
+          url: selectedApi.url,
+          headers: selectedApi.headers || '[]',
+          body: selectedApi.body || '{}',
+          parameters: selectedApi.parameters || '[]',
+          expected_status_code: selectedApi.expected_status_code,
+          interval: intervalSeconds,
+          schedule_config: JSON.stringify(scheduleConfig)
+        })
+      });
+      if (res.ok) await fetchProjectDetails();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  function handleAddApiSubmit() {
+    if (apis.length > 0) {
+      showAddApiModal = false; 
+      showAddModeModal = true;
+    } else {
+      executeAddApi('append'); // default if empty
+    }
+  }
+
+  async function handleEditApiSubmit() {
+    syncKVToJSON();
+    showEditApiModal = false;
+    try {
+      const token = localStorage.getItem('monitor_token');
+      const res = await fetch(`http://localhost:5273/api/v1/apis/${selectedApi.id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          project_id: parseInt(projectId),
+          folder: apiForm.folder,
+          name: apiForm.name,
+          method: apiForm.method,
+          url: apiForm.url,
+          parameters: apiForm.parameters,
+          headers: apiForm.headers,
+          body: apiForm.body,
+          expected_status_code: apiForm.expected_status_code,
+          interval: apiForm.interval
+        })
+      });
+      
+      if (res.ok) {
+        await fetchProjectDetails();
+      }
+    } catch(err) {
+      console.error(err);
+    }
+  }
+
+  async function handleDeleteApiSubmit() {
+    showDeleteApiModal = false;
+    try {
+      const token = localStorage.getItem('monitor_token');
+      const res = await fetch(`http://localhost:5273/api/v1/apis/${selectedApi.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (res.ok) {
+        await fetchProjectDetails();
+      }
+    } catch(err) {
+      console.error(err);
+    }
+  }
+
+  async function executeAddApi(mode: 'append' | 'replace') {
+    syncKVToJSON();
+    showAddModeModal = false;
+    showAddApiModal = false;
+    
+    try {
+      const token = localStorage.getItem('monitor_token');
+      const res = await fetch(`http://localhost:5273/api/v1/apis?mode=${mode}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          project_id: parseInt(projectId),
+          folder: apiForm.folder,
+          name: apiForm.name,
+          method: apiForm.method,
+          url: apiForm.url,
+          parameters: apiForm.parameters,
+          headers: apiForm.headers,
+          body: apiForm.body,
+          expected_status_code: apiForm.expected_status_code,
+          interval: apiForm.interval
+        })
+      });
+      
+      if (res.ok) {
+        await fetchProjectDetails();
+      }
+    } catch(err) {
+      console.error(err);
+    }
+  }
+
+  // --- Env Vars Modal State --- //
+  let showEnvVarsModal = false;
+  let envVarsKV: { key: string, value: string }[] = [{ key: '', value: '' }];
+  let isSavingEnvVars = false;
+
+  function openEnvVarsModal() {
+    let parsed: any = {};
+    if (project && project.environment_variables && project.environment_variables !== '{}') {
+      try {
+        parsed = JSON.parse(project.environment_variables);
+      } catch (e) {}
+    }
+    
+    const entries = Object.entries(parsed);
+    if (entries.length > 0) {
+      envVarsKV = entries.map(([key, value]) => ({ key, value: String(value) }));
+    } else {
+      envVarsKV = [{ key: '', value: '' }];
+    }
+    showEnvVarsModal = true;
+  }
+
+  function addEnvVarRow() {
+    envVarsKV = [...envVarsKV, { key: '', value: '' }];
+  }
+
+  function removeEnvVarRow(index: number) {
+    envVarsKV = envVarsKV.filter((_, i) => i !== index);
+    if (envVarsKV.length === 0) {
+      envVarsKV = [{ key: '', value: '' }];
+    }
+  }
+
+  async function saveEnvVars() {
+    isSavingEnvVars = true;
+    
+    const envObj: any = {};
+    envVarsKV.forEach(item => {
+      const k = item.key.trim();
+      const v = item.value.trim();
+      if (k) envObj[k] = v;
+    });
+
+    try {
+      const token = localStorage.getItem('monitor_token');
+      const res = await fetch(`http://localhost:5273/api/v1/projects/${projectId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: project.name,
+          description: project.description,
+          environment_variables: JSON.stringify(envObj)
+        })
+      });
+      
+      if (res.ok) {
+        showEnvVarsModal = false;
+        await fetchProjectDetails();
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      isSavingEnvVars = false;
+    }
+  }
+</script>
+
+<div class="fade-in max-w-full overflow-x-hidden">
+  {#if isLoading}
+    <div class="flex justify-center p-12">
+      <svg class="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+    </div>
+  {:else if project}
+    <!-- Header -->
+    <div class="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm mb-8 relative overflow-hidden break-words">
+      <!-- Decor -->
+      <div class="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-blue-50 to-cyan-50 rounded-bl-[100px] -z-10"></div>
+      
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+        <div class="min-w-0">
+          <div class="flex items-center gap-3 mb-2">
+            <a href="/dashboard" class="text-slate-400 hover:text-blue-600 transition-colors shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+            </a>
+            <h1 class="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight truncate">{project.name}</h1>
+          </div>
+          <p class="text-slate-500 max-w-2xl text-sm md:text-base">{project.description}</p>
+        </div>
+        
+        <div class="flex items-center gap-3 shrink-0 flex-wrap lg:flex-nowrap">
+          <button on:click={openEnvVarsModal} class="bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 font-medium py-2.5 px-5 rounded-xl shadow-sm transition-all flex items-center gap-2 text-sm w-full md:w-auto justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M10.4 12.6a2 2 0 1 1 3 3L8 21l-4 1 1.5-4.5L10.4 12.6z"></path></svg>
+            Env Variables {'{x}'}
+          </button>
+          <button on:click={openNotificationSettings} class="bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 font-medium py-2.5 px-5 rounded-xl shadow-sm transition-all flex items-center gap-2 text-sm w-full md:w-auto justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+            Notification Channels
+          </button>
+          <button on:click={() => showFolderModal = true} class="bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 font-medium py-2.5 px-5 rounded-xl shadow-sm transition-all flex items-center gap-2 text-sm w-full md:w-auto justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path><line x1="12" y1="11" x2="12" y2="17"></line><line x1="9" y1="14" x2="15" y2="14"></line></svg>
+            + Folder
+          </button>
+          <button on:click={openAddApiModal} class="bg-blue-600 border border-transparent text-white hover:bg-blue-700 font-medium py-2.5 px-5 rounded-xl shadow-sm transition-all flex items-center gap-2 text-sm w-full md:w-auto justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            Add API
+          </button>
+          <label class="cursor-pointer bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-medium py-2.5 px-5 rounded-xl shadow-sm transition-all flex items-center gap-2 text-sm w-full md:w-auto justify-center">
+            {#if isUploading}
+               <svg class="animate-spin h-4 w-4 text-slate-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+               Importing...
+            {:else}
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+              Upload Collection
+            {/if}
+            <input type="file" accept=".json" class="hidden" on:change={handleFileSelect} disabled={isUploading} />
+          </label>
+        </div>
+      </div>
+    </div>
+    
+    <!-- API List -->
+    <div class="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <h2 class="text-lg md:text-xl font-bold text-slate-800">Monitored Endpoints</h2>
+      <span class="bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-1 rounded-full w-fit">{apis.length} Total</span>
+    </div>
+    
+    {#if apis.length === 0}
+      <div class="border-2 border-dashed border-slate-200 rounded-2xl p-8 md:p-12 text-center bg-slate-50/50">
+        <p class="text-slate-500 font-medium mb-2">No APIs configured yet.</p>
+        <p class="text-sm text-slate-400">Import a Postman Collection JSON file to auto-generate monitoring endpoints.</p>
+      </div>
+    {:else}
+      <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-x-auto">
+        <table class="w-full text-left border-collapse min-w-[700px]">
+          <thead>
+            <tr class="bg-slate-50 border-b border-slate-200 text-sm font-semibold text-slate-600">
+              <th class="p-3 md:p-4">Method</th>
+              <th class="p-3 md:p-4">Endpoint Name</th>
+              <th class="p-3 md:p-4">URL</th>
+              <th class="p-3 md:p-4">Expected</th>
+              <th class="p-3 md:p-4 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            {#each Object.entries(groupedApis) as [folderName, folderApis]}
+              <!-- Folder Header Row -->
+              <tr 
+                class="bg-slate-50/80 border-y border-slate-200 transition-colors group"
+                class:bg-blue-50={dragOverItem?.folder === folderName && dragOverItem?.index === -1}
+                on:dragover={(e) => handleDragOver(e, folderName, -1)}
+                on:dragleave={handleDragLeave}
+                on:drop={(e) => handleDrop(e, folderName, -1)}
+              >
+                <td colspan="5" class="px-4 py-2">
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2 text-slate-700 font-semibold text-sm">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                      {folderName}
+                      <span class="text-xs bg-white border border-slate-200 px-2 py-0.5 rounded-full text-slate-500 font-medium ml-2">{folderApis.length}</span>
+                    </div>
+                    {#if folderName !== 'Uncategorized'}
+                      <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button on:click={() => openEditFolder(folderName)} class="text-slate-400 hover:text-blue-600 transition-colors p-1 rounded hover:bg-white" title="Rename Folder">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                        </button>
+                        <button on:click={() => openDeleteFolder(folderName)} class="text-slate-400 hover:text-red-500 transition-colors p-1 rounded hover:bg-white" title="Delete Folder">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                        </button>
+                      </div>
+                    {/if}
+                  </div>
+                </td>
+              </tr>
+              
+              <!-- Folder API Items -->
+              {#each folderApis as api, i}
+                <tr 
+                  draggable="true"
+                  on:dragstart={(e) => handleDragStart(e, api.id)}
+                  on:dragover={(e) => handleDragOver(e, folderName, i)}
+                  on:dragleave={handleDragLeave}
+                  on:drop={(e) => handleDrop(e, folderName, i)}
+                  class="hover:bg-slate-50/50 transition-colors cursor-grab active:cursor-grabbing"
+                  class:border-t-2={dragOverItem?.folder === folderName && dragOverItem?.index === i}
+                  class:border-blue-500={dragOverItem?.folder === folderName && dragOverItem?.index === i}
+                >
+                  <td class="p-3 md:p-4">
+                    <span class="px-2 py-1 rounded text-xs font-bold whitespace-nowrap
+                      {api.method === 'GET' ? 'bg-green-100 text-green-700' : 
+                       api.method === 'POST' ? 'bg-blue-100 text-blue-700' : 
+                       api.method === 'PUT' ? 'bg-yellow-100 text-yellow-700' : 
+                       api.method === 'DELETE' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-700'}">
+                      {api.method}
+                    </span>
+                  </td>
+                  <td class="p-3 md:p-4 font-medium text-slate-900 truncate max-w-[150px] md:max-w-xs">{api.name}</td>
+                  <td class="p-3 md:p-4 text-slate-500 text-sm truncate max-w-[150px] md:max-w-xs" title={api.url}>{api.url}</td>
+                  <td class="p-3 md:p-4 text-slate-500 text-sm">
+                    <span class="px-2 py-1 bg-slate-100 rounded text-xs font-mono">{api.expected_status_code}</span>
+                  </td>
+                  <td class="p-3 md:p-4 text-right flex items-center justify-end gap-1 sm:gap-2">
+                    <button on:click={() => openEditApiModal(api)} class="text-slate-500 hover:text-blue-600 transition-colors p-1.5 rounded-lg hover:bg-blue-50" title="Edit Endpoint">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                    </button>
+                    <button on:click={() => openScheduleModal(api)} class="text-slate-500 hover:text-indigo-600 transition-colors p-1.5 rounded-lg hover:bg-indigo-50" title="Schedule Settings">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                    </button>
+                    <button on:click={() => openDeleteApiModal(api)} class="text-slate-500 hover:text-red-500 transition-colors p-1.5 rounded-lg hover:bg-red-50" title="Delete Endpoint">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                    </button>
+                  </td>
+                </tr>
+              {/each}
+              
+              <!-- Invisible Drop Zone at end of folder if it has items -->
+              {#if folderApis.length > 0}
+                <tr 
+                  class="h-2 transition-all"
+                  class:bg-blue-100={dragOverItem?.folder === folderName && dragOverItem?.index === folderApis.length}
+                  on:dragover={(e) => handleDragOver(e, folderName, folderApis.length)}
+                  on:dragleave={handleDragLeave}
+                  on:drop={(e) => handleDrop(e, folderName, folderApis.length)}
+                >
+                  <td colspan="5" class="p-0"></td>
+                </tr>
+              {/if}
+            {/each}
+          </tbody>
+        </table>
+      </div>
+    {/if}
+  {/if}
+</div>
+
+<!-- ================= MODALS ================= -->
+
+<!-- 1. Import Mode Conflict Modal -->
+<Modal bind:open={showImportModeModal} title="Import Collection">
+  <div class="space-y-4">
+    <p class="text-sm text-slate-600">
+      This workspace already contains APIs. How would you like to handle this import?
+    </p>
+    <div class="grid grid-cols-2 gap-3">
+      <button on:click={() => executePostmanUpload('append')} class="border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-xl p-4 flex flex-col items-center justify-center text-center transition-colors">
+        <svg xmlns="http://www.w3.org/2000/svg" class="mb-2" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+        <span class="font-bold text-sm">Append Mode</span>
+        <span class="text-xs mt-1 text-slate-500">Add new APIs alongside the existing ones.</span>
+      </button>
+      
+      <button on:click={() => executePostmanUpload('replace')} class="border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 rounded-xl p-4 flex flex-col items-center justify-center text-center transition-colors">
+        <svg xmlns="http://www.w3.org/2000/svg" class="mb-2" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"></path><line x1="18" y1="9" x2="12" y2="15"></line><line x1="12" y1="9" x2="18" y2="15"></line></svg>
+        <span class="font-bold text-sm">Replace Mode</span>
+        <span class="text-xs mt-1 text-slate-500">Delete all current APIs and use only the new ones.</span>
+      </button>
+    </div>
+  </div>
+</Modal>
+
+<!-- 2. Manual Add Mode Conflict Modal -->
+<Modal bind:open={showAddModeModal} title="Save API">
+  <div class="space-y-4">
+    <p class="text-sm text-slate-600">
+      You are about to add a manual API endpoint. How would you like to process this?
+    </p>
+    <div class="grid grid-cols-2 gap-3">
+      <button on:click={() => executeAddApi('append')} class="border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-xl p-4 flex flex-col items-center justify-center text-center transition-colors">
+        <svg xmlns="http://www.w3.org/2000/svg" class="mb-2" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+        <span class="font-bold text-sm">Append Mode</span>
+        <span class="text-xs mt-1 text-slate-500">Add alongside the existing APIs.</span>
+      </button>
+      
+      <button on:click={() => executeAddApi('replace')} class="border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 rounded-xl p-4 flex flex-col items-center justify-center text-center transition-colors">
+        <svg xmlns="http://www.w3.org/2000/svg" class="mb-2" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"></path><line x1="18" y1="9" x2="12" y2="15"></line><line x1="12" y1="9" x2="18" y2="15"></line></svg>
+        <span class="font-bold text-sm">Replace Mode</span>
+        <span class="text-xs mt-1 text-slate-500">Clear project and add only this API.</span>
+      </button>
+    </div>
+  </div>
+</Modal>
+
+<!-- 3. Add API Manual Input Modal -->
+<Modal bind:open={showAddApiModal} title="Create API Endpoint" maxWidth="max-w-2xl">
+  <form on:submit|preventDefault={handleAddApiSubmit} class="space-y-4">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 border-b border-slate-100 pb-4">
+      <div class="md:col-span-1">
+        <label for="api_folder" class="block text-sm font-semibold text-slate-700 mb-1">Folder Name (Optional)</label>
+        <input id="api_folder" type="text" bind:value={apiForm.folder} class="w-full px-4 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-sm" placeholder="e.g. Authentication" />
+      </div>
+      
+      <div class="md:col-span-1">
+        <label for="api_name" class="block text-sm font-semibold text-slate-700 mb-1">Endpoint Name</label>
+        <input id="api_name" type="text" bind:value={apiForm.name} required class="w-full px-4 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-sm" placeholder="e.g. Fetch User Data" />
+      </div>
+      
+      <div class="md:col-span-1">
+        <label for="api_method" class="block text-sm font-semibold text-slate-700 mb-1">Method</label>
+        <select id="api_method" bind:value={apiForm.method} class="w-full px-4 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-sm font-medium">
+          <option value="GET">GET</option>
+          <option value="POST">POST</option>
+          <option value="PUT">PUT</option>
+          <option value="DELETE">DELETE</option>
+          <option value="PATCH">PATCH</option>
+        </select>
+      </div>
+
+      <div class="md:col-span-1">
+        <label for="api_interval" class="block text-sm font-semibold text-slate-700 mb-1">Check Interval (Seconds)</label>
+        <input id="api_interval" type="number" min="10" bind:value={apiForm.interval} required class="w-full px-4 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-sm" />
+      </div>
+
+      <div class="md:col-span-2">
+        <label for="api_url" class="block text-sm font-semibold text-slate-700 mb-1">Request URL</label>
+        <div class="flex">
+          <span class="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-slate-200 bg-slate-100 text-slate-500 text-sm font-medium">URL</span>
+          <input id="api_url" type="url" bind:value={apiForm.url} required class="flex-1 w-full px-4 py-2 bg-slate-50 rounded-r-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-sm" placeholder="https://api.example.com/v1/users" />
+        </div>
+      </div>
+    </div>
+
+    <div class="space-y-4">
+      <!-- Parameters Toggle (Only on GET/PUT/DELETE) -->
+      {#if ['GET', 'PUT', 'DELETE'].includes(apiForm.method)}
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <label class="block text-sm font-semibold text-slate-700">Query Parameters</label>
+            <div class="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+              <button type="button" class="px-3 py-1 text-xs font-semibold rounded-md transition-all {paramMode === 'json' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}" on:click={() => paramMode = 'json'}>JSON</button>
+              <button type="button" class="px-3 py-1 text-xs font-semibold rounded-md transition-all {paramMode === 'kv' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}" on:click={() => paramMode = 'kv'}>Key-Value</button>
+            </div>
+          </div>
+          {#if paramMode === 'json'}
+            <textarea rows="2" bind:value={apiForm.parameters} class="w-full font-mono px-4 py-3 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-xs resize-y" placeholder={`[\n  {"key": "search", "value": "keyword"}\n]`}></textarea>
+          {:else}
+            <div class="space-y-2">
+              {#each paramsKV as param, i}
+                <div class="flex gap-2">
+                  <input type="text" bind:value={param.key} placeholder="Key" class="flex-1 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-xs font-mono" />
+                  <input type="text" bind:value={param.value} placeholder="Value" class="flex-1 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-xs font-mono" />
+                  <button type="button" on:click={() => paramsKV = paramsKV.filter((_, idx) => idx !== i)} class="p-2 text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 border border-slate-200 rounded-lg transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                  </button>
+                </div>
+              {/each}
+              <button type="button" on:click={() => paramsKV = [...paramsKV, {key: '', value: ''}]} class="text-xs font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1 mt-1">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Parameter
+              </button>
+            </div>
+          {/if}
+        </div>
+      {/if}
+
+      <!-- Headers Toggle -->
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <label class="block text-sm font-semibold text-slate-700">Headers</label>
+          <div class="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+            <button type="button" class="px-3 py-1 text-xs font-semibold rounded-md transition-all {headerMode === 'json' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}" on:click={() => headerMode = 'json'}>JSON</button>
+            <button type="button" class="px-3 py-1 text-xs font-semibold rounded-md transition-all {headerMode === 'kv' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}" on:click={() => headerMode = 'kv'}>Key-Value</button>
+          </div>
+        </div>
+        {#if headerMode === 'json'}
+          <textarea rows="2" bind:value={apiForm.headers} class="w-full font-mono px-4 py-3 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-xs resize-y" placeholder={`[\n  {"key": "Authorization", "value": "Bearer token"}\n]`}></textarea>
+        {:else}
+          <div class="space-y-2">
+            {#each headersKV as hdr, i}
+              <div class="flex gap-2">
+                <input type="text" bind:value={hdr.key} placeholder="Header Key" class="flex-1 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-xs font-mono" />
+                <input type="text" bind:value={hdr.value} placeholder="Value" class="flex-1 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-xs font-mono" />
+                <button type="button" on:click={() => headersKV = headersKV.filter((_, idx) => idx !== i)} class="p-2 text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 border border-slate-200 rounded-lg transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+              </div>
+            {/each}
+            <button type="button" on:click={() => headersKV = [...headersKV, {key: '', value: ''}]} class="text-xs font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1 mt-1">
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Header
+            </button>
+          </div>
+        {/if}
+      </div>
+
+      <!-- Body Toggle -->
+      <div class={apiForm.method === 'GET' ? 'opacity-50' : ''}>
+        <div class="flex items-center justify-between mb-2">
+          <label class="block text-sm font-semibold text-slate-700">Body / Payload</label>
+          <div class="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+            <button type="button" disabled={apiForm.method === 'GET'} class="px-3 py-1 text-xs font-semibold rounded-md transition-all {bodyMode === 'json' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'} disabled:cursor-not-allowed" on:click={() => bodyMode = 'json'}>JSON</button>
+            <button type="button" disabled={apiForm.method === 'GET'} class="px-3 py-1 text-xs font-semibold rounded-md transition-all {bodyMode === 'kv' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'} disabled:cursor-not-allowed" on:click={() => bodyMode = 'kv'}>Key-Value</button>
+          </div>
+        </div>
+        {#if bodyMode === 'json'}
+          <textarea rows="3" bind:value={apiForm.body} disabled={apiForm.method === 'GET'} class="w-full font-mono px-4 py-3 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-xs resize-y disabled:cursor-not-allowed" placeholder={`{ "key": "value" }`}></textarea>
+        {:else}
+          <div class="space-y-2">
+            {#each bodyKV as bdy, i}
+              <div class="flex gap-2">
+                <input type="text" bind:value={bdy.key} disabled={apiForm.method === 'GET'} placeholder="Body Key" class="flex-1 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-xs font-mono disabled:cursor-not-allowed" />
+                <input type="text" bind:value={bdy.value} disabled={apiForm.method === 'GET'} placeholder="Value" class="flex-1 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-xs font-mono disabled:cursor-not-allowed" />
+                <button type="button" disabled={apiForm.method === 'GET'} on:click={() => bodyKV = bodyKV.filter((_, idx) => idx !== i)} class="p-2 text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 border border-slate-200 rounded-lg transition-colors disabled:cursor-not-allowed disabled:hover:bg-slate-50 disabled:hover:text-slate-400">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+              </div>
+            {/each}
+            <button type="button" disabled={apiForm.method === 'GET'} on:click={() => bodyKV = [...bodyKV, {key: '', value: ''}]} class="text-xs font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1 mt-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-blue-600">
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Body Field
+            </button>
+          </div>
+        {/if}
+        {#if apiForm.method === 'GET'}
+          <p class="text-xs text-orange-500 mt-1">Request body is disabled for GET requests.</p>
+        {/if}
+      </div>
+
+      <div class="w-full md:w-1/2">
+        <label for="api_expected_status" class="block text-sm font-semibold text-slate-700 mb-1">Expected HTTP Status Code</label>
+        <input id="api_expected_status" type="number" min="100" max="599" bind:value={apiForm.expected_status_code} required class="w-full px-4 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-sm font-mono" />
+      </div>
+    </div>
+
+    <div class="pt-4 flex justify-end gap-3 border-t border-slate-100">
+      <button type="button" on:click={() => showAddApiModal = false} class="px-5 py-2.5 rounded-xl font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors text-sm">Cancel</button>
+      <button type="submit" class="px-5 py-2.5 rounded-xl font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-sm shadow-blue-500/20 text-sm">Save Endpoint</button>
+    </div>
+  </form>
+</Modal>
+
+<!-- 4. Edit API Modal -->
+<Modal bind:open={showEditApiModal} title="Edit API Endpoint" maxWidth="max-w-2xl">
+  <form on:submit|preventDefault={handleEditApiSubmit} class="space-y-4">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 border-b border-slate-100 pb-4">
+      <div class="md:col-span-1">
+        <label for="api_folder_edit" class="block text-sm font-semibold text-slate-700 mb-1">Folder Name (Optional)</label>
+        <input id="api_folder_edit" type="text" bind:value={apiForm.folder} class="w-full px-4 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-sm" placeholder="e.g. Authentication" />
+      </div>
+      
+      <div class="md:col-span-1">
+        <label for="api_name_edit" class="block text-sm font-semibold text-slate-700 mb-1">Endpoint Name</label>
+        <input id="api_name_edit" type="text" bind:value={apiForm.name} required class="w-full px-4 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-sm" placeholder="e.g. Fetch User Data" />
+      </div>
+      
+      <div class="md:col-span-1">
+        <label for="api_method_edit" class="block text-sm font-semibold text-slate-700 mb-1">Method</label>
+        <select id="api_method_edit" bind:value={apiForm.method} class="w-full px-4 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-sm font-medium">
+          <option value="GET">GET</option>
+          <option value="POST">POST</option>
+          <option value="PUT">PUT</option>
+          <option value="DELETE">DELETE</option>
+          <option value="PATCH">PATCH</option>
+        </select>
+      </div>
+
+      <div class="md:col-span-1">
+        <label for="api_interval_edit" class="block text-sm font-semibold text-slate-700 mb-1">Check Interval (Seconds)</label>
+        <input id="api_interval_edit" type="number" min="10" bind:value={apiForm.interval} required class="w-full px-4 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-sm" />
+      </div>
+
+      <div class="md:col-span-2">
+        <label for="api_url_edit" class="block text-sm font-semibold text-slate-700 mb-1">Request URL</label>
+        <div class="flex">
+          <span class="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-slate-200 bg-slate-100 text-slate-500 text-sm font-medium">URL</span>
+          <input id="api_url_edit" type="url" bind:value={apiForm.url} required class="flex-1 w-full px-4 py-2 bg-slate-50 rounded-r-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-sm" placeholder="https://api.example.com/v1/users" />
+        </div>
+      </div>
+    </div>
+
+    <div class="space-y-4">
+      <!-- Parameters Toggle (Only on GET/PUT/DELETE) -->
+      {#if ['GET', 'PUT', 'DELETE'].includes(apiForm.method)}
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <label class="block text-sm font-semibold text-slate-700">Query Parameters</label>
+            <div class="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+              <button type="button" class="px-3 py-1 text-xs font-semibold rounded-md transition-all {paramMode === 'json' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}" on:click={() => paramMode = 'json'}>JSON</button>
+              <button type="button" class="px-3 py-1 text-xs font-semibold rounded-md transition-all {paramMode === 'kv' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}" on:click={() => paramMode = 'kv'}>Key-Value</button>
+            </div>
+          </div>
+          {#if paramMode === 'json'}
+            <textarea rows="2" bind:value={apiForm.parameters} class="w-full font-mono px-4 py-3 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-xs resize-y" placeholder={`[\n  {"key": "search", "value": "keyword"}\n]`}></textarea>
+          {:else}
+            <div class="space-y-2">
+              {#each paramsKV as param, i}
+                <div class="flex gap-2">
+                  <input type="text" bind:value={param.key} placeholder="Key" class="flex-1 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-xs font-mono" />
+                  <input type="text" bind:value={param.value} placeholder="Value" class="flex-1 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-xs font-mono" />
+                  <button type="button" on:click={() => paramsKV = paramsKV.filter((_, idx) => idx !== i)} class="p-2 text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 border border-slate-200 rounded-lg transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                  </button>
+                </div>
+              {/each}
+              <button type="button" on:click={() => paramsKV = [...paramsKV, {key: '', value: ''}]} class="text-xs font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1 mt-1">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Parameter
+              </button>
+            </div>
+          {/if}
+        </div>
+      {/if}
+
+      <!-- Headers Toggle -->
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <label class="block text-sm font-semibold text-slate-700">Headers</label>
+          <div class="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+            <button type="button" class="px-3 py-1 text-xs font-semibold rounded-md transition-all {headerMode === 'json' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}" on:click={() => headerMode = 'json'}>JSON</button>
+            <button type="button" class="px-3 py-1 text-xs font-semibold rounded-md transition-all {headerMode === 'kv' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}" on:click={() => headerMode = 'kv'}>Key-Value</button>
+          </div>
+        </div>
+        {#if headerMode === 'json'}
+          <textarea rows="2" bind:value={apiForm.headers} class="w-full font-mono px-4 py-3 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-xs resize-y" placeholder={`[\n  {"key": "Authorization", "value": "Bearer token"}\n]`}></textarea>
+        {:else}
+          <div class="space-y-2">
+            {#each headersKV as hdr, i}
+              <div class="flex gap-2">
+                <input type="text" bind:value={hdr.key} placeholder="Header Key" class="flex-1 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-xs font-mono" />
+                <input type="text" bind:value={hdr.value} placeholder="Value" class="flex-1 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-xs font-mono" />
+                <button type="button" on:click={() => headersKV = headersKV.filter((_, idx) => idx !== i)} class="p-2 text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 border border-slate-200 rounded-lg transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+              </div>
+            {/each}
+            <button type="button" on:click={() => headersKV = [...headersKV, {key: '', value: ''}]} class="text-xs font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1 mt-1">
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Header
+            </button>
+          </div>
+        {/if}
+      </div>
+
+      <!-- Body Toggle -->
+      <div class={apiForm.method === 'GET' ? 'opacity-50' : ''}>
+        <div class="flex items-center justify-between mb-2">
+          <label class="block text-sm font-semibold text-slate-700">Body / Payload</label>
+          <div class="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+            <button type="button" disabled={apiForm.method === 'GET'} class="px-3 py-1 text-xs font-semibold rounded-md transition-all {bodyMode === 'json' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'} disabled:cursor-not-allowed" on:click={() => bodyMode = 'json'}>JSON</button>
+            <button type="button" disabled={apiForm.method === 'GET'} class="px-3 py-1 text-xs font-semibold rounded-md transition-all {bodyMode === 'kv' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'} disabled:cursor-not-allowed" on:click={() => bodyMode = 'kv'}>Key-Value</button>
+          </div>
+        </div>
+        {#if bodyMode === 'json'}
+          <textarea rows="3" bind:value={apiForm.body} disabled={apiForm.method === 'GET'} class="w-full font-mono px-4 py-3 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-xs resize-y disabled:cursor-not-allowed" placeholder={`{ "key": "value" }`}></textarea>
+        {:else}
+          <div class="space-y-2">
+            {#each bodyKV as bdy, i}
+              <div class="flex gap-2">
+                <input type="text" bind:value={bdy.key} disabled={apiForm.method === 'GET'} placeholder="Body Key" class="flex-1 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-xs font-mono disabled:cursor-not-allowed" />
+                <input type="text" bind:value={bdy.value} disabled={apiForm.method === 'GET'} placeholder="Value" class="flex-1 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-xs font-mono disabled:cursor-not-allowed" />
+                <button type="button" disabled={apiForm.method === 'GET'} on:click={() => bodyKV = bodyKV.filter((_, idx) => idx !== i)} class="p-2 text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 border border-slate-200 rounded-lg transition-colors disabled:cursor-not-allowed disabled:hover:bg-slate-50 disabled:hover:text-slate-400">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+              </div>
+            {/each}
+            <button type="button" disabled={apiForm.method === 'GET'} on:click={() => bodyKV = [...bodyKV, {key: '', value: ''}]} class="text-xs font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1 mt-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-blue-600">
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Body Field
+            </button>
+          </div>
+        {/if}
+        {#if apiForm.method === 'GET'}
+          <p class="text-xs text-orange-500 mt-1">Request body is disabled for GET requests.</p>
+        {/if}
+      </div>
+
+      <div class="w-full md:w-1/2">
+        <label for="api_expected_status_edit" class="block text-sm font-semibold text-slate-700 mb-1">Expected HTTP Status Code</label>
+        <input id="api_expected_status_edit" type="number" min="100" max="599" bind:value={apiForm.expected_status_code} required class="w-full px-4 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-sm font-mono" />
+      </div>
+    </div>
+
+    <div class="pt-4 flex justify-end gap-3 border-t border-slate-100">
+      <button type="button" on:click={() => showEditApiModal = false} class="px-5 py-2.5 rounded-xl font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors text-sm">Cancel</button>
+      <button type="submit" class="px-5 py-2.5 rounded-xl font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-sm shadow-blue-500/20 text-sm">Save Changes</button>
+    </div>
+  </form>
+</Modal>
+
+<!-- 5. Delete API Modal -->
+<Modal bind:open={showDeleteApiModal} title="Remove Endpoint">
+  <div class="space-y-4">
+    <div class="bg-amber-50 text-amber-800 p-4 rounded-xl border border-amber-100 flex items-start gap-3">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 mt-0.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+      <div>
+        <p class="font-bold text-sm">Warning: Removing API Endpoint</p>
+        <p class="text-xs mt-1 text-amber-700">Are you sure you want to remove <span class="font-semibold px-1 rounded bg-amber-100">{selectedApi?.name}</span>? This endpoint will become inactive and hidden from the dashboard, but monitoring history is preserved in the database for recovery.</p>
+      </div>
+    </div>
+    <div class="flex justify-end gap-3 pt-2">
+      <button on:click={() => showDeleteApiModal = false} class="px-5 py-2.5 rounded-xl font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors text-sm">Cancel</button>
+      <button on:click={handleDeleteApiSubmit} class="px-5 py-2.5 rounded-xl font-semibold text-white bg-red-600 hover:bg-red-700 transition-colors shadow-sm shadow-red-500/20 text-sm">Yes, Remove</button>
+    </div>
+  </div>
+</Modal>
+
+<!-- 6. Schedule / Alert Config Modal -->
+<Modal bind:open={showScheduleModal} title="Schedule Trigger ({selectedApi?.name})">
+  <div class="space-y-4">
+    <p class="text-sm text-slate-600 mb-2">Set up when this API endpoint should be checked.</p>
+    
+    <div>
+      <select bind:value={scheduleConfig.mode} class="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none transition-all">
+        {#each scheduleModes as mode}
+          <option value={mode}>{mode}</option>
+        {/each}
+      </select>
+    </div>
+
+    {#if scheduleConfig.mode !== 'Week timer'}
+      <!-- Minute & Hour Timers -->
+      <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+        <label class="text-sm font-medium text-slate-700">Check interval:</label>
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="text-slate-700 font-medium text-sm">Every</span>
+        <input type="number" min="1" bind:value={scheduleConfig.value} class="w-24 bg-white border border-slate-300 text-slate-900 rounded-xl focus:ring-blue-500 focus:border-blue-500 block p-2 outline-none transition-all text-center">
+        <span class="text-slate-700 font-medium">{scheduleConfig.mode === 'Minute timer' ? 'minutes' : 'hours'}</span>
+      </div>
+      <p class="text-xs text-slate-500">The endpoint will be constantly monitored every {scheduleConfig.value} {scheduleConfig.mode === 'Minute timer' ? 'minutes' : 'hours'} based on this setting.</p>
+    {:else}
+      <!-- Week Timer -->
+      <div class="space-y-3 pt-2">
+        <div>
+           <select bind:value={scheduleConfig.day} class="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none transition-all">
+             {#each weekDays as day}
+               <option value={day}>{day}</option>
+             {/each}
+           </select>
+        </div>
+        <div>
+           <select bind:value={scheduleConfig.time} class="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none transition-all">
+             {#each timeOptions as time}
+               <option value={time}>{time}</option>
+             {/each}
+           </select>
+        </div>
+        <p class="text-xs text-slate-500 mt-2">The health checker will initiate an automatic check {scheduleConfig.day.toLowerCase()} at {scheduleConfig.time}.</p>
+      </div>
+    {/if}
+
+    <div class="flex gap-3 justify-end pt-5 mt-2 border-t border-slate-100">
+      <button on:click={() => showScheduleModal = false} class="px-5 py-2.5 text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 font-medium transition-colors text-sm">Cancel</button>
+      <button on:click={handleScheduleSubmit} class="px-5 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-medium transition-colors shadow-sm text-sm">
+        Save Schedule
+      </button>
+    </div>
+  </div>
+</Modal>
+
+<!-- 8. Edit Folder Modal -->
+<Modal bind:open={showEditFolderModal} title="Rename Folder">
+  <div class="space-y-4">
+    <div>
+      <label class="block text-sm font-semibold text-slate-700 mb-1.5">New Folder Name</label>
+      <input type="text" bind:value={editFolderName} class="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none transition-all">
+    </div>
+
+    <div class="flex justify-end gap-3 pt-4 border-t border-slate-100">
+      <button on:click={() => showEditFolderModal = false} class="px-5 py-2.5 text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 font-medium transition-colors text-sm">Cancel</button>
+      <button on:click={handleEditFolderSubmit} disabled={!editFolderName.trim() || editFolderName.trim() === selectedFolderToEdit} class="px-5 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-medium transition-colors shadow-sm text-sm disabled:opacity-50 disabled:cursor-not-allowed">
+        Save Changes
+      </button>
+    </div>
+  </div>
+</Modal>
+
+<!-- 9. Delete Folder Modal -->
+<Modal bind:open={showDeleteFolderModal} title="Delete Folder">
+  <div class="space-y-4">
+    <div class="bg-amber-50 text-amber-800 p-4 rounded-xl border border-amber-100 flex items-start gap-3">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 mt-0.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+      <div>
+        <p class="font-bold text-sm">Warning: Removing Folder</p>
+        <p class="text-xs mt-1 text-amber-700">Are you sure you want to delete <span class="font-semibold px-1 rounded bg-amber-100">{selectedFolderToDelete}</span>? All endpoints inside will be moved to "Uncategorized".</p>
+      </div>
+    </div>
+    <div class="flex justify-end gap-3 pt-2">
+      <button on:click={() => showDeleteFolderModal = false} class="px-5 py-2.5 rounded-xl font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors text-sm">Cancel</button>
+      <button on:click={handleDeleteFolderSubmit} class="px-5 py-2.5 rounded-xl font-semibold text-white bg-red-600 hover:bg-red-700 transition-colors shadow-sm shadow-red-500/20 text-sm">Yes, Delete</button>
+    </div>
+  </div>
+</Modal>
+
+<!-- Env Vars Modal -->
+<Modal bind:open={showEnvVarsModal} title="Environment Variables" maxWidth="max-w-2xl">
+  <div class="space-y-4">
+    <p class="text-sm text-slate-600 mb-2">
+      Define variables that can be shared across all API endpoints in this project. Use <code>{`{{VariableName}}`}</code> in your API URLs, Headers, or Body.
+    </p>
+
+    <div class="space-y-3">
+      {#each envVarsKV as pair, i}
+        <div class="flex gap-2 items-center">
+          <input type="text" bind:value={pair.key} placeholder="Variable Key (e.g. base_url)" class="flex-1 bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2 outline-none font-mono">
+          <input type="text" bind:value={pair.value} placeholder="Value" class="flex-1 bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2 outline-none font-mono">
+          <button on:click={() => removeEnvVarRow(i)} class="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
+        </div>
+      {/each}
+      
+      <button on:click={addEnvVarRow} class="text-blue-600 hover:text-blue-700 text-sm font-semibold flex items-center gap-1.5 mt-2">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        Add Variable
+      </button>
+    </div>
+
+    <div class="flex justify-end gap-3 pt-6 border-t border-slate-100">
+      <button on:click={() => showEnvVarsModal = false} class="px-5 py-2.5 text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 font-medium transition-colors text-sm">Cancel</button>
+      <button on:click={saveEnvVars} disabled={isSavingEnvVars} class="px-6 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-medium transition-colors shadow-sm text-sm disabled:opacity-50 flex items-center gap-2">
+        {#if isSavingEnvVars}
+          <svg class="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+          Saving...
+        {:else}
+          Save Variables
+        {/if}
+      </button>
+    </div>
+  </div>
+</Modal>
+
+<!-- 7. Create Folder Modal -->
+<Modal bind:open={showFolderModal} title="Create New Folder">
+  <div class="space-y-4">
+    <p class="text-sm text-slate-600 mb-2">Folders help you organize your endpoints logically.</p>
+    
+    <div>
+      <label class="block text-sm font-semibold text-slate-700 mb-1.5">Folder Name</label>
+      <input type="text" bind:value={newFolderName} placeholder="e.g. Authentication APIs" class="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none transition-all">
+    </div>
+
+    <div class="flex justify-end gap-3 pt-4 border-t border-slate-100">
+      <button on:click={() => showFolderModal = false} class="px-5 py-2.5 text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 font-medium transition-colors text-sm">Cancel</button>
+      <button on:click={handleAddFolder} disabled={!newFolderName.trim()} class="px-5 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-medium transition-colors shadow-sm text-sm disabled:opacity-50 disabled:cursor-not-allowed">
+        Create Folder
+      </button>
+    </div>
+  </div>
+</Modal>

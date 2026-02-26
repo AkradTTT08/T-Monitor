@@ -1,0 +1,76 @@
+package handlers
+
+import (
+	"log"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/monitor-api/backend/internal/database"
+	"github.com/monitor-api/backend/internal/middleware"
+	"github.com/monitor-api/backend/internal/models"
+	"golang.org/x/crypto/bcrypt"
+)
+
+type RegisterInput struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type LoginInput struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+func Register(c *fiber.Ctx) error {
+	var input RegisterInput
+	if err := c.BodyParser(&input); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to hash password"})
+	}
+
+	user := models.User{
+		Email:    input.Email,
+		Password: string(hash),
+		Role:     "user", // Default role
+	}
+
+	// Make the first user an admin automatically
+	var count int64
+	database.DB.Model(&models.User{}).Count(&count)
+	if count == 0 {
+		user.Role = "admin"
+	}
+
+	if err := database.DB.Create(&user).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create user. Email may exist."})
+	}
+
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"message": "User registered successfully", "user": user})
+}
+
+func Login(c *fiber.Ctx) error {
+	var input LoginInput
+	if err := c.BodyParser(&input); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
+	}
+
+	var user models.User
+	if err := database.DB.Where("email = ?", input.Email).First(&user).Error; err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid credentials"})
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(input.Password)); err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid credentials"})
+	}
+
+	token, err := middleware.GenerateToken(user)
+	if err != nil {
+		log.Println("Error generating token:", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to generate token"})
+	}
+
+	return c.JSON(fiber.Map{"token": token, "user": user})
+}

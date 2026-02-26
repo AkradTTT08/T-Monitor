@@ -1,0 +1,21 @@
+# Backend
+backend/.env
+backend/*.exe
+backend/tmp_app*
+backend/tmp/
+
+# Frontend
+frontend/node_modules/
+frontend/.svelte-kit/
+frontend/build/
+frontend/dist/
+
+# Go
+*.exe
+*.test
+*.out
+vendor/
+
+# Misc
+.DS_Store
+*.log
