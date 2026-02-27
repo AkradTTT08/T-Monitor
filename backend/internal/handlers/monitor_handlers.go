@@ -4,6 +4,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/monitor-api/backend/internal/database"
 	"github.com/monitor-api/backend/internal/models"
+	"gorm.io/gorm"
 )
 
 func GetMonitorLogs(c *fiber.Ctx) error {
@@ -12,7 +13,9 @@ func GetMonitorLogs(c *fiber.Ctx) error {
 
 	var logs []models.MonitorLog
 
-	query := database.DB.Order("checked_at desc").Limit(100)
+	query := database.DB.Preload("API", func(db *gorm.DB) *gorm.DB {
+		return db.Unscoped()
+	}).Order("checked_at desc").Limit(100)
 
 	// If admin, they see all logs.
 	// If user, they only see logs for APIs matching their projects.

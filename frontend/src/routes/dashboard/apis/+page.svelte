@@ -231,8 +231,8 @@
           <div class="mt-auto flex justify-between items-center border-t border-slate-100 pt-4">
             <div class="flex gap-4">
                <div class="flex flex-col">
-                 <span class="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Interval</span>
-                 <span class="text-sm font-medium text-slate-700">{api.interval} sec</span>
+                 <span class="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Method</span>
+                 <span class="text-sm font-medium text-slate-700">{api.method}</span>
                </div>
                <div class="flex flex-col">
                  <span class="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Expected</span>

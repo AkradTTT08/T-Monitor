@@ -1,11 +1,22 @@
 <script lang="ts">
   import { page } from '$app/stores';
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import Modal from '$lib/components/Modal.svelte';
+  import InputWithVariables from '$lib/components/InputWithVariables.svelte';
   
-  let projectId = $page.params.id;
+  const projectId = $page.params.id;
   let project: any = null;
   let apis: any[] = [];
+
+  // Derive environment variables for highlighting
+  $: envVarDict = (() => {
+    if (!project || !project.environment_variables) return {};
+    try {
+      return JSON.parse(project.environment_variables);
+    } catch(e) {
+      return {};
+    }
+  })();
   let isLoading = true;
   let isUploading = false;
   
@@ -646,10 +657,10 @@
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M10.4 12.6a2 2 0 1 1 3 3L8 21l-4 1 1.5-4.5L10.4 12.6z"></path></svg>
             Env Variables {'{x}'}
           </button>
-          <button on:click={openNotificationSettings} class="bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 font-medium py-2.5 px-5 rounded-xl shadow-sm transition-all flex items-center gap-2 text-sm w-full md:w-auto justify-center">
+          <a href="/dashboard/projects/{projectId}/notifications" class="bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 font-medium py-2.5 px-5 rounded-xl shadow-sm transition-all flex items-center gap-2 text-sm w-full md:w-auto justify-center">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
             Notification Channels
-          </button>
+          </a>>
           <button on:click={() => showFolderModal = true} class="bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 font-medium py-2.5 px-5 rounded-xl shadow-sm transition-all flex items-center gap-2 text-sm w-full md:w-auto justify-center">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path><line x1="12" y1="11" x2="12" y2="17"></line><line x1="9" y1="14" x2="15" y2="14"></line></svg>
             + Folder
@@ -857,16 +868,13 @@
         </select>
       </div>
 
-      <div class="md:col-span-1">
-        <label for="api_interval" class="block text-sm font-semibold text-slate-700 mb-1">Check Interval (Seconds)</label>
-        <input id="api_interval" type="number" min="10" bind:value={apiForm.interval} required class="w-full px-4 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-sm" />
-      </div>
-
       <div class="md:col-span-2">
         <label for="api_url" class="block text-sm font-semibold text-slate-700 mb-1">Request URL</label>
         <div class="flex">
           <span class="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-slate-200 bg-slate-100 text-slate-500 text-sm font-medium">URL</span>
-          <input id="api_url" type="url" bind:value={apiForm.url} required class="flex-1 w-full px-4 py-2 bg-slate-50 rounded-r-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-sm" placeholder="https://api.example.com/v1/users" />
+          <div class="flex-1 w-full bg-slate-50 rounded-r-lg border border-slate-200 focus-within:ring-2 focus-within:ring-blue-500/50 transition-all text-sm overflow-hidden h-[38px] relative">
+            <InputWithVariables bind:value={apiForm.url} placeholder="&#123;&#123;base_url&#125;&#125;/api/v1/users" required={true} variables={envVarDict} />
+          </div>
         </div>
       </div>
     </div>
@@ -889,7 +897,9 @@
               {#each paramsKV as param, i}
                 <div class="flex gap-2">
                   <input type="text" bind:value={param.key} placeholder="Key" class="flex-1 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-xs font-mono" />
-                  <input type="text" bind:value={param.value} placeholder="Value" class="flex-1 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-xs font-mono" />
+                  <div class="flex-1 bg-slate-50 rounded-lg border border-slate-200 focus-within:ring-2 focus-within:ring-blue-500/50 text-xs font-mono h-[34px] overflow-hidden relative">
+                    <InputWithVariables bind:value={param.value} placeholder="Value" variables={envVarDict} />
+                  </div>
                   <button type="button" on:click={() => paramsKV = paramsKV.filter((_, idx) => idx !== i)} class="p-2 text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 border border-slate-200 rounded-lg transition-colors">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                   </button>
@@ -919,7 +929,9 @@
             {#each headersKV as hdr, i}
               <div class="flex gap-2">
                 <input type="text" bind:value={hdr.key} placeholder="Header Key" class="flex-1 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-xs font-mono" />
-                <input type="text" bind:value={hdr.value} placeholder="Value" class="flex-1 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-xs font-mono" />
+                <div class="flex-1 bg-slate-50 rounded-lg border border-slate-200 focus-within:ring-2 focus-within:ring-blue-500/50 text-xs font-mono h-[34px] overflow-hidden relative">
+                  <InputWithVariables bind:value={hdr.value} placeholder="Value" variables={envVarDict} />
+                </div>
                 <button type="button" on:click={() => headersKV = headersKV.filter((_, idx) => idx !== i)} class="p-2 text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 border border-slate-200 rounded-lg transition-colors">
                   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                 </button>
@@ -948,7 +960,11 @@
             {#each bodyKV as bdy, i}
               <div class="flex gap-2">
                 <input type="text" bind:value={bdy.key} disabled={apiForm.method === 'GET'} placeholder="Body Key" class="flex-1 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-xs font-mono disabled:cursor-not-allowed" />
-                <input type="text" bind:value={bdy.value} disabled={apiForm.method === 'GET'} placeholder="Value" class="flex-1 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-xs font-mono disabled:cursor-not-allowed" />
+                <div class="flex-1 bg-slate-50 rounded-lg border border-slate-200 focus-within:ring-2 focus-within:ring-blue-500/50 text-xs font-mono h-[34px] overflow-hidden relative {apiForm.method === 'GET' ? 'opacity-50 cursor-not-allowed hidden' : ''}">
+                  <InputWithVariables bind:value={bdy.value} disabled={apiForm.method === 'GET'} placeholder="Value" variables={envVarDict} />
+                </div>
+                <!-- Fallback input when GET mode triggers disabling -->
+                <input type="text" bind:value={bdy.value} disabled={true} placeholder="Value" class="flex-1 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-xs font-mono disabled:cursor-not-allowed {apiForm.method !== 'GET' ? 'hidden' : ''}" />
                 <button type="button" disabled={apiForm.method === 'GET'} on:click={() => bodyKV = bodyKV.filter((_, idx) => idx !== i)} class="p-2 text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 border border-slate-200 rounded-lg transition-colors disabled:cursor-not-allowed disabled:hover:bg-slate-50 disabled:hover:text-slate-400">
                   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                 </button>
@@ -1002,16 +1018,13 @@
         </select>
       </div>
 
-      <div class="md:col-span-1">
-        <label for="api_interval_edit" class="block text-sm font-semibold text-slate-700 mb-1">Check Interval (Seconds)</label>
-        <input id="api_interval_edit" type="number" min="10" bind:value={apiForm.interval} required class="w-full px-4 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-sm" />
-      </div>
-
       <div class="md:col-span-2">
         <label for="api_url_edit" class="block text-sm font-semibold text-slate-700 mb-1">Request URL</label>
         <div class="flex">
           <span class="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-slate-200 bg-slate-100 text-slate-500 text-sm font-medium">URL</span>
-          <input id="api_url_edit" type="url" bind:value={apiForm.url} required class="flex-1 w-full px-4 py-2 bg-slate-50 rounded-r-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-sm" placeholder="https://api.example.com/v1/users" />
+          <div class="flex-1 w-full bg-slate-50 rounded-r-lg border border-slate-200 focus-within:ring-2 focus-within:ring-blue-500/50 transition-all text-sm overflow-hidden h-[38px] relative">
+            <InputWithVariables bind:value={apiForm.url} placeholder="&#123;&#123;base_url&#125;&#125;/api/v1/users" required={true} variables={envVarDict} />
+          </div>
         </div>
       </div>
     </div>
@@ -1034,7 +1047,9 @@
               {#each paramsKV as param, i}
                 <div class="flex gap-2">
                   <input type="text" bind:value={param.key} placeholder="Key" class="flex-1 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-xs font-mono" />
-                  <input type="text" bind:value={param.value} placeholder="Value" class="flex-1 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-xs font-mono" />
+                  <div class="flex-1 bg-slate-50 rounded-lg border border-slate-200 focus-within:ring-2 focus-within:ring-blue-500/50 text-xs font-mono h-[34px] overflow-hidden relative">
+                    <InputWithVariables bind:value={param.value} placeholder="Value" variables={envVarDict} />
+                  </div>
                   <button type="button" on:click={() => paramsKV = paramsKV.filter((_, idx) => idx !== i)} class="p-2 text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 border border-slate-200 rounded-lg transition-colors">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                   </button>
@@ -1064,7 +1079,9 @@
             {#each headersKV as hdr, i}
               <div class="flex gap-2">
                 <input type="text" bind:value={hdr.key} placeholder="Header Key" class="flex-1 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-xs font-mono" />
-                <input type="text" bind:value={hdr.value} placeholder="Value" class="flex-1 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-xs font-mono" />
+                <div class="flex-1 bg-slate-50 rounded-lg border border-slate-200 focus-within:ring-2 focus-within:ring-blue-500/50 text-xs font-mono h-[34px] overflow-hidden relative">
+                  <InputWithVariables bind:value={hdr.value} placeholder="Value" variables={envVarDict} />
+                </div>
                 <button type="button" on:click={() => headersKV = headersKV.filter((_, idx) => idx !== i)} class="p-2 text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 border border-slate-200 rounded-lg transition-colors">
                   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                 </button>
@@ -1093,7 +1110,11 @@
             {#each bodyKV as bdy, i}
               <div class="flex gap-2">
                 <input type="text" bind:value={bdy.key} disabled={apiForm.method === 'GET'} placeholder="Body Key" class="flex-1 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-xs font-mono disabled:cursor-not-allowed" />
-                <input type="text" bind:value={bdy.value} disabled={apiForm.method === 'GET'} placeholder="Value" class="flex-1 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-xs font-mono disabled:cursor-not-allowed" />
+                <div class="flex-1 bg-slate-50 rounded-lg border border-slate-200 focus-within:ring-2 focus-within:ring-blue-500/50 text-xs font-mono h-[34px] overflow-hidden relative {apiForm.method === 'GET' ? 'opacity-50 cursor-not-allowed hidden' : ''}">
+                  <InputWithVariables bind:value={bdy.value} disabled={apiForm.method === 'GET'} placeholder="Value" variables={envVarDict} />
+                </div>
+                <!-- Fallback input when GET mode triggers disabling -->
+                <input type="text" bind:value={bdy.value} disabled={true} placeholder="Value" class="flex-1 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-xs font-mono disabled:cursor-not-allowed {apiForm.method !== 'GET' ? 'hidden' : ''}" />
                 <button type="button" disabled={apiForm.method === 'GET'} on:click={() => bodyKV = bodyKV.filter((_, idx) => idx !== i)} class="p-2 text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 border border-slate-200 rounded-lg transition-colors disabled:cursor-not-allowed disabled:hover:bg-slate-50 disabled:hover:text-slate-400">
                   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                 </button>

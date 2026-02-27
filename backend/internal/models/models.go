@@ -61,6 +61,7 @@ type MonitorLog struct {
 	IsSuccess    bool      `json:"is_success"`
 	ErrorMessage string    `gorm:"type:text" json:"error_message"`
 	CheckedAt    time.Time `json:"checked_at"`
+	API          *API      `gorm:"foreignKey:ApiID" json:"api,omitempty"`
 }
 
 // NotificationConfig stores channel preferences for alerting when an API fails

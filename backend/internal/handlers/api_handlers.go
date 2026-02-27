@@ -336,8 +336,15 @@ func UploadPostmanCollection(c *fiber.Ctx) error {
 		Item    []json.RawMessage `json:"item"` // Handle nested folders
 	}
 
+	type PostmanVariable struct {
+		Key   string `json:"key"`
+		Value string `json:"value"`
+		Type  string `json:"type"`
+	}
+
 	type PostmanCollection struct {
-		Item []PostmanItem `json:"item"`
+		Item     []PostmanItem     `json:"item"`
+		Variable []PostmanVariable `json:"variable"`
 	}
 
 	projectID := c.QueryInt("project_id")
@@ -419,6 +426,10 @@ func UploadPostmanCollection(c *fiber.Ctx) error {
 
 	if len(parsedAPIs) > 0 {
 		if mode == "replace" {
+			if err := database.DB.Unscoped().Where("api_id IN (SELECT id FROM apis WHERE project_id = ?)", projectID).Delete(&models.MonitorLog{}).Error; err != nil {
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to clear existing monitor logs"})
+			}
+
 			if err := database.DB.Unscoped().Where("project_id = ?", projectID).Delete(&models.API{}).Error; err != nil {
 				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to clear existing APIs"})
 			}
@@ -426,6 +437,27 @@ func UploadPostmanCollection(c *fiber.Ctx) error {
 
 		if err := database.DB.Create(&parsedAPIs).Error; err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to save APIs to DB"})
+		}
+	}
+
+	// Update Project Environment Variables if defined in the collection
+	if len(collection.Variable) > 0 {
+		var project models.Project
+		if err := database.DB.First(&project, projectID).Error; err == nil {
+			envMap := make(map[string]string)
+			
+			// If appending, preserve existing env variables
+			if mode == "append" && project.EnvironmentVariables != "" {
+				json.Unmarshal([]byte(project.EnvironmentVariables), &envMap)
+			}
+			
+			for _, v := range collection.Variable {
+				envMap[v.Key] = v.Value
+			}
+			
+			envBytes, _ := json.Marshal(envMap)
+			project.EnvironmentVariables = string(envBytes)
+			database.DB.Save(&project)
 		}
 	}
 

@@ -57,6 +57,9 @@ func setupRoutes(app *fiber.App) {
 	// Protected Routes
 	protected := api.Group("/", middleware.Protected())
 
+	authProtected := protected.Group("/auth")
+	authProtected.Post("/refresh", handlers.RefreshToken)
+
 	// Project Routes
 	project := protected.Group("/projects")
 	project.Post("/", handlers.CreateProject)

@@ -7,6 +7,17 @@
   
   $: currentPath = $page.url.pathname;
 
+  // Session Management State
+  let lastActivityTimestamp = Date.now();
+  let sessionInterval: any;
+  const IDLE_TIMEOUT_MS = 60 * 60 * 1000; // 1 hour
+  const TOKEN_REFRESH_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
+  let lastTokenRefresh = Date.now();
+
+  function updateActivity() {
+    lastActivityTimestamp = Date.now();
+  }
+
   onMount(() => {
     const token = localStorage.getItem('monitor_token');
     const userData = localStorage.getItem('monitor_user');
@@ -17,7 +28,81 @@
     }
     
     user = JSON.parse(userData);
+
+    // Global Fetch Interceptor to catch 401/403 anywhere in the dashboard
+    const originalFetch = window.fetch;
+    window.fetch = async (...args) => {
+      const response = await originalFetch(...args);
+      if (response.status === 401 || response.status === 403) {
+        console.warn("Global fetch caught unauthorized response. Logging out.");
+        handleLogout();
+      }
+      return response;
+    };
+
+    // Setup Activity Listeners
+    window.addEventListener('mousemove', updateActivity);
+    window.addEventListener('keydown', updateActivity);
+    window.addEventListener('click', updateActivity);
+    window.addEventListener('scroll', updateActivity);
+
+    // Setup Session Manager Interval (Runs every 5 minutes)
+    sessionInterval = setInterval(checkSessionStatus, 5 * 60 * 1000);
+
+    return () => {
+      window.fetch = originalFetch; // Restore original fetch
+      window.removeEventListener('mousemove', updateActivity);
+      window.removeEventListener('keydown', updateActivity);
+      window.removeEventListener('click', updateActivity);
+      window.removeEventListener('scroll', updateActivity);
+      if (sessionInterval) clearInterval(sessionInterval);
+    };
   });
+
+  async function checkSessionStatus() {
+    const now = Date.now();
+    
+    // Check Idle Timeout (1 Hour)
+    if (now - lastActivityTimestamp > IDLE_TIMEOUT_MS) {
+      console.warn("Session expired due to inactivity.");
+      handleLogout();
+      return;
+    }
+
+    // Check Token Keep-Alive (Refresh every 30 mins if active)
+    if (now - lastTokenRefresh > TOKEN_REFRESH_THRESHOLD_MS) {
+      await performTokenRefresh();
+    }
+  }
+
+  async function performTokenRefresh() {
+    try {
+      const token = localStorage.getItem('monitor_token');
+      if (!token) return;
+
+      const res = await fetch('http://localhost:5273/api/v1/auth/refresh', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.token) {
+          localStorage.setItem('monitor_token', data.token);
+          lastTokenRefresh = Date.now();
+          console.log("Session token refreshed successfully.");
+        }
+      } else if (res.status === 401 || res.status === 403) {
+        console.warn("Token refresh rejected by backend. Forcing logout.");
+        handleLogout();
+      }
+    } catch (err) {
+      console.error("Failed to refresh token:", err);
+    }
+  }
 
   function handleLogout() {
     localStorage.removeItem('monitor_token');

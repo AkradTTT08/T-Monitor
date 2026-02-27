@@ -6,6 +6,42 @@
   let summary = { total: 0, up: 0, down: 0 };
   let refreshInterval: any;
 
+  // Filter State
+  let searchQuery = '';
+  let statusFilter = 'ALL'; // ALL, UP, DOWN
+  
+  // Derived state for filtered logs
+  $: filteredLogs = logs.filter(log => {
+    // 1. Check Status Filter
+    if (statusFilter === 'UP' && !log.is_success) return false;
+    if (statusFilter === 'DOWN' && log.is_success) return false;
+    
+    // 2. Check Search Query
+    if (searchQuery.trim() !== '') {
+      const q = searchQuery.toLowerCase();
+      const apiName = (log.api?.name || `API-${log.api_id}`).toLowerCase();
+      const errorMsg = (log.error_message || '').toLowerCase();
+      const statusCode = (log.status_code || '').toString();
+      
+      if (!apiName.includes(q) && !errorMsg.includes(q) && !statusCode.includes(q)) {
+        return false;
+      }
+    }
+    
+    return true;
+  });
+
+  // Pagination State
+  let currentPage = 1;
+  const itemsPerPage = 10;
+  $: totalPages = Math.ceil(filteredLogs.length / itemsPerPage);
+  $: paginatedLogs = filteredLogs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  // Reset page when filters change
+  $: if (searchQuery !== undefined || statusFilter !== undefined) {
+    currentPage = 1;
+  }
+
   onMount(async () => {
     await fetchLogs();
     // Real-time aspect: Poll every 10 seconds for new health checks
@@ -65,6 +101,18 @@
     const diffDays = Math.round(diffHours / 24);
     return rtf.format(diffDays, 'day');
   }
+
+  function formatDateTime(dateString: string) {
+    return new Intl.DateTimeFormat('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }).format(new Date(dateString));
+  }
 </script>
 
 <div class="fade-in max-w-6xl mx-auto w-full overflow-hidden">
@@ -100,8 +148,29 @@
     </div>
   </div>
 
+  <!-- Filters & Search -->
+  <div class="bg-white p-4 rounded-t-2xl border-x border-t border-slate-200 flex flex-col md:flex-row gap-4 items-center justify-between mt-4">
+    <div class="relative w-full md:max-w-md lg:max-w-lg shrink-0">
+      <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+        <svg class="h-5 w-5 text-slate-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clip-rule="evenodd" /></svg>
+      </div>
+      <input type="text" bind:value={searchQuery} placeholder="Search by endpoint name, status code, error detail..." class="block w-full pl-10 pr-10 py-2.5 border border-slate-200 rounded-xl leading-5 bg-slate-50 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 sm:text-sm transition-all duration-200" />
+      {#if searchQuery}
+        <button class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 transition-colors" on:click={() => searchQuery = ''}>
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 bg-slate-200 rounded-full p-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
+      {/if}
+    </div>
+    
+    <div class="flex gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0 hide-scrollbar shrink-0">
+      <button on:click={() => statusFilter = 'ALL'} class="px-5 py-2.5 text-sm font-semibold rounded-xl border transition-all whitespace-nowrap {statusFilter === 'ALL' ? 'bg-slate-800 text-white border-slate-800 shadow-md shadow-slate-800/20' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300'}">All Logs</button>
+      <button on:click={() => statusFilter = 'UP'} class="px-5 py-2.5 text-sm font-semibold rounded-xl border transition-all whitespace-nowrap {statusFilter === 'UP' ? 'bg-emerald-50 text-emerald-700 border-emerald-300 shadow-sm shadow-emerald-500/10' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300'} flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-emerald-500"></div> Up</button>
+      <button on:click={() => statusFilter = 'DOWN'} class="px-5 py-2.5 text-sm font-semibold rounded-xl border transition-all whitespace-nowrap {statusFilter === 'DOWN' ? 'bg-rose-50 text-rose-700 border-rose-300 shadow-sm shadow-rose-500/10' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300'} flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-rose-500"></div> Down</button>
+    </div>
+  </div>
+
   <!-- Log Table -->
-  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden w-full">
+  <div class="bg-white rounded-b-2xl border border-t-0 border-slate-200 shadow-sm overflow-hidden w-full relative -mt-px">
     {#if isLoading && logs.length === 0}
       <div class="flex justify-center p-12">
         <svg class="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
@@ -114,13 +183,25 @@
         <h3 class="text-lg font-bold text-slate-800">No Logs Recorded</h3>
         <p class="text-slate-500 mt-1 text-sm">Waiting for the background worker to execute health checks.</p>
       </div>
+    {:else if filteredLogs.length === 0}
+      <div class="p-8 md:p-12 text-center py-24">
+        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-50 mb-4 ring-8 ring-blue-50/50">
+          <svg xmlns="http://www.w3.org/2000/svg" class="text-blue-500 h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+        </div>
+        <h3 class="text-xl font-bold text-slate-800 tracking-tight">No matching logs found</h3>
+        <p class="text-slate-500 mt-2 text-sm max-w-sm mx-auto">We couldn't find any health check logs matching your search terms or filter criteria.</p>
+        <button on:click={() => { searchQuery = ''; statusFilter = 'ALL'; }} class="mt-6 px-5 py-2.5 text-sm font-semibold text-blue-700 bg-blue-50 rounded-xl hover:bg-blue-100 transition-colors shadow-sm inline-flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"/></svg>
+          Clear all filters
+        </button>
+      </div>
     {:else}
       <div class="overflow-x-auto w-full">
-        <table class="w-full text-left border-collapse whitespace-nowrap min-w-[700px]">
+        <table class="w-full text-left border-collapse whitespace-nowrap min-w-[800px]">
           <thead>
             <tr class="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
               <th class="p-3 md:p-4 pl-4 md:pl-6">Status</th>
-              <th class="p-3 md:p-4">API ID</th>
+              <th class="p-3 md:p-4">Endpoint Name</th>
               <th class="p-3 md:p-4">Check Time</th>
               <th class="p-3 md:p-4">Response Time</th>
               <th class="p-3 md:p-4">Status Code</th>
@@ -128,7 +209,7 @@
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100 text-sm">
-            {#each logs as log}
+            {#each paginatedLogs as log}
               <tr class="hover:bg-slate-50 transition-colors">
                 <td class="p-3 md:p-4 pl-4 md:pl-6">
                   {#if log.is_success}
@@ -141,8 +222,13 @@
                     </div>
                   {/if}
                 </td>
-                <td class="p-3 md:p-4 font-mono font-medium text-slate-700">API-{log.api_id}</td>
-                <td class="p-3 md:p-4 text-slate-500">{formatRelativeTime(log.checked_at)}</td>
+                <td class="p-3 md:p-4 text-slate-800 font-semibold truncate max-w-[200px]" title={log.api?.name || 'Unknown API'}>
+                  {log.api?.name || `API-${log.api_id}`}
+                </td>
+                <td class="p-3 md:p-4 text-slate-500 flex flex-col justify-center">
+                  <span class="font-medium text-slate-700">{formatDateTime(log.checked_at)}</span>
+                  <span class="text-xs text-slate-400">{formatRelativeTime(log.checked_at)}</span>
+                </td>
                 <td class="p-3 md:p-4">
                   <span class="font-mono {log.response_time > 1000 ? 'text-orange-500 font-semibold' : 'text-slate-600'}">
                     {log.response_time}ms
@@ -160,7 +246,83 @@
             {/each}
           </tbody>
         </table>
+        
+        <!-- Pagination Controls -->
+        {#if totalPages > 1}
+          <div class="flex items-center justify-between border-t border-slate-200 px-4 py-3 bg-white sm:px-6 rounded-b-2xl">
+            <div class="flex flex-1 justify-between sm:hidden">
+              <button on:click={() => currentPage > 1 && currentPage--} disabled={currentPage === 1} class="relative inline-flex items-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">Previous</button>
+              <button on:click={() => currentPage < totalPages && currentPage++} disabled={currentPage === totalPages} class="relative ml-3 inline-flex items-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">Next</button>
+            </div>
+            <div class="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+              <div>
+                <p class="text-sm text-slate-700">
+                  Showing
+                  <span class="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span>
+                  to
+                  <span class="font-medium">{Math.min(currentPage * itemsPerPage, logs.length)}</span>
+                  of
+                  <span class="font-medium">{logs.length}</span>
+                  results
+                </p>
+              </div>
+              <div>
+                <nav class="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
+                  <button 
+                    on:click={() => currentPage > 1 && currentPage--}
+                    disabled={currentPage === 1}
+                    class="relative inline-flex items-center rounded-l-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <span class="sr-only">Previous</span>
+                    <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path fill-rule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clip-rule="evenodd" />
+                    </svg>
+                  </button>
+                  
+                  {#each Array(totalPages) as _, i}
+                    <!-- Show max 5 page numbers -->
+                    {#if i + 1 === 1 || i + 1 === totalPages || (i + 1 >= currentPage - 1 && i + 1 <= currentPage + 1)}
+                      <button 
+                        on:click={() => currentPage = i + 1}
+                        class="relative inline-flex items-center px-4 py-2 text-sm font-semibold {currentPage === i + 1 ? 'z-10 bg-blue-600 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600' : 'text-slate-900 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0'}"
+                      >
+                        {i + 1}
+                      </button>
+                    {:else if (i + 1 === currentPage - 2 && currentPage > 3) || (i + 1 === currentPage + 2 && currentPage < totalPages - 2)}
+                      <span class="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-inset ring-slate-300 focus:outline-offset-0">
+                        ...
+                      </span>
+                    {/if}
+                  {/each}
+                  
+                  <button 
+                    on:click={() => currentPage < totalPages && currentPage++}
+                    disabled={currentPage === totalPages}
+                    class="relative inline-flex items-center rounded-r-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <span class="sr-only">Next</span>
+                    <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd" />
+                    </svg>
+                  </button>
+                </nav>
+              </div>
+            </div>
+          </div>
+        {/if}
+        
       </div>
     {/if}
   </div>
 </div>
+<style>
+  /* Hide scrollbar for Chrome, Safari and Opera */
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  /* Hide scrollbar for IE, Edge and Firefox */
+  .hide-scrollbar {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+</style>

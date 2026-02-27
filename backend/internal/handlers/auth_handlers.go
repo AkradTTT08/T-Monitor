@@ -74,3 +74,22 @@ func Login(c *fiber.Ctx) error {
 
 	return c.JSON(fiber.Map{"token": token, "user": user})
 }
+
+// RefreshToken generates a new bearer token using the user details from the existing validated token
+func RefreshToken(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(uint)
+	role := c.Locals("role").(string)
+
+	user := models.User{
+		ID:   userID,
+		Role: role,
+	}
+
+	token, err := middleware.GenerateToken(user)
+	if err != nil {
+		log.Println("Error refreshing token:", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to refresh token"})
+	}
+
+	return c.JSON(fiber.Map{"token": token, "message": "Token refreshed successfully"})
+}
