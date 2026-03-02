@@ -22,6 +22,10 @@
   let isLoading = true;
   let isUploading = false;
   
+  // Bulk Delete State
+  let selectedApiIds: number[] = [];
+  let showBulkDeleteModal = false;
+  
   // Modals state
   let showAddApiModal = false;
   let showEditApiModal = false;
@@ -427,6 +431,27 @@
     }
   }
 
+  // --- Bulk Selection Logic --- //
+  $: allApisList = apis; // Flatted list of all APIs for the project
+  $: allSelected = apis.length > 0 && selectedApiIds.length === apis.length;
+  $: indeterminate = selectedApiIds.length > 0 && selectedApiIds.length < apis.length;
+
+  function toggleAllSelection() {
+    if (allSelected) {
+      selectedApiIds = [];
+    } else {
+      selectedApiIds = apis.map(a => a.id);
+    }
+  }
+
+  function toggleSelection(id: number) {
+    if (selectedApiIds.includes(id)) {
+      selectedApiIds = selectedApiIds.filter(i => i !== id);
+    } else {
+      selectedApiIds = [...selectedApiIds, id];
+    }
+  }
+
   // --- Postman Import Handlers --- //
   function handleFileSelect(event: Event) {
     const target = event.target as HTMLInputElement;
@@ -673,6 +698,32 @@
     }
   }
 
+  async function handleBulkDeleteSubmit() {
+    try {
+      const token = localStorage.getItem('monitor_token');
+      // Fire requests concurrently using Promise.all
+      const deletePromises = selectedApiIds.map(id => 
+        fetch(`http://localhost:5273/api/v1/apis/${id}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+      );
+      
+      const results = await Promise.all(deletePromises);
+      const allOk = results.every(res => res.ok);
+      
+      if (allOk || results.some(res => res.ok)) {
+        showBulkDeleteModal = false;
+        selectedApiIds = [];
+        await fetchProjectDetails();
+      } else {
+         console.error("Some or all deletions failed");
+      }
+    } catch (err) {
+      console.error("Bulk delete failed:", err);
+    }
+  }
+
   async function executeAddApi(mode: 'append' | 'replace') {
     syncKVToJSON();
     showAddModeModal = false;
@@ -832,9 +883,21 @@
     </div>
     
     <!-- API List -->
-    <div class="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-      <h2 class="text-lg md:text-xl font-bold text-slate-800">Monitored Endpoints</h2>
-      <span class="bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-1 rounded-full w-fit">{apis.length} Total</span>
+    <div class="mb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div class="flex items-center gap-4">
+        <h2 class="text-lg md:text-xl font-bold text-slate-800">Monitored Endpoints</h2>
+        <span class="bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-1 rounded-full w-fit">{apis.length} Total</span>
+      </div>
+      
+      {#if selectedApiIds.length > 0}
+        <div class="flex items-center gap-3 animate-fade-in">
+          <span class="text-sm font-medium text-slate-600 border-r border-slate-200 pr-3">{selectedApiIds.length} Selected</span>
+          <button on:click={() => showBulkDeleteModal = true} class="bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 font-medium py-1.5 px-4 rounded-lg shadow-sm transition-colors text-sm flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
+            Delete Selected
+          </button>
+        </div>
+      {/if}
     </div>
     
     {#if apis.length === 0}
@@ -847,6 +910,9 @@
         <table class="w-full text-left border-collapse min-w-[700px]">
           <thead>
             <tr class="bg-slate-50 border-b border-slate-200 text-sm font-semibold text-slate-600">
+              <th class="p-3 md:p-4 w-12 text-center">
+                <input type="checkbox" checked={allSelected} indeterminate={indeterminate} on:change={toggleAllSelection} class="w-4 h-4 text-blue-600 bg-white border-slate-300 rounded focus:ring-blue-500/50 cursor-pointer" />
+              </th>
               <th class="p-3 md:p-4">Method</th>
               <th class="p-3 md:p-4">Endpoint Name</th>
               <th class="p-3 md:p-4">URL</th>
@@ -857,14 +923,14 @@
           <tbody class="divide-y divide-slate-100">
             {#each Object.entries(groupedApis) as [folderName, folderApis]}
               <!-- Folder Header Row -->
-              <tr 
+              <tr  
                 class="bg-slate-50/80 border-y border-slate-200 transition-colors group"
                 class:bg-blue-50={dragOverItem?.folder === folderName && dragOverItem?.index === -1}
                 on:dragover={(e) => handleDragOver(e, folderName, -1)}
                 on:dragleave={handleDragLeave}
                 on:drop={(e) => handleDrop(e, folderName, -1)}
               >
-                <td colspan="5" class="px-4 py-2">
+                <td colspan="6" class="px-4 py-2">
                   <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2 text-slate-700 font-semibold text-sm">
                       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
@@ -897,6 +963,9 @@
                   class:border-t-2={dragOverItem?.folder === folderName && dragOverItem?.index === i}
                   class:border-blue-500={dragOverItem?.folder === folderName && dragOverItem?.index === i}
                 >
+                  <td class="p-3 md:p-4 text-center">
+                    <input type="checkbox" checked={selectedApiIds.includes(api.id)} on:change={() => toggleSelection(api.id)} class="w-4 h-4 text-blue-600 bg-white border border-slate-300 rounded focus:ring-blue-500/50 cursor-pointer" />
+                  </td>
                   <td class="p-3 md:p-4">
                     <span class="px-2 py-1 rounded text-xs font-bold whitespace-nowrap
                       {api.method === 'GET' ? 'bg-green-100 text-green-700' : 
@@ -934,7 +1003,7 @@
                   on:dragleave={handleDragLeave}
                   on:drop={(e) => handleDrop(e, folderName, folderApis.length)}
                 >
-                  <td colspan="5" class="p-0"></td>
+                  <td colspan="6" class="p-0"></td>
                 </tr>
               {/if}
             {/each}
@@ -1304,6 +1373,25 @@
     <div class="flex justify-end gap-3 pt-2">
       <button on:click={() => showDeleteApiModal = false} class="px-5 py-2.5 rounded-xl font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors text-sm">Cancel</button>
       <button on:click={handleDeleteApiSubmit} class="px-5 py-2.5 rounded-xl font-semibold text-white bg-red-600 hover:bg-red-700 transition-colors shadow-sm shadow-red-500/20 text-sm">Yes, Remove</button>
+    </div>
+  </div>
+</Modal>
+
+<!-- 5a. Bulk Delete API Modal -->
+<Modal bind:open={showBulkDeleteModal} title="Delete Selected APIs">
+  <div class="space-y-4">
+    <div class="bg-red-50 text-red-800 p-4 rounded-xl border border-red-100 flex items-start gap-3">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 mt-0.5"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+      <div>
+        <p class="font-bold text-sm">Warning: Bulk Endpoint Deletion</p>
+        <p class="text-xs mt-1 text-red-700">Are you sure you want to delete <span class="font-bold">{selectedApiIds.length}</span> selected endpoints? This action cannot be undone and will stop monitoring for all selected items immediately.</p>
+      </div>
+    </div>
+    <div class="flex justify-end gap-3 pt-2">
+      <button on:click={() => showBulkDeleteModal = false} class="px-5 py-2.5 rounded-xl font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors text-sm">Cancel</button>
+      <button on:click={handleBulkDeleteSubmit} class="px-5 py-2.5 rounded-xl font-semibold text-white bg-red-600 hover:bg-red-700 transition-colors shadow-sm shadow-red-500/20 text-sm flex items-center gap-2">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
+        Confirm Delete</button>
     </div>
   </div>
 </Modal>

@@ -1,10 +1,15 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import Chart from 'chart.js/auto';
   
   let logs: any[] = [];
   let isLoading = true;
   let summary = { total: 0, up: 0, down: 0 };
   let refreshInterval: any;
+
+  // Chart State
+  let chartCanvas: HTMLCanvasElement;
+  let statusChart: Chart | null = null;
 
   // Filter State
   let searchQuery = '';
@@ -42,6 +47,135 @@
     currentPage = 1;
   }
 
+  // --- Chart.js Rendering Logic --- //
+  $: if (chartCanvas && filteredLogs.length >= 0) {
+    updateChart();
+  }
+
+  function updateChart() {
+    if (!chartCanvas) return;
+    
+    // We want the chart to flow chronologically (oldest left, newest right)
+    // The logs from DB are newest-first, so limit to latest 50 and reverse.
+    const chartData = [...filteredLogs].slice(0, 50).reverse();
+    
+    const labels = chartData.map(log => 
+      new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date(log.checked_at))
+    );
+    
+    // Background colors: Green if UP, Red if DOWN
+    const backgroundColors = chartData.map(log => 
+      log.is_success ? 'rgba(34, 197, 94, 0.8)' : 'rgba(239, 68, 68, 0.8)'
+    );
+
+    const dataPoints = chartData.map(log => log.response_time);
+
+    // Custom Tooltip Data
+    const tooltipLabels = chartData.map(log => ({
+      name: log.api?.name || `API-${log.api_id}`,
+      status: log.status_code || 'ERR',
+      error: log.error_message || '-'
+    }));
+
+    if (statusChart) {
+      statusChart.data.labels = labels;
+      statusChart.data.datasets[0].data = dataPoints;
+      statusChart.data.datasets[0].backgroundColor = backgroundColors;
+      // Store custom data for tooltips
+      (statusChart.data.datasets[0] as any).customData = tooltipLabels;
+      statusChart.update();
+    } else {
+      statusChart = new Chart(chartCanvas, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Response Time (ms)',
+            data: dataPoints,
+            backgroundColor: backgroundColors,
+            borderRadius: 4,
+            borderSkipped: false,
+            barPercentage: 0.8,
+            categoryPercentage: 0.9,
+            customData: tooltipLabels // Attach our custom tooltip object
+          } as any]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: 'rgba(15, 23, 42, 0.9)',
+              titleFont: { size: 13, family: "'Inter', sans-serif", weight: 'bold' },
+              bodyFont: { size: 12, family: "'Inter', sans-serif" },
+              padding: 12,
+              cornerRadius: 8,
+              callbacks: {
+                title: (context) => {
+                  const dataIndex = context[0].dataIndex;
+                  const name = context[0].dataset.customData[dataIndex].name;
+                  return `${name} • ${context[0].label}`;
+                },
+                afterTitle: (context) => {
+                  const dataIndex = context[0].dataIndex;
+                  const status = context[0].dataset.customData[dataIndex].status;
+                  return `Status Code: ${status}`;
+                },
+                label: (context) => {
+                  return `Response: ${context.raw} ms`;
+                },
+                afterLabel: (context) => {
+                  const dataIndex = context.dataIndex;
+                  const error = context.dataset.customData[dataIndex].error;
+                  if (error && error !== '-') {
+                    return `\nError: ${error}`;
+                  }
+                  return '';
+                }
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              grid: { color: 'rgba(226, 232, 240, 0.5)' },
+              border: { dash: [4, 4] },
+              ticks: {
+                font: { family: "'Inter', sans-serif", size: 11 },
+                color: '#64748b',
+                callback: function(value) {
+                  // Format as seconds similar to Postman if it's over 1000
+                  if (Number(value) >= 1000) {
+                    return (Number(value) / 1000).toFixed(1) + ' s';
+                  }
+                  return value + ' ms';
+                }
+              },
+              title: {
+                display: true,
+                text: 'Response Time',
+                color: '#94a3b8',
+                font: { size: 10, weight: 'bold', family: "'Inter', sans-serif" }
+              }
+            },
+            x: {
+              grid: { display: false },
+              ticks: {
+                maxTicksLimit: 12,
+                maxRotation: 45,
+                minRotation: 0,
+                font: { family: "'Inter', sans-serif", size: 10 },
+                color: '#94a3b8'
+              }
+            }
+          },
+          animation: { duration: 400 }
+        }
+      });
+    }
+  }
+
   onMount(async () => {
     await fetchLogs();
     // Real-time aspect: Poll every 10 seconds for new health checks
@@ -50,6 +184,7 @@
 
   onDestroy(() => {
     if (refreshInterval) clearInterval(refreshInterval);
+    if (statusChart) statusChart.destroy();
   });
 
   async function fetchLogs() {
@@ -145,6 +280,26 @@
       <div class="absolute right-0 top-0 w-24 h-24 bg-red-500 opacity-5 rounded-bl-full pointer-events-none"></div>
       <p class="text-slate-500 font-medium text-xs md:text-sm mb-1 uppercase tracking-wider">Failing (DOWN)</p>
       <h2 class="text-3xl md:text-4xl font-black text-red-500">{summary.down}</h2>
+    </div>
+  </div>
+
+  <!-- Performance Chart -->
+  <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm mb-6">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-sm font-semibold text-slate-800 flex items-center gap-2">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+        Recent Activity (Run Summary)
+      </h3>
+      <span class="text-xs font-medium text-slate-500 bg-slate-100 py-1 px-2.5 rounded-md border border-slate-200">Latest 50 Hits</span>
+    </div>
+    
+    <div class="h-48 w-full relative">
+      {#if isLoading && logs.length === 0}
+        <div class="absolute inset-0 flex items-center justify-center">
+          <svg class="animate-spin h-6 w-6 text-slate-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+        </div>
+      {/if}
+      <canvas bind:this={chartCanvas} class:opacity-0={isLoading && logs.length === 0}></canvas>
     </div>
   </div>
 
