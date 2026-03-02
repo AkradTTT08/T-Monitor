@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Modal from '$lib/components/Modal.svelte';
+  import InputWithVariables from '$lib/components/InputWithVariables.svelte';
+  import TextareaWithVariables from '$lib/components/TextareaWithVariables.svelte';
   
   let apis: any[] = [];
   let projects: any[] = [];
@@ -19,6 +21,17 @@
   let reqHeaders = '';
   let reqBody = '';
   let reqParams = '';
+
+  $: activeProjectEnvVars = (() => {
+    if (!selectedApi || !projects.length) return {};
+    const activeProject = projects.find(p => p.id === selectedApi.project_id);
+    if (activeProject && activeProject.environment_variables && activeProject.environment_variables !== '{}') {
+      try {
+        return JSON.parse(activeProject.environment_variables);
+      } catch (e) {}
+    }
+    return {};
+  })();
 
   onMount(async () => {
     await fetchProjects();
@@ -95,13 +108,7 @@
     testResult = null;
     
     // Get project env vars
-    const activeProject = projects.find(p => p.id === selectedApi.project_id);
-    let envVars: any = {};
-    if (activeProject && activeProject.environment_variables && activeProject.environment_variables !== '{}') {
-      try {
-        envVars = JSON.parse(activeProject.environment_variables);
-      } catch (e) {}
-    }
+    const envVars = activeProjectEnvVars;
 
     // Apply regex replacement
     const processedUrl = replaceVariables(reqUrl, envVars);
@@ -269,7 +276,9 @@
               selectedApi.method === 'DELETE' ? 'bg-red-100 text-red-700' : 'bg-slate-200 text-slate-700'}">
              {selectedApi.method}
            </span>
-           <input type="text" bind:value={reqUrl} class="w-full bg-white border border-slate-200 text-slate-800 rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2 outline-none transition-all font-mono text-sm" placeholder="https://api.example.com/v1/resource" />
+           <div class="flex-1 overflow-hidden relative">
+             <InputWithVariables bind:value={reqUrl} variables={activeProjectEnvVars} placeholder="https://api.example.com/v1/resource" />
+           </div>
          </div>
       </div>
 
@@ -279,7 +288,7 @@
           <div class="bg-slate-50 border-b border-slate-200 px-3 py-2 flex justify-between items-center">
              <span class="text-xs font-bold text-slate-600 uppercase tracking-widest">Headers (JSON)</span>
           </div>
-          <textarea bind:value={reqHeaders} class="w-full h-full p-3 bg-slate-900 text-green-400 font-mono text-xs focus:outline-none resize-none"></textarea>
+          <TextareaWithVariables bind:value={reqHeaders} variables={activeProjectEnvVars} outerClass="h-full bg-slate-900 border-0" innerClass="w-full h-full p-3 resize-none" textClass="text-green-400 font-mono text-xs" />
         </div>
         
         <!-- Parameters Editor -->
@@ -287,7 +296,7 @@
           <div class="bg-slate-50 border-b border-slate-200 px-3 py-2 flex justify-between items-center">
              <span class="text-xs font-bold text-slate-600 uppercase tracking-widest">Query Params (JSON)</span>
           </div>
-          <textarea bind:value={reqParams} class="w-full h-full p-3 bg-slate-900 text-amber-400 font-mono text-xs focus:outline-none resize-none"></textarea>
+          <TextareaWithVariables bind:value={reqParams} variables={activeProjectEnvVars} outerClass="h-full bg-slate-900 border-0" innerClass="w-full h-full p-3 resize-none" textClass="text-amber-400 font-mono text-xs" />
         </div>
       </div>
       
@@ -298,7 +307,7 @@
              <span class="text-xs font-bold text-slate-600 uppercase tracking-widest">Request Body</span>
              <span class="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded uppercase font-bold">Raw JSON</span>
           </div>
-          <textarea bind:value={reqBody} class="w-full h-full p-3 bg-slate-900 text-blue-300 font-mono text-xs focus:outline-none resize-none"></textarea>
+          <TextareaWithVariables bind:value={reqBody} variables={activeProjectEnvVars} outerClass="h-full bg-slate-900 border-0" innerClass="w-full h-full p-3 resize-none" textClass="text-blue-300 font-mono text-xs" />
         </div>
       {/if}
 

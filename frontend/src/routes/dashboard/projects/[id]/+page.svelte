@@ -1,8 +1,10 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import { onMount, tick } from 'svelte';
+  import Swal from 'sweetalert2';
   import Modal from '$lib/components/Modal.svelte';
   import InputWithVariables from '$lib/components/InputWithVariables.svelte';
+  import TextareaWithVariables from '$lib/components/TextareaWithVariables.svelte';
   
   const projectId = $page.params.id;
   let project: any = null;
@@ -102,6 +104,36 @@
     if (headerMode === 'kv') apiForm.headers = kvArrayToArrayString(headersKV);
     if (bodyMode === 'kv') apiForm.body = kvArrayToMapString(bodyKV);
     if (paramMode === 'kv') apiForm.parameters = kvArrayToArrayString(paramsKV);
+  }
+
+  function toggleHeaderMode(mode: 'json' | 'kv') {
+    if (headerMode === mode) return;
+    if (mode === 'json') {
+      apiForm.headers = kvArrayToArrayString(headersKV);
+    } else {
+      headersKV = parseToKVArray(apiForm.headers);
+    }
+    headerMode = mode;
+  }
+
+  function toggleParamMode(mode: 'json' | 'kv') {
+    if (paramMode === mode) return;
+    if (mode === 'json') {
+      apiForm.parameters = kvArrayToArrayString(paramsKV);
+    } else {
+      paramsKV = parseToKVArray(apiForm.parameters);
+    }
+    paramMode = mode;
+  }
+
+  function toggleBodyMode(mode: 'json' | 'kv') {
+    if (bodyMode === mode) return;
+    if (mode === 'json') {
+      apiForm.body = kvArrayToMapString(bodyKV);
+    } else {
+      bodyKV = parseToKVArray(apiForm.body);
+    }
+    bodyMode = mode;
   }
 
   // Temp state for handling file before asking import mode
@@ -500,9 +532,29 @@
       
       if (res.ok) {
         await fetchProjectDetails();
+        Swal.fire({
+          icon: 'success',
+          title: 'Saved',
+          text: 'API endpoint updated successfully!',
+          toast: true,
+          position: 'top-end',
+          showConfirmButton: false,
+          timer: 3000
+        });
+      } else {
+        throw new Error('Failed to update API');
       }
     } catch(err) {
       console.error(err);
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'Failed to save changes.',
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 3000
+      });
     }
   }
 
@@ -886,12 +938,12 @@
           <div class="flex items-center justify-between mb-2">
             <label class="block text-sm font-semibold text-slate-700">Query Parameters</label>
             <div class="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
-              <button type="button" class="px-3 py-1 text-xs font-semibold rounded-md transition-all {paramMode === 'json' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}" on:click={() => paramMode = 'json'}>JSON</button>
-              <button type="button" class="px-3 py-1 text-xs font-semibold rounded-md transition-all {paramMode === 'kv' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}" on:click={() => paramMode = 'kv'}>Key-Value</button>
+              <button type="button" class="px-3 py-1 text-xs font-semibold rounded-md transition-all {paramMode === 'json' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}" on:click={() => toggleParamMode('json')}>JSON</button>
+              <button type="button" class="px-3 py-1 text-xs font-semibold rounded-md transition-all {paramMode === 'kv' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}" on:click={() => toggleParamMode('kv')}>Key-Value</button>
             </div>
           </div>
           {#if paramMode === 'json'}
-            <textarea rows="2" bind:value={apiForm.parameters} class="w-full font-mono px-4 py-3 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-xs resize-y" placeholder={`[\n  {"key": "search", "value": "keyword"}\n]`}></textarea>
+            <TextareaWithVariables rows={2} bind:value={apiForm.parameters} variables={envVarDict} placeholder={`[\n  {"key": "search", "value": "keyword"}\n]`} />
           {:else}
             <div class="space-y-2">
               {#each paramsKV as param, i}
@@ -918,12 +970,12 @@
         <div class="flex items-center justify-between mb-2">
           <label class="block text-sm font-semibold text-slate-700">Headers</label>
           <div class="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
-            <button type="button" class="px-3 py-1 text-xs font-semibold rounded-md transition-all {headerMode === 'json' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}" on:click={() => headerMode = 'json'}>JSON</button>
-            <button type="button" class="px-3 py-1 text-xs font-semibold rounded-md transition-all {headerMode === 'kv' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}" on:click={() => headerMode = 'kv'}>Key-Value</button>
+            <button type="button" class="px-3 py-1 text-xs font-semibold rounded-md transition-all {headerMode === 'json' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}" on:click={() => toggleHeaderMode('json')}>JSON</button>
+            <button type="button" class="px-3 py-1 text-xs font-semibold rounded-md transition-all {headerMode === 'kv' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}" on:click={() => toggleHeaderMode('kv')}>Key-Value</button>
           </div>
         </div>
         {#if headerMode === 'json'}
-          <textarea rows="2" bind:value={apiForm.headers} class="w-full font-mono px-4 py-3 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-xs resize-y" placeholder={`[\n  {"key": "Authorization", "value": "Bearer token"}\n]`}></textarea>
+          <TextareaWithVariables rows={2} bind:value={apiForm.headers} variables={envVarDict} placeholder={`[\n  {"key": "Authorization", "value": "Bearer token"}\n]`} />
         {:else}
           <div class="space-y-2">
             {#each headersKV as hdr, i}
@@ -949,12 +1001,12 @@
         <div class="flex items-center justify-between mb-2">
           <label class="block text-sm font-semibold text-slate-700">Body / Payload</label>
           <div class="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
-            <button type="button" disabled={apiForm.method === 'GET'} class="px-3 py-1 text-xs font-semibold rounded-md transition-all {bodyMode === 'json' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'} disabled:cursor-not-allowed" on:click={() => bodyMode = 'json'}>JSON</button>
-            <button type="button" disabled={apiForm.method === 'GET'} class="px-3 py-1 text-xs font-semibold rounded-md transition-all {bodyMode === 'kv' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'} disabled:cursor-not-allowed" on:click={() => bodyMode = 'kv'}>Key-Value</button>
+            <button type="button" disabled={apiForm.method === 'GET'} class="px-3 py-1 text-xs font-semibold rounded-md transition-all {bodyMode === 'json' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'} disabled:cursor-not-allowed" on:click={() => toggleBodyMode('json')}>JSON</button>
+            <button type="button" disabled={apiForm.method === 'GET'} class="px-3 py-1 text-xs font-semibold rounded-md transition-all {bodyMode === 'kv' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'} disabled:cursor-not-allowed" on:click={() => toggleBodyMode('kv')}>Key-Value</button>
           </div>
         </div>
         {#if bodyMode === 'json'}
-          <textarea rows="3" bind:value={apiForm.body} disabled={apiForm.method === 'GET'} class="w-full font-mono px-4 py-3 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-xs resize-y disabled:cursor-not-allowed" placeholder={`{ "key": "value" }`}></textarea>
+          <TextareaWithVariables rows={3} bind:value={apiForm.body} variables={envVarDict} disabled={apiForm.method === 'GET'} placeholder={`{ "key": "value" }`} />
         {:else}
           <div class="space-y-2">
             {#each bodyKV as bdy, i}
@@ -1036,12 +1088,12 @@
           <div class="flex items-center justify-between mb-2">
             <label class="block text-sm font-semibold text-slate-700">Query Parameters</label>
             <div class="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
-              <button type="button" class="px-3 py-1 text-xs font-semibold rounded-md transition-all {paramMode === 'json' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}" on:click={() => paramMode = 'json'}>JSON</button>
-              <button type="button" class="px-3 py-1 text-xs font-semibold rounded-md transition-all {paramMode === 'kv' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}" on:click={() => paramMode = 'kv'}>Key-Value</button>
+              <button type="button" class="px-3 py-1 text-xs font-semibold rounded-md transition-all {paramMode === 'json' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}" on:click={() => toggleParamMode('json')}>JSON</button>
+              <button type="button" class="px-3 py-1 text-xs font-semibold rounded-md transition-all {paramMode === 'kv' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}" on:click={() => toggleParamMode('kv')}>Key-Value</button>
             </div>
           </div>
           {#if paramMode === 'json'}
-            <textarea rows="2" bind:value={apiForm.parameters} class="w-full font-mono px-4 py-3 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-xs resize-y" placeholder={`[\n  {"key": "search", "value": "keyword"}\n]`}></textarea>
+            <TextareaWithVariables rows={2} bind:value={apiForm.parameters} variables={envVarDict} placeholder={`[\n  {"key": "search", "value": "keyword"}\n]`} />
           {:else}
             <div class="space-y-2">
               {#each paramsKV as param, i}
@@ -1068,12 +1120,12 @@
         <div class="flex items-center justify-between mb-2">
           <label class="block text-sm font-semibold text-slate-700">Headers</label>
           <div class="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
-            <button type="button" class="px-3 py-1 text-xs font-semibold rounded-md transition-all {headerMode === 'json' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}" on:click={() => headerMode = 'json'}>JSON</button>
-            <button type="button" class="px-3 py-1 text-xs font-semibold rounded-md transition-all {headerMode === 'kv' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}" on:click={() => headerMode = 'kv'}>Key-Value</button>
+            <button type="button" class="px-3 py-1 text-xs font-semibold rounded-md transition-all {headerMode === 'json' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}" on:click={() => toggleHeaderMode('json')}>JSON</button>
+            <button type="button" class="px-3 py-1 text-xs font-semibold rounded-md transition-all {headerMode === 'kv' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}" on:click={() => toggleHeaderMode('kv')}>Key-Value</button>
           </div>
         </div>
         {#if headerMode === 'json'}
-          <textarea rows="2" bind:value={apiForm.headers} class="w-full font-mono px-4 py-3 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-xs resize-y" placeholder={`[\n  {"key": "Authorization", "value": "Bearer token"}\n]`}></textarea>
+          <TextareaWithVariables rows={2} bind:value={apiForm.headers} variables={envVarDict} placeholder={`[\n  {"key": "Authorization", "value": "Bearer token"}\n]`} />
         {:else}
           <div class="space-y-2">
             {#each headersKV as hdr, i}
@@ -1099,8 +1151,8 @@
         <div class="flex items-center justify-between mb-2">
           <label class="block text-sm font-semibold text-slate-700">Body / Payload</label>
           <div class="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
-            <button type="button" disabled={apiForm.method === 'GET'} class="px-3 py-1 text-xs font-semibold rounded-md transition-all {bodyMode === 'json' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'} disabled:cursor-not-allowed" on:click={() => bodyMode = 'json'}>JSON</button>
-            <button type="button" disabled={apiForm.method === 'GET'} class="px-3 py-1 text-xs font-semibold rounded-md transition-all {bodyMode === 'kv' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'} disabled:cursor-not-allowed" on:click={() => bodyMode = 'kv'}>Key-Value</button>
+            <button type="button" disabled={apiForm.method === 'GET'} class="px-3 py-1 text-xs font-semibold rounded-md transition-all {bodyMode === 'json' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'} disabled:cursor-not-allowed" on:click={() => toggleBodyMode('json')}>JSON</button>
+            <button type="button" disabled={apiForm.method === 'GET'} class="px-3 py-1 text-xs font-semibold rounded-md transition-all {bodyMode === 'kv' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'} disabled:cursor-not-allowed" on:click={() => toggleBodyMode('kv')}>Key-Value</button>
           </div>
         </div>
         {#if bodyMode === 'json'}

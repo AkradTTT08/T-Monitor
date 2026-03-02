@@ -152,22 +152,18 @@ func UpdateAPI(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(uint)
 	role := c.Locals("role").(string)
 
-	type APIProject struct {
-		UserID uint `json:"user_id"`
-	}
-	type APIWithProject struct {
-		models.API
-		Project APIProject `gorm:"foreignKey:ProjectID"`
-	}
-
-	var api APIWithProject
-	// Use explicit JOIN for faster query or rely on Preload for ORM convenience
-	if err := database.DB.Joins("Project").First(&api, apiID).Error; err != nil {
+	var api models.API
+	if err := database.DB.First(&api, apiID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "API not found"})
 	}
 
+	var project models.Project
+	if err := database.DB.Select("user_id").First(&project, api.ProjectID).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Associated project not found"})
+	}
+
 	// Verify project ownership
-	if role != "admin" && api.Project.UserID != userID {
+	if role != "admin" && project.UserID != userID {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Unauthorized to edit this API"})
 	}
 
@@ -204,21 +200,18 @@ func DeleteAPI(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(uint)
 	role := c.Locals("role").(string)
 
-	type APIProject struct {
-		UserID uint `json:"user_id"`
-	}
-	type APIWithProject struct {
-		models.API
-		Project APIProject `gorm:"foreignKey:ProjectID"`
-	}
-
-	var api APIWithProject
-	if err := database.DB.Joins("Project").First(&api, apiID).Error; err != nil {
+	var api models.API
+	if err := database.DB.First(&api, apiID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "API not found"})
 	}
 
+	var project models.Project
+	if err := database.DB.Select("user_id").First(&project, api.ProjectID).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Associated project not found"})
+	}
+
 	// Verify project ownership
-	if role != "admin" && api.Project.UserID != userID {
+	if role != "admin" && project.UserID != userID {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Unauthorized to delete this API"})
 	}
 
