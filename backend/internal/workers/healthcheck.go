@@ -147,9 +147,16 @@ func handleResult(api models.API, statusCode int, duration int64, isSuccess bool
 	if !isSuccess {
 		var config models.NotificationConfig
 		err := database.DB.Where("project_id = ?", api.ProjectID).First(&config).Error
-		if err == nil {
-			triggerN8nWebhook(api, logEntry, &config)
+
+		// If config is genuinely missing, initialize an empty default to suppress error logs
+		if err != nil {
+			config = models.NotificationConfig{
+				ProjectID: api.ProjectID,
+			}
+			database.DB.Create(&config)
 		}
+
+		triggerN8nWebhook(api, logEntry, &config)
 	}
 }
 

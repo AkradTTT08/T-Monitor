@@ -203,6 +203,7 @@
               <th class="p-3 md:p-4 pl-4 md:pl-6">Status</th>
               <th class="p-3 md:p-4">Endpoint Name</th>
               <th class="p-3 md:p-4">Check Time</th>
+              <th class="p-3 md:p-4">Schedule</th>
               <th class="p-3 md:p-4">Response Time</th>
               <th class="p-3 md:p-4">Status Code</th>
               <th class="p-3 md:p-4 pr-4 md:pr-6">Error Detail</th>
@@ -228,6 +229,21 @@
                 <td class="p-3 md:p-4 text-slate-500 flex flex-col justify-center">
                   <span class="font-medium text-slate-700">{formatDateTime(log.checked_at)}</span>
                   <span class="text-xs text-slate-400">{formatRelativeTime(log.checked_at)}</span>
+                </td>
+                <td class="p-3 md:p-4">
+                  <span class="text-sm font-medium {log.api?.interval ? 'text-blue-600' : 'text-slate-400'}">
+                    {#if log.api?.interval}
+                      {#if log.api.interval < 60}
+                        Every {log.api.interval} sec
+                      {:else if log.api.interval < 3600}
+                        Every {Math.round(log.api.interval / 60)} min
+                      {:else}
+                        Every {Math.round(log.api.interval / 3600)} hr
+                      {/if}
+                    {:else}
+                      -
+                    {/if}
+                  </span>
                 </td>
                 <td class="p-3 md:p-4">
                   <span class="font-mono {log.response_time > 1000 ? 'text-orange-500 font-semibold' : 'text-slate-600'}">
