@@ -87,6 +87,7 @@
     placeholder={placeholder}
     on:focus={() => isFocused = true}
     on:blur={() => isFocused = false}
+    on:paste
     class="relative z-20 w-full h-full px-4 py-2 bg-transparent focus:outline-none transition-all text-slate-700 caret-blue-500 {disabled ? 'cursor-not-allowed opacity-50' : ''}" 
     style="color: transparent;" 
     spellcheck="false"

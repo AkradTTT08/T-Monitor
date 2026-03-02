@@ -117,10 +117,17 @@
     const processedParams = replaceVariables(reqParams, envVars);
     
     // Parse headers if valid JSON
-    let parsedHeaders = {};
+    let parsedHeaders: any = {};
     try {
-      if (processedHeaders.trim() && processedHeaders.trim() !== '{}' && processedHeaders.trim() !== '{\n}') {
-        parsedHeaders = JSON.parse(processedHeaders);
+      if (processedHeaders.trim() && processedHeaders.trim() !== '{}' && processedHeaders.trim() !== '{\n}' && processedHeaders.trim() !== '[]') {
+        const rawHeaders = JSON.parse(processedHeaders);
+        if (Array.isArray(rawHeaders)) {
+          rawHeaders.forEach(item => {
+            if (item.key && item.key.trim()) parsedHeaders[item.key.trim()] = item.value;
+          });
+        } else {
+          parsedHeaders = rawHeaders;
+        }
       }
     } catch (e) {
       testResult = { error: 'Invalid JSON format in Headers', is_json: false };
@@ -131,12 +138,18 @@
     // Construct final URL with URL-encoded parameters if they exist
     let finalUrl = processedUrl;
     try {
-      if (processedParams.trim() && processedParams.trim() !== '{}' && processedParams.trim() !== '{\n}') {
+      if (processedParams.trim() && processedParams.trim() !== '{}' && processedParams.trim() !== '{\n}' && processedParams.trim() !== '[]') {
         const parsedParams = JSON.parse(processedParams);
         const urlObj = new URL(finalUrl);
-        Object.keys(parsedParams).forEach(key => {
-          urlObj.searchParams.append(key, parsedParams[key]);
-        });
+        if (Array.isArray(parsedParams)) {
+          parsedParams.forEach(item => {
+            if (item.key && item.key.trim()) urlObj.searchParams.append(item.key.trim(), item.value);
+          });
+        } else {
+          Object.keys(parsedParams).forEach(key => {
+            urlObj.searchParams.append(key, parsedParams[key]);
+          });
+        }
         finalUrl = urlObj.toString();
       }
     } catch (e) {

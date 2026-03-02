@@ -32,7 +32,7 @@
       </button>
     </div>
     
-    <div class="p-6">
+    <div class="p-6 max-h-[80vh] overflow-y-auto custom-scrollbar">
       <slot></slot>
     </div>
   </div>

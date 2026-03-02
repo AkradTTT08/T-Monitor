@@ -39,6 +39,8 @@ func replaceEnvVariables(input string, envVars map[string]string) string {
 	})
 }
 
+var lastCheckMap = make(map[uint]time.Time)
+
 func checkAPIs() {
 	var apis []models.API
 	database.DB.Where("is_active = ?", true).Find(&apis)
@@ -55,9 +57,19 @@ func checkAPIs() {
 		envMap[p.ID] = vars
 	}
 
+	now := time.Now()
 	for _, api := range apis {
-		// Need logic to check if this specific API is due based on its interval
-		// For simplicity in this demo, we'll check all active APIs every cycle
+		// Check if this specific API is due based on its interval
+		if lastCheck, exists := lastCheckMap[api.ID]; exists {
+			// api.Interval is in seconds
+			if time.Since(lastCheck).Seconds() < float64(api.Interval) {
+				continue // not due yet
+			}
+		}
+
+		// Update last check time before running
+		lastCheckMap[api.ID] = now
+
 		vars := envMap[api.ProjectID]
 		go runPing(api, vars)
 	}
@@ -72,7 +84,7 @@ func runPing(api models.API, envVars map[string]string) {
 		api.Headers = replaceEnvVariables(api.Headers, envVars)
 		api.Body = replaceEnvVariables(api.Body, envVars)
 	}
-	
+
 	client := &http.Client{Timeout: 10 * time.Second}
 	var req *http.Request
 	var err error
@@ -159,7 +171,7 @@ func triggerN8nWebhook(api models.API, entry models.MonitorLog, config *models.N
 	}
 
 	jsonPayload, _ := json.Marshal(payload)
-	
+
 	_, err := http.Post(webhookURL, "application/json", bytes.NewBuffer(jsonPayload))
 	if err != nil {
 		fmt.Printf("Error triggering n8n webhook: %v\n", err)

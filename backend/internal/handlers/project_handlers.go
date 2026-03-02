@@ -36,6 +36,12 @@ func CreateProject(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create project"})
 	}
 
+	// Create default notification config
+	defaultConfig := models.NotificationConfig{
+		ProjectID: project.ID,
+	}
+	database.DB.Create(&defaultConfig)
+
 	return c.Status(fiber.StatusCreated).JSON(project)
 }
 
@@ -44,7 +50,7 @@ func GetProjects(c *fiber.Ctx) error {
 	role := c.Locals("role").(string)
 
 	var projects []models.Project
-	
+
 	// Admins can see all projects; users see only theirs
 	if role == "admin" {
 		database.DB.Preload("APIs").Find(&projects)
@@ -125,7 +131,7 @@ func DeleteProject(c *fiber.Ctx) error {
 
 	// Delete child API logs first (requires joined delete or subquery, but easier to use a subquery)
 	database.DB.Exec("DELETE FROM monitor_logs WHERE api_id IN (SELECT id FROM apis WHERE project_id = ?)", project.ID)
-	
+
 	// Delete child Records to satisfy foreign key constraints
 	database.DB.Unscoped().Where("project_id = ?", project.ID).Delete(&models.API{})
 	database.DB.Unscoped().Where("project_id = ?", project.ID).Delete(&models.NotificationConfig{})

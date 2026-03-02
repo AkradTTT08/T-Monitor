@@ -66,7 +66,10 @@
     if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return [{ key: '', value: '' }];
     const entries = Object.entries(obj);
     if (entries.length === 0) return [{ key: '', value: '' }];
-    return entries.map(([key, value]) => ({ key, value: String(value) }));
+    return entries.map(([key, value]) => {
+      const valStr = typeof value === 'object' ? JSON.stringify(value) : String(value);
+      return { key, value: valStr };
+    });
   }
 
   function parseToKVArray(str: string): { key: string, value: string }[] {
@@ -174,6 +177,99 @@
 
     return groups;
   })();
+
+  // Parse cURL Paste
+  function handleUrlPaste(e: ClipboardEvent) {
+    const pastedText = e.clipboardData?.getData('text');
+    if (!pastedText) return;
+
+    // Check if it looks like a curl command
+    if (pastedText.trim().startsWith('curl ')) {
+      e.preventDefault();
+      try {
+        parseAndApplyCurl(pastedText);
+      } catch (err) {
+        console.error("Failed to parse cURL:", err);
+        Swal.fire({
+          icon: 'error',
+          title: 'Import Failed',
+          text: 'Could not parse the pasted cURL command.',
+          toast: true,
+          position: 'top-end',
+          showConfirmButton: false,
+          timer: 3000
+        });
+      }
+    }
+  }
+
+  function parseAndApplyCurl(curlStr: string) {
+    let method = 'GET';
+    let url = '';
+    const headers: Record<string, string> = {};
+    let bodyText = '';
+
+    // Remove newlines and backslashes for easier parsing, or parse token by token
+    const tokens = curlStr.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) || [];
+    
+    for (let i = 1; i < tokens.length; i++) {
+      let token = tokens[i].replace(/^['"]|['"]$/g, '');
+      
+      if (['--request', '-X'].includes(tokens[i])) {
+        method = tokens[++i].replace(/^['"]|['"]$/g, '').toUpperCase();
+      } else if (['--header', '-H'].includes(tokens[i])) {
+        const headerToken = tokens[++i].replace(/^['"]|['"]$/g, '');
+        const sepIdx = headerToken.indexOf(':');
+        if (sepIdx > -1) {
+          headers[headerToken.substring(0, sepIdx).trim()] = headerToken.substring(sepIdx + 1).trim();
+        }
+      } else if (['--data', '--data-raw', '--data-binary', '-d'].includes(tokens[i])) {
+        let rawBody = tokens[++i];
+        if (rawBody) {
+          // Remove wrapping quotes and optional bash string prefix `$'...'`
+          rawBody = rawBody.replace(/^(\$)?['"]|['"]$/g, '');
+          // Unescape any escaped characters (like \") if present
+          rawBody = rawBody.replace(/\\"/g, '"').replace(/\\'/g, "'").replace(/\\\\/g, "\\");
+          bodyText = rawBody;
+        }
+        if (method === 'GET') method = 'POST'; // curl defaults to POST if --data is used without -X
+      } else if (token.startsWith('http://') || token.startsWith('https://') || token.startsWith('{{')) {
+        url = token;
+      }
+    }
+
+    if (url) {
+      apiForm.url = url;
+      apiForm.method = method;
+      
+      const headerKeys = Object.keys(headers);
+      if (headerKeys.length > 0) {
+        headerMode = 'json';
+        apiForm.headers = JSON.stringify(headers, null, 2);
+        headersKV = parseToKVArray(apiForm.headers);
+      }
+      
+      if (bodyText) {
+        bodyMode = 'json';
+        try {
+          apiForm.body = JSON.stringify(JSON.parse(bodyText), null, 2);
+        } catch {
+          apiForm.body = bodyText;
+        }
+        bodyKV = parseToKVArray(apiForm.body);
+      }
+
+      Swal.fire({
+        icon: 'success',
+        title: 'cURL Imported',
+        text: 'Successfully parsed cURL command.',
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 3000
+      });
+    }
+  }
 
   function handleAddFolder() {
     if (newFolderName.trim() && !customFolders.includes(newFolderName.trim())) {
@@ -925,7 +1021,7 @@
         <div class="flex">
           <span class="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-slate-200 bg-slate-100 text-slate-500 text-sm font-medium">URL</span>
           <div class="flex-1 w-full bg-slate-50 rounded-r-lg border border-slate-200 focus-within:ring-2 focus-within:ring-blue-500/50 transition-all text-sm overflow-hidden h-[38px] relative">
-            <InputWithVariables bind:value={apiForm.url} placeholder="&#123;&#123;base_url&#125;&#125;/api/v1/users" required={true} variables={envVarDict} />
+            <InputWithVariables bind:value={apiForm.url} placeholder="&#123;&#123;base_url&#125;&#125;/api/v1/users" required={true} variables={envVarDict} on:paste={handleUrlPaste} />
           </div>
         </div>
       </div>
@@ -1075,7 +1171,7 @@
         <div class="flex">
           <span class="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-slate-200 bg-slate-100 text-slate-500 text-sm font-medium">URL</span>
           <div class="flex-1 w-full bg-slate-50 rounded-r-lg border border-slate-200 focus-within:ring-2 focus-within:ring-blue-500/50 transition-all text-sm overflow-hidden h-[38px] relative">
-            <InputWithVariables bind:value={apiForm.url} placeholder="&#123;&#123;base_url&#125;&#125;/api/v1/users" required={true} variables={envVarDict} />
+            <InputWithVariables bind:value={apiForm.url} placeholder="&#123;&#123;base_url&#125;&#125;/api/v1/users" required={true} variables={envVarDict} on:paste={handleUrlPaste} />
           </div>
         </div>
       </div>
