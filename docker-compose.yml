@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: monitor-backend
+    ports:
+      - "5273:5273"
+    environment:
+      - DB_HOST=monitor-postgres
+      - DB_PORT=5432
+      - DB_USER=monitor_user
+      - DB_PASSWORD=monitor_password
+      - DB_NAME=monitor_db
+      - DB_SSLMODE=disable
+    networks:
+      - default
+      - infrastructure_ext
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: monitor-frontend
+    ports:
+      - "4173:4173"
+    depends_on:
+      - backend
+
+networks:
+  infrastructure_ext:
+    name: infrastructure_default
+    external: true
