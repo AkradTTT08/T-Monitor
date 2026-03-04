@@ -37,11 +37,12 @@ func Register(c *fiber.Ctx) error {
 		Role:     "user", // Default role
 	}
 
-	// Make the first user an admin automatically
+	// Make the first user an admin automatically and approve them
 	var count int64
 	database.DB.Model(&models.User{}).Count(&count)
 	if count == 0 {
 		user.Role = "admin"
+		user.IsApproved = true
 	}
 
 	if err := database.DB.Create(&user).Error; err != nil {
@@ -64,6 +65,10 @@ func Login(c *fiber.Ctx) error {
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(input.Password)); err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid credentials"})
+	}
+
+	if !user.IsApproved {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Waiting for admin approval"})
 	}
 
 	token, err := middleware.GenerateToken(user)

@@ -7,8 +7,10 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/monitor-api/backend/internal/database"
@@ -83,6 +85,39 @@ func runPing(api models.API, envVars map[string]string) {
 		api.URL = replaceEnvVariables(api.URL, envVars)
 		api.Headers = replaceEnvVariables(api.Headers, envVars)
 		api.Body = replaceEnvVariables(api.Body, envVars)
+		api.Parameters = replaceEnvVariables(api.Parameters, envVars)
+	}
+
+	// Process URL Parameters
+	if api.Parameters != "" && api.Parameters != "[]" && api.Parameters != "{}" && api.Parameters != "{\n}" {
+		u, err := url.Parse(api.URL)
+		if err == nil {
+			q := u.Query()
+			// Try to parse as array of objects [{"key": "foo", "value": "bar"}]
+			var paramsArray []struct {
+				Key   string `json:"key"`
+				Value string `json:"value"`
+			}
+			if err := json.Unmarshal([]byte(api.Parameters), &paramsArray); err == nil {
+				for _, p := range paramsArray {
+					if p.Key != "" {
+						q.Add(strings.TrimSpace(p.Key), p.Value)
+					}
+				}
+			} else {
+				// Try to parse as map {"foo": "bar"}
+				var paramsMap map[string]interface{}
+				if err := json.Unmarshal([]byte(api.Parameters), &paramsMap); err == nil {
+					for k, v := range paramsMap {
+						if k != "" {
+							q.Add(strings.TrimSpace(k), fmt.Sprintf("%v", v))
+						}
+					}
+				}
+			}
+			u.RawQuery = q.Encode()
+			api.URL = u.String()
+		}
 	}
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -96,19 +131,32 @@ func runPing(api models.API, envVars map[string]string) {
 	}
 
 	if err != nil {
-		handleResult(api, 0, 0, false, err.Error())
+		handleResult(api, 0, 0, false, err.Error(), "")
 		return
 	}
 
 	// Parse Headers
-	if api.Headers != "" {
-		var headers []struct {
+	if api.Headers != "" && api.Headers != "[]" && api.Headers != "{}" && api.Headers != "{\n}" {
+		// Try to parse as array of objects [{"key": "foo", "value": "bar"}]
+		var headersArray []struct {
 			Key   string `json:"key"`
 			Value string `json:"value"`
 		}
-		if json.Unmarshal([]byte(api.Headers), &headers) == nil {
-			for _, h := range headers {
-				req.Header.Add(h.Key, h.Value)
+		if err := json.Unmarshal([]byte(api.Headers), &headersArray); err == nil {
+			for _, h := range headersArray {
+				if h.Key != "" {
+					req.Header.Add(strings.TrimSpace(h.Key), h.Value)
+				}
+			}
+		} else {
+			// Try to parse as map {"foo": "bar"}
+			var headersMap map[string]interface{}
+			if err := json.Unmarshal([]byte(api.Headers), &headersMap); err == nil {
+				for k, v := range headersMap {
+					if k != "" {
+						req.Header.Add(strings.TrimSpace(k), fmt.Sprintf("%v", v))
+					}
+				}
 			}
 		}
 	}
@@ -117,27 +165,32 @@ func runPing(api models.API, envVars map[string]string) {
 	duration := time.Since(start).Milliseconds()
 
 	if err != nil {
-		handleResult(api, 0, duration, false, err.Error())
+		handleResult(api, 0, duration, false, err.Error(), "")
 		return
 	}
 	defer res.Body.Close()
 
+	bodyBytes, readerr := io.ReadAll(res.Body)
+	bodyString := string(bodyBytes)
+
+	log.Printf("[HealthCheck DEBUG] API ID: %d, Read Err: %v, Body Length: %d, Parsed Body: %s", api.ID, readerr, len(bodyBytes), bodyString)
+
 	if res.StatusCode != api.ExpectedStatusCode {
-		bodyBytes, _ := io.ReadAll(res.Body)
-		errMsg := fmt.Sprintf("Expected %d, got %d. Body: %s", api.ExpectedStatusCode, res.StatusCode, string(bodyBytes))
-		handleResult(api, res.StatusCode, duration, false, errMsg)
+		errMsg := fmt.Sprintf("Expected %d, got %d. Body: %s", api.ExpectedStatusCode, res.StatusCode, bodyString)
+		handleResult(api, res.StatusCode, duration, false, errMsg, bodyString)
 	} else {
-		handleResult(api, res.StatusCode, duration, true, "")
+		handleResult(api, res.StatusCode, duration, true, "", bodyString)
 	}
 }
 
-func handleResult(api models.API, statusCode int, duration int64, isSuccess bool, errorMsg string) {
+func handleResult(api models.API, statusCode int, duration int64, isSuccess bool, errorMsg string, responseBody string) {
 	logEntry := models.MonitorLog{
 		ApiID:        api.ID,
 		StatusCode:   statusCode,
 		ResponseTime: duration,
 		IsSuccess:    isSuccess,
 		ErrorMessage: errorMsg,
+		ResponseBody: responseBody,
 		CheckedAt:    time.Now(),
 	}
 

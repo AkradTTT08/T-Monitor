@@ -60,6 +60,12 @@ func setupRoutes(app *fiber.App) {
 	authProtected := protected.Group("/auth")
 	authProtected.Post("/refresh", handlers.RefreshToken)
 
+	// Profile Routes
+	profile := protected.Group("/profile")
+	profile.Get("/", handlers.GetProfile)
+	profile.Put("/", handlers.UpdateProfile)
+	profile.Put("/password", handlers.UpdatePassword)
+
 	// Project Routes
 	project := protected.Group("/projects")
 	project.Post("/", handlers.CreateProject)
@@ -77,11 +83,11 @@ func setupRoutes(app *fiber.App) {
 	apis.Put("/:id", handlers.UpdateAPI)
 	apis.Delete("/:id", handlers.DeleteAPI)
 	apis.Post("/import-postman", handlers.UploadPostmanCollection)
-	
+
 	// Notifications Config
 	protected.Get("/projects/:projectId/notifications", handlers.GetNotificationConfig)
 	protected.Post("/notifications", handlers.UpsertNotificationConfig)
-	
+
 	// Logs
 	protected.Get("/logs", handlers.GetMonitorLogs)
 
@@ -89,4 +95,7 @@ func setupRoutes(app *fiber.App) {
 	users := protected.Group("/users", middleware.AdminOnly())
 	users.Get("/", handlers.GetAllUsers)
 	users.Put("/:id/role", handlers.UpdateUserRole)
+	users.Put("/:id/approve", handlers.ApproveUser)
+	users.Delete("/:id/disapprove", handlers.DisapproveUser)
+	users.Put("/:id/reset-password", handlers.ResetPassword)
 }
