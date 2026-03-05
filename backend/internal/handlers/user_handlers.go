@@ -175,3 +175,29 @@ func UpdatePassword(c *fiber.Ctx) error {
 
 	return c.JSON(fiber.Map{"message": "Password updated successfully"})
 }
+
+func ToggleBlockUser(c *fiber.Ctx) error {
+	id := c.Params("id")
+	var user models.User
+	if err := database.DB.First(&user, id).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
+	}
+
+	// Prevent blocking admins
+	if user.Role == "admin" {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot block an administrator"})
+	}
+
+	user.IsBlocked = !user.IsBlocked
+	database.DB.Save(&user)
+
+	status := "unblocked"
+	if user.IsBlocked {
+		status = "blocked"
+	}
+
+	return c.JSON(fiber.Map{
+		"message":    "User " + status + " successfully",
+		"is_blocked": user.IsBlocked,
+	})
+}

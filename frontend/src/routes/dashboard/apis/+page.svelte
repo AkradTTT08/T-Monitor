@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { page } from "$app/stores";
   import Modal from "$lib/components/Modal.svelte";
   import InputWithVariables from "$lib/components/InputWithVariables.svelte";
   import TextareaWithVariables from "$lib/components/TextareaWithVariables.svelte";
@@ -54,6 +55,11 @@
   })();
 
   onMount(async () => {
+    // Read project_id from URL query param, or fall back to localStorage
+    selectedProjectId =
+      $page.url.searchParams.get("project_id") ||
+      localStorage.getItem("monitor_selected_project") ||
+      "";
     await fetchProjects();
     await fetchAPIs();
   });
@@ -237,14 +243,16 @@
 <div class="fade-in max-w-full overflow-x-hidden">
   <!-- Header -->
   <div
-    class="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8"
+    class="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8 relative z-10"
   >
     <div>
-      <h1 class="text-3xl font-bold text-slate-900 tracking-tight">
-        Open APIs
+      <h1
+        class="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400 tracking-tight font-mono uppercase"
+      >
+        OPEN_APIS
       </h1>
-      <p class="text-slate-500 mt-2">
-        Manage and monitor health across all registered API endpoints.
+      <p class="text-cyan-500/80 mt-2 font-mono text-sm tracking-wide">
+        MANAGE AND MONITOR HEALTH ACROSS ALL REGISTERED API ENDPOINTS.
       </p>
     </div>
 
@@ -253,15 +261,19 @@
         <select
           bind:value={selectedProjectId}
           on:change={handleFilterChange}
-          class="w-full appearance-none bg-white border border-slate-200 text-slate-700 py-2.5 pl-4 pr-10 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 shadow-sm transition-all text-sm font-medium cursor-pointer"
+          class="w-full appearance-none bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 text-cyan-50 py-2.5 pl-4 pr-10 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 transition-all font-mono tracking-wide text-sm cursor-pointer shadow-[0_0_15px_rgba(0,0,0,0.5)]"
         >
-          <option value="">All Projects</option>
+          <option value="" class="bg-slate-800 text-slate-300"
+            >ALL PROJECTS</option
+          >
           {#each projects as project}
-            <option value={project.id}>{project.name}</option>
+            <option value={project.id} class="bg-slate-800 text-slate-300"
+              >{project.name}</option
+            >
           {/each}
         </select>
         <div
-          class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-500"
+          class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-cyan-500/50"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -284,7 +296,7 @@
   {#if isLoading}
     <div class="flex justify-center p-12">
       <svg
-        class="animate-spin h-8 w-8 text-blue-600"
+        class="animate-spin h-8 w-8 text-cyan-500"
         xmlns="http://www.w3.org/2000/svg"
         fill="none"
         viewBox="0 0 24 24"
@@ -304,18 +316,21 @@
     </div>
   {:else if apis.length === 0}
     <div
-      class="bg-white border text-center border-slate-200 rounded-2xl p-12 shadow-sm"
+      class="bg-slate-800/40 backdrop-blur-xl border border-slate-700/50 text-center rounded-3xl p-16 shadow-[0_8px_30px_rgb(0,0,0,0.5)] relative overflow-hidden group/empty"
     >
       <div
-        class="inline-flex items-center justify-center w-20 h-20 rounded-full bg-slate-50 mb-4"
+        class="absolute inset-0 bg-cyan-900/5 opacity-0 group-hover/empty:opacity-100 transition-opacity duration-500"
+      ></div>
+      <div
+        class="inline-flex items-center justify-center w-24 h-24 rounded-full bg-slate-900 border border-cyan-500/30 mb-6 shadow-[0_0_15px_rgba(6,182,212,0.2)] relative z-10"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
-          class="text-slate-400 h-10 w-10"
+          class="text-cyan-400 h-10 w-10"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
-          stroke-width="2"
+          stroke-width="1.5"
           stroke-linecap="round"
           stroke-linejoin="round"
           ><path d="M12 2v20" /><path
@@ -323,72 +338,84 @@
           /></svg
         >
       </div>
-      <h3 class="text-xl font-bold text-slate-800 mb-2">No APIs Found</h3>
-      <p class="text-slate-500 max-w-md mx-auto">
-        Upload a Postman collection in one of your projects to populate APIs
-        here.
+      <h3
+        class="text-2xl font-bold text-cyan-50 mb-3 font-mono tracking-wide relative z-10"
+      >
+        NO_APIS_FOUND
+      </h3>
+      <p
+        class="text-slate-400/80 max-w-md mx-auto mb-10 font-mono text-sm relative z-10"
+      >
+        UPLOAD A POSTMAN COLLECTION IN A PROJECT TO POPULATE ENDPOINTS.
       </p>
     </div>
   {:else}
-    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 relative z-10">
       {#each apis as api}
         <div
-          class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover-lift flex flex-col group transition-all relative overflow-hidden"
+          class="bg-slate-800/40 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-5 shadow-[0_8px_30px_rgb(0,0,0,0.5)] transition-all duration-500 hover:shadow-[0_0px_30px_rgba(6,182,212,0.15)] hover:border-cyan-500/40 hover:-translate-y-1 flex flex-col group relative overflow-hidden"
         >
           <div
-            class="absolute top-0 right-0 h-full w-1 border-r-4 {api.notification_config
-              ? 'border-green-400'
-              : 'border-slate-200'}"
+            class="absolute inset-0 bg-gradient-to-br from-cyan-900/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
           ></div>
 
-          <div class="flex justify-between items-start mb-3">
+          <div
+            class="absolute top-0 right-0 h-full w-1 border-r-4 {api.notification_config
+              ? 'border-emerald-400/80 shadow-[0_0_10px_rgba(52,211,153,0.5)]'
+              : 'border-slate-700/50'}"
+          ></div>
+
+          <div class="flex justify-between items-start mb-3 relative z-10">
             <div class="flex items-center gap-3">
               <span
-                class="px-2.5 py-1 rounded text-xs font-bold whitespace-nowrap
+                class="px-2 py-0.5 rounded border text-[10px] font-bold whitespace-nowrap tracking-wider
                 {api.method === 'GET'
-                  ? 'bg-green-100 text-green-700'
+                  ? 'bg-emerald-950/50 border-emerald-500/40 text-emerald-400'
                   : api.method === 'POST'
-                    ? 'bg-blue-100 text-blue-700'
+                    ? 'bg-blue-950/50 border-blue-500/40 text-blue-400'
                     : api.method === 'PUT'
-                      ? 'bg-yellow-100 text-yellow-700'
+                      ? 'bg-amber-950/50 border-amber-500/40 text-amber-400'
                       : api.method === 'DELETE'
-                        ? 'bg-red-100 text-red-700'
-                        : 'bg-slate-100 text-slate-700'}"
+                        ? 'bg-red-950/50 border-red-500/40 text-red-400'
+                        : 'bg-slate-800 border-slate-600 text-slate-300'}"
               >
                 {api.method}
               </span>
-              <h3 class="font-bold text-slate-800 truncate" title={api.name}>
+              <h3
+                class="font-bold text-cyan-50 tracking-wide font-mono truncate"
+                title={api.name}
+              >
                 {api.name}
               </h3>
             </div>
           </div>
 
           <div
-            class="bg-slate-50 rounded-lg p-3 text-sm text-slate-600 font-mono truncate mb-4 border border-slate-100"
+            class="bg-slate-900 border border-slate-700/50 rounded-lg p-3 text-xs text-slate-400 font-mono truncate mb-4 select-all shadow-inner relative z-10"
             title={api.url}
           >
             {api.url}
           </div>
 
           <div
-            class="mt-auto flex justify-between items-center border-t border-slate-100 pt-4"
+            class="mt-auto flex justify-between items-center border-t border-slate-700/50 pt-4 relative z-10"
           >
             <div class="flex gap-4">
               <div class="flex flex-col">
                 <span
-                  class="text-[10px] text-slate-400 font-semibold uppercase tracking-wider"
-                  >Method</span
+                  class="text-[9px] text-slate-500 font-bold uppercase tracking-widest font-mono"
+                  >METHOD</span
                 >
-                <span class="text-sm font-medium text-slate-700"
+                <span class="text-sm font-bold text-cyan-400 font-mono"
                   >{api.method}</span
                 >
               </div>
               <div class="flex flex-col">
                 <span
-                  class="text-[10px] text-slate-400 font-semibold uppercase tracking-wider"
-                  >Expected</span
+                  class="text-[9px] text-slate-500 font-bold uppercase tracking-widest font-mono"
+                  >EXPECTED</span
                 >
-                <span class="text-sm font-medium text-slate-700"
+                <span class="text-sm font-bold text-cyan-400 font-mono"
                   >{api.expected_status_code}</span
                 >
               </div>
@@ -396,9 +423,9 @@
 
             <a
               href={`/dashboard/projects/${api.project_id}`}
-              class="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline group-hover:underline"
+              class="flex items-center gap-1.5 text-xs font-bold text-cyan-500/80 hover:text-cyan-300 transition-colors tracking-widest font-mono uppercase ml-auto"
             >
-              View Project
+              PROJECT
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 width="14"
@@ -406,9 +433,10 @@
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
-                stroke-width="2"
+                stroke-width="2.5"
                 stroke-linecap="round"
                 stroke-linejoin="round"
+                class="group-hover:translate-x-1 transition-transform"
                 ><line x1="5" y1="12" x2="19" y2="12"></line><polyline
                   points="12 5 19 12 12 19"
                 ></polyline></svg
@@ -417,21 +445,18 @@
 
             <button
               on:click={() => openTestModal(api)}
-              class="flex items-center gap-1.5 text-sm font-bold text-slate-600 hover:text-amber-600 border border-slate-200 hover:border-amber-300 bg-white hover:bg-amber-50 px-3 py-1.5 rounded-lg transition-all ml-4"
+              class="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-amber-400 border border-slate-700 hover:border-amber-500/50 bg-slate-900 hover:bg-amber-950/30 hover:shadow-[0_0_15px_rgba(245,158,11,0.2)] px-3 py-1.5 rounded-lg transition-all ml-4 tracking-wider font-mono uppercase"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
-                width="14"
-                height="14"
+                width="12"
+                height="12"
                 viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
+                fill="currentColor"
+                class="text-amber-500"
                 ><polygon points="5 3 19 12 5 21 5 3"></polygon></svg
               >
-              Test API
+              TEST_API
             </button>
           </div>
         </div>
@@ -449,20 +474,20 @@
   {#if selectedApi}
     <div class="space-y-6">
       <div
-        class="bg-slate-50 border border-slate-200 rounded-xl p-4 flex items-center justify-between"
+        class="bg-slate-900/60 border border-slate-700/60 rounded-xl p-4 flex items-center justify-between shadow-[inset_0_0_30px_rgba(0,0,0,0.3)]"
       >
         <div class="flex items-center gap-4 w-full">
           <span
             class="px-3 py-1.5 rounded text-sm font-black whitespace-nowrap
              {selectedApi.method === 'GET'
-              ? 'bg-green-100 text-green-700'
+              ? 'bg-green-950/60 text-green-400 border border-green-500/30'
               : selectedApi.method === 'POST'
-                ? 'bg-blue-100 text-blue-700'
+                ? 'bg-cyan-950/60 text-cyan-400 border border-cyan-500/30'
                 : selectedApi.method === 'PUT'
-                  ? 'bg-yellow-100 text-yellow-700'
+                  ? 'bg-amber-950/60 text-amber-400 border border-amber-500/30'
                   : selectedApi.method === 'DELETE'
-                    ? 'bg-red-100 text-red-700'
-                    : 'bg-slate-200 text-slate-700'}"
+                    ? 'bg-red-950/60 text-red-400 border border-red-500/30'
+                    : 'bg-slate-800 text-slate-400 border border-slate-600'}"
           >
             {selectedApi.method}
           </span>
@@ -478,7 +503,7 @@
             </div>
             <button
               on:click={() => copyToClipboard(reqUrl, "url")}
-              class="opacity-0 group-hover/copy:opacity-100 transition-opacity p-2 bg-white border border-slate-200 shadow-sm rounded-md text-slate-500 hover:text-slate-800 hover:bg-slate-50 cursor-pointer shrink-0"
+              class="opacity-0 group-hover/copy:opacity-100 transition-opacity p-2 bg-slate-800 border border-slate-700 rounded-md text-slate-400 hover:text-cyan-400 hover:border-cyan-500/40 cursor-pointer shrink-0"
               title="Copy URL"
             >
               {#if copyFeedback["url"]}
@@ -520,18 +545,18 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <!-- Headers Editor -->
         <div
-          class="border border-slate-200 rounded-xl overflow-hidden flex flex-col h-48"
+          class="border border-slate-700/60 rounded-xl overflow-hidden flex flex-col h-48 bg-slate-950/30"
         >
           <div
-            class="bg-slate-50 border-b border-slate-200 px-3 py-2 flex justify-between items-center"
+            class="bg-slate-800/70 border-b border-slate-700/60 px-3 py-2 flex justify-between items-center"
           >
             <span
-              class="text-xs font-bold text-slate-600 uppercase tracking-widest"
+              class="text-xs font-bold text-cyan-500/80 uppercase tracking-widest font-mono"
               >Headers (JSON)</span
             >
             <button
               on:click={() => copyToClipboard(reqHeaders, "headers")}
-              class="p-1 text-slate-400 hover:text-slate-700 transition-colors"
+              class="p-1 text-slate-500 hover:text-cyan-400 transition-colors"
               title="Copy JSON"
             >
               {#if copyFeedback["headers"]}
@@ -578,18 +603,18 @@
 
         <!-- Parameters Editor -->
         <div
-          class="border border-slate-200 rounded-xl overflow-hidden flex flex-col h-48"
+          class="border border-slate-700/60 rounded-xl overflow-hidden flex flex-col h-48 bg-slate-950/30"
         >
           <div
-            class="bg-slate-50 border-b border-slate-200 px-3 py-2 flex justify-between items-center"
+            class="bg-slate-800/70 border-b border-slate-700/60 px-3 py-2 flex justify-between items-center"
           >
             <span
-              class="text-xs font-bold text-slate-600 uppercase tracking-widest"
+              class="text-xs font-bold text-amber-400/80 uppercase tracking-widest font-mono"
               >Query Params (JSON)</span
             >
             <button
               on:click={() => copyToClipboard(reqParams, "params")}
-              class="p-1 text-slate-400 hover:text-slate-700 transition-colors"
+              class="p-1 text-slate-500 hover:text-cyan-400 transition-colors"
               title="Copy JSON"
             >
               {#if copyFeedback["params"]}
@@ -638,23 +663,23 @@
       <!-- Body Editor -->
       {#if reqMethod !== "GET"}
         <div
-          class="border border-slate-200 rounded-xl overflow-hidden flex flex-col h-48"
+          class="border border-slate-700/60 rounded-xl overflow-hidden flex flex-col h-48 bg-slate-950/30"
         >
           <div
-            class="bg-slate-50 border-b border-slate-200 px-3 py-2 flex items-center justify-between"
+            class="bg-slate-800/70 border-b border-slate-700/60 px-3 py-2 flex items-center justify-between"
           >
             <span
-              class="text-xs font-bold text-slate-600 uppercase tracking-widest"
+              class="text-xs font-bold text-indigo-400/80 uppercase tracking-widest font-mono"
               >Request Body</span
             >
             <div class="flex items-center gap-2">
               <span
-                class="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded uppercase font-bold"
+                class="text-[10px] bg-slate-700 text-indigo-300 border border-slate-600 px-2 py-0.5 rounded uppercase font-mono font-bold"
                 >Raw JSON</span
               >
               <button
                 on:click={() => copyToClipboard(reqBody, "body")}
-                class="p-1 text-slate-400 hover:text-slate-700 transition-colors"
+                class="p-1 text-slate-500 hover:text-cyan-400 transition-colors"
                 title="Copy JSON"
               >
                 {#if copyFeedback["body"]}
@@ -704,17 +729,17 @@
       <div class="flex justify-between items-center pt-2">
         <button
           on:click={() => (showApiTestModal = false)}
-          class="px-5 py-2.5 text-slate-600 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 font-bold transition-colors text-sm"
+          class="px-4 py-2 text-slate-400 bg-slate-800 border border-slate-700 rounded-xl hover:bg-slate-700 hover:text-cyan-400 font-bold transition-colors text-xs"
           >Close</button
         >
         <button
           on:click={executeApiTest}
           disabled={isTestingApi}
-          class="px-6 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-bold transition-all shadow-md text-sm flex items-center gap-2 outline-none focus:ring-4 focus:ring-blue-500/30 disabled:opacity-75 relative overflow-hidden"
+          class="px-4 py-2 bg-cyan-600 text-cyan-50 rounded-xl hover:bg-cyan-700 font-bold transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] text-xs flex items-center gap-2 outline-none focus:ring-4 focus:ring-cyan-500/30 disabled:opacity-75 relative overflow-hidden"
         >
           {#if isTestingApi}
             <svg
-              class="animate-spin h-4 w-4 text-white"
+              class="animate-spin h-4 w-4 text-cyan-50"
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
               viewBox="0 0 24 24"
@@ -752,9 +777,11 @@
 
       <!-- Test Result Output -->
       {#if testResult}
-        <div class="mt-8 border-t border-slate-200 pt-6 animate-fade-in">
+        <div class="mt-8 border-t border-slate-700 pt-6 animate-fade-in">
           <div class="flex items-center justify-between mb-3">
-            <h3 class="text-sm font-black text-slate-800 tracking-wide">
+            <h3
+              class="text-sm font-black text-slate-400 tracking-widest font-mono uppercase"
+            >
               RESPONSE
             </h3>
             <div class="flex gap-3">
@@ -762,26 +789,26 @@
                 <span
                   class="px-2.5 py-1 rounded text-[11px] font-black tracking-widest font-mono
                    {testResult.status >= 200 && testResult.status < 300
-                    ? 'bg-green-100 text-green-700 border border-green-200'
+                    ? 'bg-green-950/50 text-green-400 border border-green-500/30'
                     : testResult.status >= 400 && testResult.status < 500
-                      ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                      ? 'bg-amber-950/50 text-amber-400 border border-amber-500/30'
                       : testResult.status >= 500
-                        ? 'bg-red-100 text-red-700 border border-red-200'
-                        : 'bg-slate-100 text-slate-700'}"
+                        ? 'bg-red-950/50 text-red-400 border border-red-500/30'
+                        : 'bg-slate-800 text-slate-400'}"
                 >
                   STATUS: {testResult.status}
                 </span>
               {/if}
               {#if testResult.latency}
                 <span
-                  class="px-2.5 py-1 rounded text-[11px] font-black tracking-widest font-mono bg-blue-50 text-blue-700 border border-blue-200"
+                  class="px-2.5 py-1 rounded text-[11px] font-black tracking-widest font-mono bg-cyan-950/50 text-cyan-400 border border-cyan-500/30"
                 >
                   {testResult.latency} MS
                 </span>
               {/if}
               {#if testResult.error}
                 <span
-                  class="px-2.5 py-1 rounded text-[11px] font-black tracking-widest font-mono bg-red-100 text-red-700 border border-red-200"
+                  class="px-2.5 py-1 rounded text-[11px] font-black tracking-widest font-mono bg-red-950/50 text-red-400 border border-red-500/30"
                 >
                   FAILED TO CONNECT
                 </span>

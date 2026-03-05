@@ -241,18 +241,20 @@
     class="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500"
 >
     <div class="mb-8">
-        <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">
-            Profile Settings
+        <h1
+            class="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400 tracking-tight font-mono uppercase"
+        >
+            PROFILE_SETTINGS
         </h1>
-        <p class="text-slate-500 mt-2">
-            Manage your account details and password.
+        <p class="text-cyan-500/80 mt-2 font-mono text-sm tracking-wide">
+            MANAGE YOUR ACCOUNT DETAILS AND PASSWORD.
         </p>
     </div>
 
     {#if initialLoading}
         <div class="flex justify-center p-12">
             <svg
-                class="animate-spin h-8 w-8 text-blue-600"
+                class="animate-spin h-8 w-8 text-cyan-500"
                 xmlns="http://www.w3.org/2000/svg"
                 fill="none"
                 viewBox="0 0 24 24"
@@ -274,11 +276,15 @@
         <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
             <!-- Profile Information Section -->
             <div class="md:col-span-1">
-                <h3 class="text-lg font-bold text-slate-900 mb-2">
-                    Personal Information
+                <h3
+                    class="text-lg font-bold text-cyan-50 font-mono tracking-widest uppercase mb-2"
+                >
+                    PERSONAL_INFO
                 </h3>
-                <p class="text-sm text-slate-500">
-                    Update your basic profile information and email address.
+                <p
+                    class="text-xs font-mono tracking-wider text-slate-400 uppercase"
+                >
+                    UPDATE YOUR BASIC PROFILE INFORMATION AND EMAIL ADDRESS.
                 </p>
 
                 <div class="mt-6 flex flex-col items-center">
@@ -298,7 +304,7 @@
                         tabindex="0"
                     >
                         <div
-                            class="w-32 h-32 rounded-full bg-slate-900 flex items-center justify-center text-white text-3xl font-bold uppercase overflow-hidden shadow-xl border-4 border-white"
+                            class="w-32 h-32 rounded-full bg-slate-900 flex items-center justify-center text-cyan-400 text-3xl font-bold uppercase overflow-hidden shadow-[0_0_20px_rgba(6,182,212,0.3)] border-2 border-cyan-500/50"
                         >
                             {#if user.profile_image_url}
                                 <img
@@ -330,14 +336,14 @@
                         </div>
                     </div>
                     <span
-                        class="text-xs text-slate-500 mt-3 font-medium text-center leading-relaxed"
-                        >Max size 2MB <br /> Allowed: .jpg, .jpeg, .png</span
+                        class="text-[10px] text-slate-500 mt-4 font-bold font-mono tracking-widest uppercase text-center leading-relaxed"
+                        >MAX_SIZE 2MB <br /> ALLOWED: .JPG, .JPEG, .PNG</span
                     >
                 </div>
             </div>
 
             <div
-                class="md:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"
+                class="md:col-span-2 bg-slate-900/60 backdrop-blur-md rounded-3xl border border-slate-700/50 shadow-[0_8px_30px_rgb(0,0,0,0.5)] overflow-hidden"
             >
                 <form
                     on:submit|preventDefault={handleUpdateProfile}
@@ -347,29 +353,29 @@
                         <div class="space-y-2">
                             <label
                                 for="name"
-                                class="block text-sm font-semibold text-slate-700"
-                                >Full Name</label
+                                class="block text-[10px] font-bold text-slate-400 font-mono tracking-widest uppercase mb-2"
+                                >FULL_NAME</label
                             >
                             <input
                                 id="name"
                                 type="text"
                                 bind:value={user.name}
                                 placeholder="John Doe"
-                                class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium"
+                                class="w-full px-4 py-3 bg-slate-950/50 border border-slate-700 rounded-xl text-cyan-50 font-mono text-sm tracking-wide placeholder:text-slate-600 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all"
                             />
                         </div>
                         <div class="space-y-2">
                             <label
                                 for="phone"
-                                class="block text-sm font-semibold text-slate-700"
-                                >Phone Number</label
+                                class="block text-[10px] font-bold text-slate-400 font-mono tracking-widest uppercase mb-2"
+                                >PHONE_NUMBER</label
                             >
                             <input
                                 id="phone"
                                 type="text"
                                 bind:value={user.phone}
                                 placeholder="+1 (555) 000-0000"
-                                class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium"
+                                class="w-full px-4 py-3 bg-slate-950/50 border border-slate-700 rounded-xl text-cyan-50 font-mono text-sm tracking-wide placeholder:text-slate-600 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all"
                             />
                         </div>
                     </div>
@@ -378,8 +384,8 @@
                         <div class="space-y-2">
                             <label
                                 for="department"
-                                class="block text-sm font-semibold text-slate-700"
-                                >Department</label
+                                class="block text-[10px] font-bold text-slate-400 font-mono tracking-widest uppercase mb-2"
+                                >DEPARTMENT</label
                             >
                             <!-- Custom Dropdown -->
                             <div class="relative">
@@ -387,9 +393,9 @@
                                     type="button"
                                     on:click={() =>
                                         (showDeptDropdown = !showDeptDropdown)}
-                                    class="w-full px-4 py-3 bg-slate-50 border {showDeptDropdown
-                                        ? 'border-blue-500 ring-2 ring-blue-500/20'
-                                        : 'border-slate-200'} rounded-xl text-left text-slate-900 font-medium flex items-center justify-between transition-all focus:outline-none"
+                                    class="w-full px-4 py-3 bg-slate-950/50 border {showDeptDropdown
+                                        ? 'border-cyan-500/50 ring-1 ring-cyan-500/50'
+                                        : 'border-slate-700'} rounded-xl text-left text-cyan-50 font-mono text-sm tracking-wide flex items-center justify-between transition-all focus:outline-none"
                                 >
                                     <span
                                         class={user.department
@@ -418,17 +424,17 @@
 
                                 {#if showDeptDropdown}
                                     <div
-                                        class="absolute z-20 top-full mt-1 w-full bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden animate-in slide-in-from-top-2 duration-150"
+                                        class="absolute z-20 top-full mt-2 w-full bg-slate-900 border border-slate-700/80 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.8)] overflow-hidden animate-in slide-in-from-top-2 duration-150"
                                     >
                                         {#each departments as dept}
                                             <button
                                                 type="button"
                                                 on:click={() =>
                                                     selectDepartment(dept)}
-                                                class="w-full text-left px-4 py-3 text-sm font-medium flex items-center gap-3 transition-colors {user.department ===
+                                                class="w-full text-left px-4 py-3 text-xs font-mono font-bold tracking-widest uppercase flex items-center gap-3 transition-colors {user.department ===
                                                 dept
-                                                    ? 'bg-blue-50 text-blue-700'
-                                                    : 'text-slate-700 hover:bg-slate-50'}"
+                                                    ? 'bg-cyan-950/50 text-cyan-400'
+                                                    : 'text-slate-400 hover:bg-slate-800 hover:text-cyan-50'}"
                                             >
                                                 {#if user.department === dept}
                                                     <svg
@@ -459,15 +465,15 @@
                         <div class="space-y-2">
                             <label
                                 for="position"
-                                class="block text-sm font-semibold text-slate-700"
-                                >Position</label
+                                class="block text-[10px] font-bold text-slate-400 font-mono tracking-widest uppercase mb-2"
+                                >POSITION</label
                             >
                             <input
                                 id="position"
                                 type="text"
                                 bind:value={user.position}
                                 placeholder="Senior Developer"
-                                class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium"
+                                class="w-full px-4 py-3 bg-slate-950/50 border border-slate-700 rounded-xl text-cyan-50 font-mono text-sm tracking-wide placeholder:text-slate-600 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all"
                             />
                         </div>
                     </div>
@@ -475,18 +481,20 @@
                     <div class="space-y-2">
                         <label
                             for="email"
-                            class="block text-sm font-semibold text-slate-700"
-                            >Email Address</label
+                            class="block text-[10px] font-bold text-slate-400 font-mono tracking-widest uppercase mb-2"
+                            >EMAIL_ADDRESS</label
                         >
                         <input
                             id="email"
                             type="email"
                             value={user.email}
                             disabled
-                            class="w-full px-4 py-3 bg-slate-100 border border-slate-200 rounded-xl text-slate-500 cursor-not-allowed font-medium"
+                            class="w-full px-4 py-3 bg-slate-800/80 border border-slate-700 rounded-xl text-slate-500 cursor-not-allowed font-mono text-sm tracking-wide"
                         />
-                        <p class="text-xs text-slate-500 mt-1">
-                            Email is managed by the system administrator.
+                        <p
+                            class="text-[10px] text-slate-500 mt-2 font-mono uppercase tracking-widest font-bold"
+                        >
+                            EMAIL IS MANAGED BY THE SYSTEM ADMINISTRATOR.
                         </p>
                     </div>
 
@@ -494,7 +502,7 @@
                         <button
                             type="submit"
                             disabled={isProfileLoading}
-                            class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold rounded-xl shadow-sm hover:shadow transition-all disabled:opacity-70 flex items-center gap-2"
+                            class="px-6 py-3 font-mono text-xs font-bold tracking-widest uppercase rounded-xl transition-all flex items-center gap-2 bg-cyan-950/80 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-900/80 hover:border-cyan-400/50 hover:shadow-[0_0_15px_rgba(6,182,212,0.3)] disabled:opacity-50"
                         >
                             {#if isProfileLoading}
                                 <svg
@@ -517,7 +525,7 @@
                                 >
                                 Saving...
                             {:else}
-                                Save Changes
+                                SAVE_CHANGES
                             {/if}
                         </button>
                     </div>
@@ -526,17 +534,23 @@
 
             <!-- Password Section -->
             <div
-                class="md:col-span-1 mt-8 md:mt-0 pt-8 border-t border-slate-200 md:border-0 md:pt-0"
+                class="md:col-span-1 mt-8 md:mt-0 pt-8 border-t border-slate-800 md:border-0 md:pt-0"
             >
-                <h3 class="text-lg font-bold text-slate-900 mb-2">Security</h3>
-                <p class="text-sm text-slate-500">
-                    Ensure your account is using a long, random password to stay
-                    secure.
+                <h3
+                    class="text-lg font-bold text-cyan-50 font-mono tracking-widest uppercase mb-2"
+                >
+                    SECURITY
+                </h3>
+                <p
+                    class="text-xs font-mono tracking-wider text-slate-400 uppercase"
+                >
+                    ENSURE YOUR ACCOUNT IS USING A LONG, RANDOM PASSWORD TO STAY
+                    SECURE.
                 </p>
             </div>
 
             <div
-                class="md:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"
+                class="md:col-span-2 bg-slate-900/60 backdrop-blur-md rounded-3xl border border-slate-700/50 shadow-[0_8px_30px_rgb(0,0,0,0.5)] overflow-hidden"
             >
                 <form
                     on:submit|preventDefault={handleUpdatePassword}
@@ -545,15 +559,15 @@
                     <div class="space-y-2">
                         <label
                             for="current_password"
-                            class="block text-sm font-semibold text-slate-700"
-                            >Current Password</label
+                            class="block text-[10px] font-bold text-slate-400 font-mono tracking-widest uppercase mb-2"
+                            >CURRENT_PASSWORD</label
                         >
                         <input
                             id="current_password"
                             type="password"
                             bind:value={passwords.current}
                             required
-                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-all font-medium"
+                            class="w-full px-4 py-3 bg-slate-950/50 border border-slate-700 rounded-xl text-cyan-50 font-mono text-sm tracking-wide placeholder:text-slate-600 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all"
                         />
                     </div>
 
@@ -561,23 +575,23 @@
                         <div class="space-y-2">
                             <label
                                 for="new_password"
-                                class="block text-sm font-semibold text-slate-700"
-                                >New Password</label
+                                class="block text-[10px] font-bold text-slate-400 font-mono tracking-widest uppercase mb-2"
+                                >NEW_PASSWORD</label
                             >
                             <input
                                 id="new_password"
                                 type="password"
                                 bind:value={passwords.new}
                                 required
-                                class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-all font-medium"
+                                class="w-full px-4 py-3 bg-slate-950/50 border border-slate-700 rounded-xl text-cyan-50 font-mono text-sm tracking-wide placeholder:text-slate-600 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all"
                             />
                             {#if passwords.new.length > 0}
                                 <ul class="mt-2 space-y-1">
                                     {#each passwordRules as rule}
                                         <li
-                                            class="flex items-center gap-1.5 text-xs font-medium {rule.valid
-                                                ? 'text-emerald-600'
-                                                : 'text-slate-400'}"
+                                            class="flex items-center gap-2 text-[10px] font-bold font-mono tracking-widest uppercase mt-1 mb-1 {rule.valid
+                                                ? 'text-emerald-400 drop-shadow-[0_0_5px_rgba(52,211,153,0.5)]'
+                                                : 'text-slate-500'}"
                                         >
                                             {#if rule.valid}
                                                 <svg
@@ -608,15 +622,15 @@
                         <div class="space-y-2">
                             <label
                                 for="confirm_password"
-                                class="block text-sm font-semibold text-slate-700"
-                                >Confirm Password</label
+                                class="block text-[10px] font-bold text-slate-400 font-mono tracking-widest uppercase mb-2"
+                                >CONFIRM_PASSWORD</label
                             >
                             <input
                                 id="confirm_password"
                                 type="password"
                                 bind:value={passwords.confirm}
                                 required
-                                class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-all font-medium"
+                                class="w-full px-4 py-3 bg-slate-950/50 border border-slate-700 rounded-xl text-cyan-50 font-mono text-sm tracking-wide placeholder:text-slate-600 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all"
                             />
                         </div>
                     </div>
@@ -628,7 +642,7 @@
                                 !passwords.current ||
                                 !passwords.new ||
                                 !passwords.confirm}
-                            class="px-6 py-2.5 bg-slate-900 hover:bg-black active:bg-slate-800 text-white font-semibold rounded-xl shadow-sm hover:shadow transition-all disabled:opacity-70 flex items-center gap-2"
+                            class="px-6 py-3 font-mono text-xs font-bold tracking-widest uppercase rounded-xl transition-all flex items-center gap-2 bg-purple-950/50 text-purple-400 border border-purple-500/30 hover:bg-purple-900/60 hover:border-purple-400/50 hover:shadow-[0_0_15px_rgba(168,85,247,0.3)] disabled:opacity-50"
                         >
                             {#if isPasswordLoading}
                                 <svg
@@ -651,7 +665,7 @@
                                 >
                                 Updating...
                             {:else}
-                                Update Password
+                                UPDATE_PASSWORD
                             {/if}
                         </button>
                     </div>

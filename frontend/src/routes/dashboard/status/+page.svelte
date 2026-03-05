@@ -1,11 +1,13 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
+  import { page } from "$app/stores";
   import Chart from "chart.js/auto";
 
   let logs: any[] = [];
   let isLoading = true;
   let summary = { total: 0, up: 0, down: 0 };
   let refreshInterval: any;
+  let selectedProjectId = "";
 
   // Chart State
   let chartCanvas: HTMLCanvasElement;
@@ -203,6 +205,11 @@
   }
 
   onMount(async () => {
+    // Read project_id from URL query param
+    selectedProjectId =
+      $page.url.searchParams.get("project_id") ||
+      localStorage.getItem("monitor_selected_project") ||
+      "";
     await fetchLogs();
     // Real-time aspect: Poll every 10 seconds for new health checks
     refreshInterval = setInterval(fetchLogs, 10000);
@@ -216,7 +223,11 @@
   async function fetchLogs() {
     try {
       const token = localStorage.getItem("monitor_token");
-      const res = await fetch("http://localhost:5273/api/v1/logs", {
+      let url = "http://localhost:5273/api/v1/logs";
+      if (selectedProjectId) {
+        url += `?project_id=${selectedProjectId}`;
+      }
+      const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -285,79 +296,104 @@
 
 <div class="fade-in max-w-6xl mx-auto w-full overflow-hidden">
   <div
-    class="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-4 md:mb-8"
+    class="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8"
   >
     <div>
-      <h1 class="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">
-        API Status Console
+      <h1
+        class="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400 tracking-tight font-mono uppercase"
+      >
+        API_STATUS_CONSOLE
       </h1>
-      <p class="text-sm md:text-base text-slate-500 mt-2">
-        Real-time health check logs and analytics.
+      <p class="text-cyan-500/80 mt-2 font-mono text-sm tracking-wide">
+        REAL-TIME DIAGNOSTICS AND HEALTH ANALYTICS.
       </p>
     </div>
     <div
-      class="flex items-center gap-2 text-xs md:text-sm font-medium text-slate-500 bg-white border border-slate-200 py-1.5 px-3 md:py-2 md:px-4 rounded-full shadow-sm w-fit self-start md:self-auto"
+      class="flex items-center gap-2 text-xs md:text-sm font-bold text-emerald-400 bg-slate-900 border border-emerald-500/30 py-1.5 px-3 md:py-2 md:px-4 rounded-full shadow-[0_0_15px_rgba(52,211,153,0.2)] w-fit self-start md:self-auto font-mono tracking-wider"
     >
-      <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-      Live Polling Active
+      <div
+        class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]"
+      ></div>
+      LIVE_POLLING_ACTIVE
     </div>
   </div>
 
   <!-- Summary Cards -->
-  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6 mb-8">
+  <div
+    class="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6 mb-8 relative z-10"
+  >
     <div
-      class="bg-white rounded-2xl border border-slate-200 p-5 md:p-6 shadow-sm relative overflow-hidden"
+      class="bg-slate-800/40 backdrop-blur-xl rounded-3xl border border-slate-700/50 p-5 md:p-6 shadow-[0_8px_30px_rgb(0,0,0,0.5)] relative overflow-hidden group"
     >
       <div
-        class="absolute right-0 top-0 w-24 h-24 bg-blue-500 opacity-5 rounded-bl-full pointer-events-none"
+        class="absolute inset-0 bg-gradient-to-br from-cyan-900/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+      ></div>
+      <div
+        class="absolute right-0 top-0 w-24 h-24 bg-cyan-500 opacity-10 rounded-bl-full pointer-events-none group-hover:scale-110 transition-transform duration-500"
       ></div>
       <p
-        class="text-slate-500 font-medium text-xs md:text-sm mb-1 uppercase tracking-wider"
+        class="text-cyan-500/80 font-bold text-xs md:text-sm mb-1 uppercase tracking-widest font-mono"
       >
-        Monitored Endpoints
+        MONITORED_ENDPOINTS
       </p>
-      <h2 class="text-3xl md:text-4xl font-black text-slate-800">
+      <h2
+        class="text-3xl md:text-4xl font-black text-cyan-50 drop-shadow-[0_0_15px_rgba(6,182,212,0.3)]"
+      >
         {summary.total}
       </h2>
     </div>
 
     <div
-      class="bg-white rounded-2xl border border-slate-200 p-5 md:p-6 shadow-sm relative overflow-hidden"
+      class="bg-slate-800/40 backdrop-blur-xl rounded-3xl border border-slate-700/50 p-5 md:p-6 shadow-[0_8px_30px_rgb(0,0,0,0.5)] relative overflow-hidden group"
     >
       <div
-        class="absolute right-0 top-0 w-24 h-24 bg-green-500 opacity-5 rounded-bl-full pointer-events-none"
+        class="absolute inset-0 bg-gradient-to-br from-emerald-900/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+      ></div>
+      <div
+        class="absolute right-0 top-0 w-24 h-24 bg-emerald-500 opacity-10 rounded-bl-full pointer-events-none group-hover:scale-110 transition-transform duration-500"
       ></div>
       <p
-        class="text-slate-500 font-medium text-xs md:text-sm mb-1 uppercase tracking-wider"
+        class="text-emerald-500/80 font-bold text-xs md:text-sm mb-1 uppercase tracking-widest font-mono"
       >
-        Operational (UP)
+        OPERATIONAL [UP]
       </p>
-      <h2 class="text-3xl md:text-4xl font-black text-green-500">
+      <h2
+        class="text-3xl md:text-4xl font-black text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.3)]"
+      >
         {summary.up}
       </h2>
     </div>
 
     <div
-      class="bg-white rounded-2xl border border-slate-200 p-5 md:p-6 shadow-sm relative overflow-hidden"
+      class="bg-slate-800/40 backdrop-blur-xl rounded-3xl border border-slate-700/50 p-5 md:p-6 shadow-[0_8px_30px_rgb(0,0,0,0.5)] relative overflow-hidden group"
     >
       <div
-        class="absolute right-0 top-0 w-24 h-24 bg-red-500 opacity-5 rounded-bl-full pointer-events-none"
+        class="absolute inset-0 bg-gradient-to-br from-red-900/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+      ></div>
+      <div
+        class="absolute right-0 top-0 w-24 h-24 bg-red-500 opacity-10 rounded-bl-full pointer-events-none group-hover:scale-110 transition-transform duration-500"
       ></div>
       <p
-        class="text-slate-500 font-medium text-xs md:text-sm mb-1 uppercase tracking-wider"
+        class="text-red-500/80 font-bold text-xs md:text-sm mb-1 uppercase tracking-widest font-mono"
       >
-        Failing (DOWN)
+        FAILING [DOWN]
       </p>
-      <h2 class="text-3xl md:text-4xl font-black text-red-500">
+      <h2
+        class="text-3xl md:text-4xl font-black text-red-500 drop-shadow-[0_0_15px_rgba(239,68,68,0.3)]"
+      >
         {summary.down}
       </h2>
     </div>
   </div>
 
   <!-- Performance Chart -->
-  <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm mb-6">
-    <div class="flex items-center justify-between mb-4">
-      <h3 class="text-sm font-semibold text-slate-800 flex items-center gap-2">
+  <div
+    class="bg-slate-800/40 backdrop-blur-xl p-5 md:p-6 rounded-3xl border border-slate-700/50 shadow-[0_8px_30px_rgb(0,0,0,0.5)] mb-8 relative"
+  >
+    <div class="flex items-center justify-between mb-6">
+      <h3
+        class="text-sm font-bold text-cyan-50 font-mono tracking-widest flex items-center gap-2"
+      >
         <svg
           xmlns="http://www.w3.org/2000/svg"
           width="16"
@@ -368,14 +404,14 @@
           stroke-width="2"
           stroke-linecap="round"
           stroke-linejoin="round"
-          class="text-blue-500"
+          class="text-cyan-400"
           ><path d="M3 3v18h18" /><path d="m19 9-5 5-4-4-3 3" /></svg
         >
-        Recent Activity (Run Summary)
+        RECENT_ACTIVITY_LOG
       </h3>
       <span
-        class="text-xs font-medium text-slate-500 bg-slate-100 py-1 px-2.5 rounded-md border border-slate-200"
-        >Latest 50 Hits</span
+        class="text-[10px] font-bold text-cyan-400 bg-slate-900 border border-slate-700 py-1.5 px-3 rounded-md uppercase tracking-widest font-mono"
+        >LATEST 50 EVENT_CYCLES</span
       >
     </div>
 
@@ -383,7 +419,7 @@
       {#if isLoading && logs.length === 0}
         <div class="absolute inset-0 flex items-center justify-center">
           <svg
-            class="animate-spin h-6 w-6 text-slate-300"
+            class="animate-spin h-6 w-6 text-cyan-500"
             xmlns="http://www.w3.org/2000/svg"
             fill="none"
             viewBox="0 0 24 24"
@@ -411,14 +447,14 @@
 
   <!-- Filters & Search -->
   <div
-    class="bg-white p-4 rounded-t-2xl border-x border-t border-slate-200 flex flex-col md:flex-row gap-4 items-center justify-between mt-4"
+    class="bg-slate-900/60 backdrop-blur-md p-4 rounded-t-3xl border-x border-t border-slate-700/50 flex flex-col xl:flex-row gap-4 items-center justify-between mt-4 relative z-10"
   >
-    <div class="relative w-full md:max-w-md lg:max-w-lg shrink-0">
+    <div class="relative w-full xl:max-w-lg shrink-0">
       <div
-        class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"
+        class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"
       >
         <svg
-          class="h-5 w-5 text-slate-400"
+          class="h-5 w-5 text-slate-500"
           xmlns="http://www.w3.org/2000/svg"
           viewBox="0 0 20 20"
           fill="currentColor"
@@ -433,8 +469,8 @@
       <input
         type="text"
         bind:value={searchQuery}
-        placeholder="Search by endpoint name, status code, error detail..."
-        class="block w-full pl-10 pr-10 py-2.5 border border-slate-200 rounded-xl leading-5 bg-slate-50 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 sm:text-sm transition-all duration-200"
+        placeholder="SEARCH BY ENDPOINT_NAME, HTTP_STATUS, ERR_DETAIL..."
+        class="block w-full pl-11 pr-10 py-3 border border-slate-700/80 rounded-xl leading-5 bg-slate-800 text-cyan-50 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500 sm:text-sm transition-all duration-200 font-mono tracking-wide"
       />
       {#if searchQuery}
         <button
@@ -459,45 +495,49 @@
     </div>
 
     <div
-      class="flex gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0 hide-scrollbar shrink-0"
+      class="flex gap-2 w-full xl:w-auto overflow-x-auto pb-1 xl:pb-0 hide-scrollbar shrink-0"
     >
       <button
         on:click={() => (statusFilter = "ALL")}
-        class="px-5 py-2.5 text-sm font-semibold rounded-xl border transition-all whitespace-nowrap {statusFilter ===
+        class="px-6 py-3 text-xs tracking-widest font-mono font-bold rounded-xl border transition-all whitespace-nowrap {statusFilter ===
         'ALL'
-          ? 'bg-slate-800 text-white border-slate-800 shadow-md shadow-slate-800/20'
-          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300'}"
-        >All Logs</button
+          ? 'bg-cyan-900 text-cyan-50 border-cyan-500/50 shadow-[0_0_15px_rgba(6,182,212,0.3)]'
+          : 'bg-slate-800/80 text-slate-400 border-slate-700 hover:bg-slate-700 hover:text-cyan-300'}"
+        >ALL_LOGS</button
       >
       <button
         on:click={() => (statusFilter = "UP")}
-        class="px-5 py-2.5 text-sm font-semibold rounded-xl border transition-all whitespace-nowrap {statusFilter ===
+        class="px-6 py-3 text-xs tracking-widest font-mono font-bold rounded-xl border transition-all whitespace-nowrap {statusFilter ===
         'UP'
-          ? 'bg-emerald-50 text-emerald-700 border-emerald-300 shadow-sm shadow-emerald-500/10'
-          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300'} flex items-center gap-2"
-        ><div class="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-        Up</button
+          ? 'bg-emerald-900/80 text-emerald-400 border-emerald-500/50 shadow-[0_0_15px_rgba(52,211,153,0.3)]'
+          : 'bg-slate-800/80 text-slate-400 border-slate-700 hover:bg-slate-700 hover:text-emerald-300'} flex items-center gap-2"
+        ><div
+          class="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_5px_rgba(52,211,153,0.8)]"
+        ></div>
+        UP</button
       >
       <button
         on:click={() => (statusFilter = "DOWN")}
-        class="px-5 py-2.5 text-sm font-semibold rounded-xl border transition-all whitespace-nowrap {statusFilter ===
+        class="px-6 py-3 text-xs tracking-widest font-mono font-bold rounded-xl border transition-all whitespace-nowrap {statusFilter ===
         'DOWN'
-          ? 'bg-rose-50 text-rose-700 border-rose-300 shadow-sm shadow-rose-500/10'
-          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300'} flex items-center gap-2"
-        ><div class="w-1.5 h-1.5 rounded-full bg-rose-500"></div>
-        Down</button
+          ? 'bg-red-900/80 text-red-400 border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.3)]'
+          : 'bg-slate-800/80 text-slate-400 border-slate-700 hover:bg-slate-700 hover:text-red-300'} flex items-center gap-2"
+        ><div
+          class="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.8)]"
+        ></div>
+        DOWN</button
       >
     </div>
   </div>
 
   <!-- Log Table -->
   <div
-    class="bg-white rounded-b-2xl border border-t-0 border-slate-200 shadow-sm overflow-hidden w-full relative -mt-px"
+    class="bg-slate-900/60 backdrop-blur-md rounded-b-3xl border border-t-0 border-slate-700/50 shadow-[0_8px_30px_rgb(0,0,0,0.5)] overflow-hidden w-full relative -mt-px z-0"
   >
     {#if isLoading && logs.length === 0}
       <div class="flex justify-center p-12">
         <svg
-          class="animate-spin h-8 w-8 text-blue-600"
+          class="animate-spin h-8 w-8 text-cyan-500"
           xmlns="http://www.w3.org/2000/svg"
           fill="none"
           viewBox="0 0 24 24"
@@ -518,7 +558,7 @@
     {:else if logs.length === 0}
       <div class="p-8 md:p-12 text-center">
         <div
-          class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-50 mb-4"
+          class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-800 border border-slate-700 shadow-[0_0_15px_rgba(0,0,0,0.5)] mb-4"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -535,19 +575,23 @@
             ></path></svg
           >
         </div>
-        <h3 class="text-lg font-bold text-slate-800">No Logs Recorded</h3>
-        <p class="text-slate-500 mt-1 text-sm">
-          Waiting for the background worker to execute health checks.
+        <h3 class="text-lg font-bold text-cyan-50 font-mono tracking-widest">
+          NO_LOGS_RECORDED
+        </h3>
+        <p
+          class="text-slate-400 mt-2 text-sm font-mono uppercase tracking-wider"
+        >
+          WAITING FOR THE BACKGROUND WORKER TO EXECUTE HEALTH CHECKS.
         </p>
       </div>
     {:else if filteredLogs.length === 0}
       <div class="p-8 md:p-12 text-center py-24">
         <div
-          class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-50 mb-4 ring-8 ring-blue-50/50"
+          class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-cyan-900/30 mb-4 ring-8 ring-cyan-900/10 border border-cyan-500/30 shadow-[0_0_15px_rgba(6,182,212,0.2)]"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            class="text-blue-500 h-8 w-8"
+            class="text-cyan-400 h-8 w-8"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -559,19 +603,23 @@
             /></svg
           >
         </div>
-        <h3 class="text-xl font-bold text-slate-800 tracking-tight">
-          No matching logs found
+        <h3
+          class="text-xl font-bold text-cyan-50 tracking-widest font-mono uppercase"
+        >
+          NO MATCHING LOGS FOUND
         </h3>
-        <p class="text-slate-500 mt-2 text-sm max-w-sm mx-auto">
-          We couldn't find any health check logs matching your search terms or
-          filter criteria.
+        <p
+          class="text-slate-400 mt-3 text-sm max-w-sm mx-auto font-mono uppercase tracking-wider"
+        >
+          WE COULDN'T FIND ANY HEALTH CHECK LOGS MATCHING YOUR SEARCH TERMS OR
+          FILTER CRITERIA.
         </p>
         <button
           on:click={() => {
             searchQuery = "";
             statusFilter = "ALL";
           }}
-          class="mt-6 px-5 py-2.5 text-sm font-semibold text-blue-700 bg-blue-50 rounded-xl hover:bg-blue-100 transition-colors shadow-sm inline-flex items-center gap-2"
+          class="mt-8 px-5 py-2.5 text-xs font-bold font-mono tracking-widest text-cyan-400 bg-cyan-950/50 border border-cyan-500/30 rounded-xl hover:bg-cyan-900/50 hover:border-cyan-400/50 hover:shadow-[0_0_15px_rgba(6,182,212,0.3)] transition-all inline-flex items-center gap-2 uppercase"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -587,7 +635,7 @@
               d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"
             /></svg
           >
-          Clear all filters
+          CLEAR_ALL_FILTERS
         </button>
       </div>
     {:else}
@@ -597,59 +645,65 @@
         >
           <thead>
             <tr
-              class="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider"
+              class="bg-slate-950/80 border-b border-slate-700/50 text-[10px] font-bold text-slate-400 uppercase tracking-widest font-mono"
             >
               <th class="p-3 md:p-4 pl-4 md:pl-6">Status</th>
-              <th class="p-3 md:p-4">Endpoint Name</th>
-              <th class="p-3 md:p-4">Check Time</th>
+              <th class="p-3 md:p-4">Endpoint_Name</th>
+              <th class="p-3 md:p-4">Check_Time</th>
               <th class="p-3 md:p-4">Schedule</th>
-              <th class="p-3 md:p-4">Response Time</th>
-              <th class="p-3 md:p-4">Status Code</th>
-              <th class="p-3 md:p-4 pr-4 md:pr-6">Error Detail</th>
+              <th class="p-3 md:p-4">Resp_Time</th>
+              <th class="p-3 md:p-4">HTTP</th>
+              <th class="p-3 md:p-4 pr-4 md:pr-6">Error_Detail</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-slate-100 text-sm">
+          <tbody class="divide-y divide-slate-800/50 text-sm">
             {#each paginatedLogs as log}
               <tr
-                class="hover:bg-slate-50 transition-colors cursor-pointer active:bg-slate-100"
+                class="hover:bg-slate-800/50 transition-colors cursor-pointer active:bg-slate-800"
                 on:click={() => viewLogDetails(log)}
               >
                 <td class="p-3 md:p-4 pl-4 md:pl-6">
                   {#if log.is_success}
                     <div
-                      class="flex items-center gap-2 text-green-600 font-bold"
+                      class="flex items-center gap-2 text-emerald-400 font-bold font-mono text-xs tracking-widest"
                     >
-                      <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                      <div
+                        class="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_5px_rgba(52,211,153,0.8)]"
+                      ></div>
                       UP
                     </div>
                   {:else}
-                    <div class="flex items-center gap-2 text-red-600 font-bold">
-                      <div class="w-2 h-2 rounded-full bg-red-500"></div>
+                    <div
+                      class="flex items-center gap-2 text-red-500 font-bold font-mono text-xs tracking-widest"
+                    >
+                      <div
+                        class="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.8)]"
+                      ></div>
                       DOWN
                     </div>
                   {/if}
                 </td>
                 <td
-                  class="p-3 md:p-4 text-slate-800 font-semibold truncate max-w-[200px]"
+                  class="p-3 md:p-4 text-cyan-50 font-bold font-mono tracking-wide truncate max-w-[200px]"
                   title={log.api?.name || "Unknown API"}
                 >
                   {log.api?.name || `API-${log.api_id}`}
                 </td>
-                <td
-                  class="p-3 md:p-4 text-slate-500 flex flex-col justify-center"
-                >
-                  <span class="font-medium text-slate-700"
+                <td class="p-3 md:p-4 flex flex-col justify-center">
+                  <span class="font-bold text-slate-300 font-mono text-xs"
                     >{formatDateTime(log.checked_at)}</span
                   >
-                  <span class="text-xs text-slate-400"
+                  <span
+                    class="text-[10px] font-bold text-slate-500 font-mono tracking-wider uppercase mt-0.5"
                     >{formatRelativeTime(log.checked_at)}</span
                   >
                 </td>
                 <td class="p-3 md:p-4">
                   <span
-                    class="text-sm font-medium {log.api?.interval
-                      ? 'text-blue-600'
-                      : 'text-slate-400'}"
+                    class="text-xs font-bold font-mono uppercase tracking-wider {log
+                      .api?.interval
+                      ? 'text-cyan-400'
+                      : 'text-slate-600'}"
                   >
                     {#if log.api?.interval}
                       {#if log.api.interval < 60}
@@ -666,27 +720,27 @@
                 </td>
                 <td class="p-3 md:p-4">
                   <span
-                    class="font-mono {log.response_time > 1000
-                      ? 'text-orange-500 font-semibold'
-                      : 'text-slate-600'}"
+                    class="font-mono text-xs font-bold {log.response_time > 1000
+                      ? 'text-amber-400'
+                      : 'text-slate-300'}"
                   >
                     {log.response_time}ms
                   </span>
                 </td>
                 <td class="p-3 md:p-4">
                   <span
-                    class="inline-flex items-center justify-center px-2 py-1 rounded text-xs font-bold {log.status_code >=
+                    class="inline-flex items-center justify-center px-2 py-0.5 border rounded text-[10px] font-bold font-mono tracking-wider {log.status_code >=
                       200 && log.status_code < 300
-                      ? 'bg-green-100 text-green-700'
+                      ? 'bg-emerald-950/50 text-emerald-400 border-emerald-500/30'
                       : log.status_code > 0
-                        ? 'bg-red-100 text-red-700'
-                        : 'bg-slate-200 text-slate-700'}"
+                        ? 'bg-red-950/50 text-red-400 border-red-500/30'
+                        : 'bg-slate-800 text-slate-400 border-slate-700'}"
                   >
                     {log.status_code || "ERR"}
                   </span>
                 </td>
                 <td
-                  class="p-3 md:p-4 pr-4 md:pr-6 truncate max-w-[150px] md:max-w-xs text-slate-500"
+                  class="p-3 md:p-4 pr-4 md:pr-6 truncate max-w-[150px] md:max-w-xs text-slate-400 font-mono text-xs"
                   title={log.error_message}
                 >
                   {log.error_message || "-"}
@@ -699,19 +753,19 @@
         <!-- Pagination Controls -->
         {#if totalPages > 1}
           <div
-            class="flex items-center justify-between border-t border-slate-200 px-4 py-3 bg-white sm:px-6 rounded-b-2xl"
+            class="flex items-center justify-between border-t border-slate-700/50 px-4 py-3 bg-slate-900/50 sm:px-6 rounded-b-3xl"
           >
             <div class="flex flex-1 justify-between sm:hidden">
               <button
                 on:click={() => currentPage > 1 && currentPage--}
                 disabled={currentPage === 1}
-                class="relative inline-flex items-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                class="relative inline-flex items-center rounded-md border border-slate-700 bg-slate-800 px-4 py-2 text-xs font-bold font-mono tracking-widest uppercase text-slate-300 hover:bg-slate-700 hover:text-cyan-50 disabled:opacity-50 transition-colors"
                 >Previous</button
               >
               <button
                 on:click={() => currentPage < totalPages && currentPage++}
                 disabled={currentPage === totalPages}
-                class="relative ml-3 inline-flex items-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                class="relative ml-3 inline-flex items-center rounded-md border border-slate-700 bg-slate-800 px-4 py-2 text-xs font-bold font-mono tracking-widest uppercase text-slate-300 hover:bg-slate-700 hover:text-cyan-50 disabled:opacity-50 transition-colors"
                 >Next</button
               >
             </div>
@@ -719,18 +773,20 @@
               class="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between"
             >
               <div>
-                <p class="text-sm text-slate-700">
-                  Showing
-                  <span class="font-medium"
+                <p
+                  class="text-xs font-mono tracking-wider text-slate-400 uppercase"
+                >
+                  SHOWING
+                  <span class="font-bold text-cyan-400"
                     >{(currentPage - 1) * itemsPerPage + 1}</span
                   >
-                  to
-                  <span class="font-medium"
+                  TO
+                  <span class="font-bold text-cyan-400"
                     >{Math.min(currentPage * itemsPerPage, logs.length)}</span
                   >
-                  of
-                  <span class="font-medium">{logs.length}</span>
-                  results
+                  OF
+                  <span class="font-bold text-cyan-400">{logs.length}</span>
+                  RESULTS
                 </p>
               </div>
               <div>
@@ -741,7 +797,7 @@
                   <button
                     on:click={() => currentPage > 1 && currentPage--}
                     disabled={currentPage === 1}
-                    class="relative inline-flex items-center rounded-l-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                    class="relative inline-flex items-center rounded-l-md px-2 py-2 text-slate-500 ring-1 ring-inset ring-slate-700 bg-slate-800 hover:bg-slate-700 hover:text-cyan-400 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     <span class="sr-only">Previous</span>
                     <svg
@@ -763,16 +819,16 @@
                     {#if i + 1 === 1 || i + 1 === totalPages || (i + 1 >= currentPage - 1 && i + 1 <= currentPage + 1)}
                       <button
                         on:click={() => (currentPage = i + 1)}
-                        class="relative inline-flex items-center px-4 py-2 text-sm font-semibold {currentPage ===
+                        class="relative inline-flex items-center px-4 py-2 text-sm font-bold font-mono {currentPage ===
                         i + 1
-                          ? 'z-10 bg-blue-600 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600'
-                          : 'text-slate-900 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0'}"
+                          ? 'z-10 bg-cyan-900/80 text-cyan-400 ring-1 ring-inset ring-cyan-500/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.2)]'
+                          : 'text-slate-400 ring-1 ring-inset ring-slate-700 bg-slate-800 hover:bg-slate-700 hover:text-cyan-50 focus:z-20 focus:outline-offset-0 transition-colors'}"
                       >
                         {i + 1}
                       </button>
                     {:else if (i + 1 === currentPage - 2 && currentPage > 3) || (i + 1 === currentPage + 2 && currentPage < totalPages - 2)}
                       <span
-                        class="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-inset ring-slate-300 focus:outline-offset-0"
+                        class="relative inline-flex items-center px-4 py-2 text-sm font-bold font-mono text-slate-500 ring-1 ring-inset ring-slate-700 bg-slate-800 focus:outline-offset-0"
                       >
                         ...
                       </span>
@@ -782,7 +838,7 @@
                   <button
                     on:click={() => currentPage < totalPages && currentPage++}
                     disabled={currentPage === totalPages}
-                    class="relative inline-flex items-center rounded-r-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                    class="relative inline-flex items-center rounded-r-md px-2 py-2 text-slate-500 ring-1 ring-inset ring-slate-700 bg-slate-800 hover:bg-slate-700 hover:text-cyan-400 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     <span class="sr-only">Next</span>
                     <svg
@@ -812,22 +868,22 @@
 {#if showLogModal && selectedLog}
   <div class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
     <div
-      class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
+      class="absolute inset-0 bg-slate-950/80 backdrop-blur-md transition-opacity"
       on:click={() => (showLogModal = false)}
     ></div>
 
     <div
-      class="relative bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col transform transition-all overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+      class="relative bg-slate-900 border border-slate-700/50 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.8)] w-full max-w-2xl max-h-[90vh] flex flex-col transform transition-all overflow-hidden animate-in fade-in zoom-in-95 duration-200"
     >
       <!-- Modal Header -->
       <div
-        class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50"
+        class="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/50"
       >
         <div class="flex items-center gap-3">
           <div
-            class="p-2 rounded-lg {selectedLog.is_success
-              ? 'bg-green-100 text-green-600'
-              : 'bg-red-100 text-red-600'}"
+            class="p-2 rounded-lg border shadow-inner {selectedLog.is_success
+              ? 'bg-emerald-950/50 text-emerald-400 border-emerald-500/30'
+              : 'bg-red-950/50 text-red-500 border-red-500/30'}"
           >
             {#if selectedLog.is_success}
               <svg
@@ -865,17 +921,21 @@
             {/if}
           </div>
           <div>
-            <h3 class="text-lg font-bold text-slate-800 leading-tight">
-              Response Details
+            <h3
+              class="text-lg font-bold text-cyan-50 font-mono tracking-widest uppercase leading-tight"
+            >
+              RESPONSE_DETAILS
             </h3>
-            <p class="text-xs font-medium text-slate-500 mt-0.5">
+            <p
+              class="text-xs font-bold text-slate-500 font-mono tracking-wider mt-1"
+            >
               {formatDateTime(selectedLog.checked_at)}
             </p>
           </div>
         </div>
         <button
           on:click={() => (showLogModal = false)}
-          class="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-full transition-colors"
+          class="text-slate-500 hover:text-cyan-400 hover:bg-slate-800 p-2 rounded-full transition-colors"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -898,113 +958,129 @@
       </div>
 
       <!-- Modal Body (Scrollable) -->
-      <div class="overflow-y-auto p-6 flex-1 bg-white">
+      <div class="overflow-y-auto p-6 flex-1 bg-slate-900/50">
         <div class="grid grid-cols-2 gap-4 mb-6">
-          <div class="bg-slate-50 rounded-xl p-4 border border-slate-100">
+          <div
+            class="bg-slate-800/80 rounded-xl p-4 border border-slate-700/50 shadow-inner"
+          >
             <span
-              class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1"
-              >Status Code</span
+              class="block text-[10px] font-bold text-slate-500 font-mono tracking-widest uppercase mb-1.5"
+              >HTTP_STATUS</span
             >
             <div class="flex items-center gap-2">
               <span
-                class="inline-flex items-center justify-center px-2.5 py-1 rounded-md text-sm font-bold {selectedLog.status_code >=
+                class="inline-flex items-center justify-center px-2 py-0.5 border rounded text-xs font-bold font-mono tracking-wider {selectedLog.status_code >=
                   200 && selectedLog.status_code < 300
-                  ? 'bg-green-100 text-green-700'
+                  ? 'bg-emerald-950/50 text-emerald-400 border-emerald-500/30'
                   : selectedLog.status_code > 0
-                    ? 'bg-red-100 text-red-700'
-                    : 'bg-slate-200 text-slate-700'}"
+                    ? 'bg-red-950/50 text-red-400 border-red-500/30'
+                    : 'bg-slate-800 text-slate-400 border-slate-700'}"
               >
                 {selectedLog.status_code || "ERR"}
               </span>
-              <span class="text-sm font-medium text-slate-700"
-                >{selectedLog.is_success ? "OK" : "Error"}</span
+              <span
+                class="text-xs font-bold font-mono tracking-widest uppercase {selectedLog.is_success
+                  ? 'text-emerald-400'
+                  : 'text-red-400'}"
+                >{selectedLog.is_success ? "OK" : "ERROR"}</span
               >
             </div>
           </div>
-          <div class="bg-slate-50 rounded-xl p-4 border border-slate-100">
+          <div
+            class="bg-slate-800/80 rounded-xl p-4 border border-slate-700/50 shadow-inner"
+          >
             <span
-              class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1"
-              >Response Time</span
+              class="block text-[10px] font-bold text-slate-500 font-mono tracking-widest uppercase mb-1.5"
+              >RESPONSE_TIME</span
             >
             <div class="flex items-baseline gap-1">
               <span
-                class="text-2xl font-black {selectedLog.response_time > 1000
-                  ? 'text-orange-500'
-                  : 'text-slate-800'}">{selectedLog.response_time}</span
+                class="text-2xl font-black font-mono {selectedLog.response_time >
+                1000
+                  ? 'text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]'
+                  : 'text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.5)]'}"
+                >{selectedLog.response_time}</span
               >
-              <span class="text-sm font-bold text-slate-500">ms</span>
+              <span
+                class="text-xs font-bold text-slate-500 font-mono tracking-widest"
+                >ms</span
+              >
             </div>
           </div>
         </div>
 
         <div class="mb-6">
           <h4
-            class="text-sm font-bold text-slate-800 mb-2 border-b border-slate-100 pb-2"
+            class="text-xs font-bold text-cyan-50 font-mono tracking-widest uppercase mb-3 border-b border-slate-800 pb-2"
           >
-            Endpoint Information
+            ENDPOINT_INFORMATION
           </h4>
           <div
-            class="bg-slate-50 rounded-lg border border-slate-200 overflow-hidden text-sm"
+            class="bg-slate-950/50 rounded-lg border border-slate-700/80 overflow-hidden text-sm shadow-inner"
           >
-            <div class="grid grid-cols-[100px_1fr] border-b border-slate-200">
+            <div class="grid grid-cols-[100px_1fr] border-b border-slate-800">
               <div
-                class="p-3 bg-slate-100 text-slate-500 font-semibold border-r border-slate-200"
+                class="p-3 bg-slate-900 text-slate-500 text-xs font-bold font-mono tracking-wider uppercase border-r border-slate-800"
               >
-                Name
+                NAME
               </div>
-              <div class="p-3 font-medium text-slate-800">
+              <div
+                class="p-3 font-bold font-mono text-cyan-50 text-xs tracking-wide"
+              >
                 {selectedLog.api?.name || `API-${selectedLog.api_id}`}
               </div>
             </div>
             {#if selectedLog.api?.url}
-              <div class="grid grid-cols-[100px_1fr] border-b border-slate-200">
+              <div class="grid grid-cols-[100px_1fr] border-b border-slate-800">
                 <div
-                  class="p-3 bg-slate-100 text-slate-500 font-semibold border-r border-slate-200"
+                  class="p-3 bg-slate-900 text-slate-500 text-xs font-bold font-mono tracking-wider uppercase border-r border-slate-800"
                 >
-                  Method
+                  METHOD
                 </div>
                 <div class="p-3">
                   <span
-                    class="px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-700"
+                    class="px-2 py-0.5 rounded border border-blue-500/30 text-[10px] font-bold font-mono bg-blue-950/50 text-blue-400 tracking-widest"
                     >{selectedLog.api?.method || "GET"}</span
                   >
                 </div>
               </div>
               <div class="grid grid-cols-[100px_1fr]">
                 <div
-                  class="p-3 bg-slate-100 text-slate-500 font-semibold border-r border-slate-200"
+                  class="p-3 bg-slate-900 text-slate-500 text-xs font-bold font-mono tracking-wider uppercase border-r border-slate-800"
                 >
                   URL
                 </div>
-                <div class="p-3 font-mono text-xs text-slate-700 break-all">
+                <div
+                  class="p-3 font-mono text-xs text-slate-400 break-all bg-slate-900/50"
+                >
                   {selectedLog.api?.url}
                 </div>
               </div>
             {/if}
             {#if selectedLog.api?.headers && selectedLog.api?.headers !== "{}" && selectedLog.api?.headers !== "[]"}
-              <div class="grid grid-cols-[100px_1fr] border-b border-slate-200">
+              <div class="grid grid-cols-[100px_1fr] border-t border-slate-800">
                 <div
-                  class="p-3 bg-slate-100 text-slate-500 font-semibold border-r border-slate-200"
+                  class="p-3 bg-slate-900 text-slate-500 text-xs font-bold font-mono tracking-wider uppercase border-r border-slate-800"
                 >
-                  Headers
+                  HEADERS
                 </div>
-                <div class="p-3">
+                <div class="p-3 bg-slate-900/50">
                   <pre
-                    class="font-mono text-xs text-slate-700 whitespace-pre-wrap break-all">{selectedLog
+                    class="font-mono text-[10px] text-green-400 whitespace-pre-wrap break-all">{selectedLog
                       .api.headers}</pre>
                 </div>
               </div>
             {/if}
             {#if selectedLog.api?.body}
-              <div class="grid grid-cols-[100px_1fr]">
+              <div class="grid grid-cols-[100px_1fr] border-t border-slate-800">
                 <div
-                  class="p-3 bg-slate-100 text-slate-500 font-semibold border-r border-slate-200"
+                  class="p-3 bg-slate-900 text-slate-500 text-xs font-bold font-mono tracking-wider uppercase border-r border-slate-800"
                 >
-                  Body
+                  BODY
                 </div>
-                <div class="p-3">
+                <div class="p-3 bg-slate-900/50">
                   <pre
-                    class="font-mono text-xs text-slate-700 whitespace-pre-wrap break-all">{selectedLog
+                    class="font-mono text-[10px] text-blue-400 whitespace-pre-wrap break-all">{selectedLog
                       .api.body}</pre>
                 </div>
               </div>
@@ -1015,7 +1091,7 @@
         {#if selectedLog.error_message || selectedLog.response_body}
           <div>
             <h4
-              class="text-sm font-bold text-slate-800 mb-2 flex items-center gap-2"
+              class="text-xs font-bold text-cyan-50 font-mono tracking-widest uppercase mb-3 flex items-center gap-2 border-b border-slate-800 pb-2"
             >
               {#if selectedLog.is_success}
                 <svg
@@ -1028,7 +1104,7 @@
                   stroke-width="2"
                   stroke-linecap="round"
                   stroke-linejoin="round"
-                  class="text-green-500"
+                  class="text-emerald-500"
                   ><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline
                     points="22 4 12 14.01 9 11.01"
                   ></polyline></svg
@@ -1054,16 +1130,16 @@
                 >
               {/if}
               {selectedLog.is_success
-                ? "Response Body"
-                : "Error Details / Response Body"}
+                ? "RESPONSE_BODY"
+                : "ERROR_DETAILS / RESPONSE_BODY"}
             </h4>
             <div
-              class="bg-slate-900 rounded-xl p-4 overflow-hidden border border-slate-800 shadow-inner"
+              class="bg-slate-950 rounded-xl p-4 overflow-hidden border border-slate-800 shadow-inner"
             >
               <pre
                 class="{selectedLog.is_success
-                  ? 'text-green-400'
-                  : 'text-red-400'} font-mono text-xs whitespace-pre-wrap leading-relaxed overflow-x-auto"><code
+                  ? 'text-emerald-400'
+                  : 'text-red-400'} font-mono text-[10px] whitespace-pre-wrap leading-relaxed overflow-x-auto"><code
                   >{selectedLog.response_body ||
                     selectedLog.error_message}</code
                 ></pre>

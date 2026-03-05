@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { page } from "$app/stores";
   import { goto } from "$app/navigation";
+  import Modal from "$lib/components/Modal.svelte";
 
   let projects: any[] = [];
   let selectedProjectId = "";
@@ -31,6 +32,7 @@
   let user: any = null;
   let isMobileMenuOpen = false;
   let isSidebarCollapsed = false;
+  let showHelpModal = false;
 
   $: currentPath = $page.url.pathname;
 
@@ -182,11 +184,11 @@
 
 {#if user}
   <div
-    class="h-screen w-full bg-slate-50 flex overflow-hidden font-sans text-slate-800"
+    class="h-screen w-full bg-slate-950 flex overflow-hidden font-mono text-slate-300 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-black"
   >
     <!-- Mobile Menu Button -->
     <button
-      class="md:hidden fixed top-4 right-4 z-50 p-2 rounded-lg bg-white shadow-md border border-slate-200 text-slate-600"
+      class="md:hidden fixed top-4 right-4 z-50 p-2 rounded-lg bg-slate-800 shadow-[0_0_15px_rgba(6,182,212,0.3)] border border-slate-700 text-cyan-400"
       on:click={() => (isMobileMenuOpen = !isMobileMenuOpen)}
     >
       {#if isMobileMenuOpen}
@@ -238,9 +240,9 @@
 
     <!-- Sidebar Area (Single-column layout) -->
     <div
-      class="fixed md:static inset-y-0 left-0 flex h-full bg-[#fcfcfc] z-40 transition-transform duration-300 transform {isMobileMenuOpen
+      class="fixed md:static inset-y-0 left-0 flex h-full bg-slate-900/80 backdrop-blur-xl z-40 transition-transform duration-300 transform {isMobileMenuOpen
         ? 'translate-x-0'
-        : '-translate-x-full md:translate-x-0'} border-r border-slate-200 relative group/sidebar overflow-visible"
+        : '-translate-x-full md:translate-x-0'} border-r border-slate-800 relative group/sidebar overflow-visible"
     >
       <!-- Floating sidebar toggle button on right border -->
       <button
@@ -248,10 +250,10 @@
         title={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         class="absolute right-0 translate-x-1/2 top-[40px] z-50
           w-6 h-6 flex items-center justify-center rounded-full
-          bg-white border border-slate-200 shadow-md text-slate-500
-          hover:text-slate-900 hover:border-slate-400 hover:shadow-lg
+          bg-slate-800 border border-cyan-500/50 shadow-[0_0_10px_rgba(6,182,212,0.2)] text-cyan-500
+          hover:text-cyan-300 hover:border-cyan-400 hover:shadow-[0_0_15px_rgba(6,182,212,0.5)]
           opacity-0 hover:opacity-100 group-hover/sidebar:opacity-100
-          transition-all duration-200"
+          transition-all duration-300"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -283,8 +285,11 @@
             : 'gap-3'}"
         >
           <div
-            class="w-10 h-10 rounded-xl bg-slate-900 flex shrink-0 items-center justify-center text-white shadow-sm"
+            class="w-10 h-10 rounded-xl bg-slate-900 border border-cyan-500/40 flex shrink-0 items-center justify-center text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.3)] relative overflow-hidden group/logo"
           >
+            <div
+              class="absolute inset-0 bg-cyan-400/20 mix-blend-screen filter blur-md opacity-20 group-hover/logo:opacity-50 transition-opacity duration-500"
+            ></div>
             <svg
               xmlns="http://www.w3.org/2000/svg"
               width="20"
@@ -295,6 +300,7 @@
               stroke-width="2"
               stroke-linecap="round"
               stroke-linejoin="round"
+              class="relative z-10"
               ><path d="M20.2 7.8l-7.7 7.7-4-4-5.7 5.7" /><path
                 d="M15 7h6v6"
               /></svg
@@ -303,10 +309,13 @@
           {#if !isSidebarCollapsed}
             <div class="flex flex-col overflow-hidden min-w-0 flex-1">
               <span
-                class="font-bold text-slate-900 text-sm leading-tight truncate"
+                class="font-bold text-cyan-50 text-sm leading-tight truncate tracking-wide"
                 >T-Monitor</span
               >
-              <span class="text-xs text-slate-500 truncate">Enterprise</span>
+              <span
+                class="text-[10px] text-cyan-500/80 truncate font-mono tracking-wider"
+                >UNIT COMMAND</span
+              >
             </div>
           {/if}
         </div>
@@ -318,17 +327,17 @@
             : 'pr-1'} hide-scrollbar"
         >
           <a
-            href={selectedProjectId
-              ? `/dashboard/projects/${selectedProjectId}`
-              : "/dashboard"}
+            href={!selectedProjectId || selectedProjectId === "undefined"
+              ? "/dashboard"
+              : `/dashboard/projects/${selectedProjectId}`}
             on:click={() => (isMobileMenuOpen = false)}
             title="Project APIs"
-            class="w-full flex items-center {isSidebarCollapsed
+            class="w-full flex items-center group/navitem {isSidebarCollapsed
               ? 'justify-center px-0'
               : 'justify-between px-3'} py-3 rounded-xl text-sm font-semibold transition-all {currentPath ===
             '/dashboard'
-              ? 'bg-[#ecff82] text-slate-900 shadow-sm'
-              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}"
+              ? 'bg-cyan-900/30 border border-cyan-500/50 text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.15)]'
+              : 'text-slate-400 hover:bg-slate-800/80 hover:text-cyan-400 border border-transparent'}"
           >
             <div class="flex items-center gap-3">
               <svg
@@ -337,9 +346,9 @@
                 height="20"
                 viewBox="0 0 24 24"
                 fill="none"
-                class={currentPath === "/dashboard"
-                  ? "text-slate-900"
-                  : "text-slate-500"}
+                class="transition-colors {currentPath === '/dashboard'
+                  ? 'text-cyan-400'
+                  : 'text-slate-500 group-hover/navitem:text-cyan-400'}"
                 stroke="currentColor"
                 stroke-width="2.5"
                 stroke-linecap="round"
@@ -364,15 +373,15 @@
 
           <!-- Open APIs Link -->
           <a
-            href="/dashboard/apis"
+            href={`/dashboard/apis?project_id=${selectedProjectId}`}
             on:click={() => (isMobileMenuOpen = false)}
             title="Open APIs"
-            class="w-full flex items-center {isSidebarCollapsed
+            class="w-full flex items-center group/navitem {isSidebarCollapsed
               ? 'justify-center px-0 relative'
               : 'justify-between px-3'} py-3 rounded-xl text-sm font-semibold transition-all {currentPath ===
             '/dashboard/apis'
-              ? 'bg-[#ecff82] text-slate-900 shadow-sm'
-              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}"
+              ? 'bg-cyan-900/30 border border-cyan-500/50 text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.15)]'
+              : 'text-slate-400 hover:bg-slate-800/80 hover:text-cyan-400 border border-transparent'}"
           >
             <div class="flex items-center gap-3">
               <svg
@@ -381,9 +390,9 @@
                 height="20"
                 viewBox="0 0 24 24"
                 fill="none"
-                class={currentPath === "/dashboard/apis"
-                  ? "text-slate-900"
-                  : "text-slate-500"}
+                class="transition-colors {currentPath === '/dashboard/apis'
+                  ? 'text-cyan-400'
+                  : 'text-slate-500 group-hover/navitem:text-cyan-400'}"
                 stroke="currentColor"
                 stroke-width="2.5"
                 stroke-linecap="round"
@@ -396,27 +405,27 @@
             </div>
             {#if !isSidebarCollapsed}
               <span
-                class="bg-slate-900 text-white text-[10px] font-bold px-2 py-0.5 rounded-md"
+                class="bg-cyan-500/20 border border-cyan-500/50 text-cyan-300 text-[10px] font-bold px-2 py-0.5 rounded-md shadow-[0_0_10px_rgba(6,182,212,0.2)]"
                 >8</span
               >
             {:else}
               <span
-                class="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-slate-900 border-2 border-slate-50 rounded-full"
+                class="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-cyan-400 border border-slate-900 rounded-full shadow-[0_0_10px_rgba(6,182,212,0.8)]"
               ></span>
             {/if}
           </a>
 
           <!-- Status Live Link -->
           <a
-            href="/dashboard/status"
+            href={`/dashboard/status?project_id=${selectedProjectId}`}
             on:click={() => (isMobileMenuOpen = false)}
             title="Status Live"
-            class="w-full flex items-center {isSidebarCollapsed
+            class="w-full flex items-center group/navitem {isSidebarCollapsed
               ? 'justify-center px-0'
               : 'justify-between px-3'} py-3 rounded-xl text-sm font-semibold transition-all {currentPath ===
             '/dashboard/status'
-              ? 'bg-[#ecff82] text-slate-900 shadow-sm'
-              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}"
+              ? 'bg-cyan-900/30 border border-cyan-500/50 text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.15)]'
+              : 'text-slate-400 hover:bg-slate-800/80 hover:text-cyan-400 border border-transparent'}"
           >
             <div class="flex items-center gap-3">
               <svg
@@ -425,9 +434,9 @@
                 height="20"
                 viewBox="0 0 24 24"
                 fill="none"
-                class={currentPath === "/dashboard/status"
-                  ? "text-slate-900"
-                  : "text-slate-500"}
+                class="transition-colors {currentPath === '/dashboard/status'
+                  ? 'text-cyan-400'
+                  : 'text-slate-500 group-hover/navitem:text-cyan-400'}"
                 stroke="currentColor"
                 stroke-width="2.5"
                 stroke-linecap="round"
@@ -441,16 +450,16 @@
 
           <!-- Notification Channels Link -->
           <a
-            href={`/dashboard/projects/${$page.params.id || "1"}/notifications`}
+            href={`/dashboard/projects/${selectedProjectId}/notifications`}
             on:click={() => (isMobileMenuOpen = false)}
             title="Alerts & Channels"
-            class="w-full flex items-center {isSidebarCollapsed
+            class="w-full flex items-center group/navitem {isSidebarCollapsed
               ? 'justify-center px-0'
               : 'justify-between px-3'} py-3 rounded-xl text-sm font-semibold transition-all {currentPath.includes(
               'notifications',
             )
-              ? 'bg-amber-100 text-amber-900 shadow-sm'
-              : 'text-slate-600 hover:bg-amber-50 hover:text-amber-700'}"
+              ? 'bg-amber-900/30 border border-amber-500/50 text-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.15)]'
+              : 'text-slate-400 hover:bg-slate-800/80 hover:text-amber-400 border border-transparent'}"
           >
             <div class="flex items-center gap-3">
               <svg
@@ -459,9 +468,9 @@
                 height="20"
                 viewBox="0 0 24 24"
                 fill="none"
-                class={currentPath.includes("notifications")
-                  ? "text-amber-700"
-                  : "text-amber-500"}
+                class="transition-colors {currentPath.includes('notifications')
+                  ? 'text-amber-400'
+                  : 'text-slate-500 group-hover/navitem:text-amber-400'}"
                 stroke="currentColor"
                 stroke-width="2.5"
                 stroke-linecap="round"
@@ -483,12 +492,12 @@
             <div class="pt-4 pb-1">
               {#if !isSidebarCollapsed}
                 <div
-                  class="px-3 flex items-center justify-between text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-2"
+                  class="px-3 flex items-center justify-between text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-2 font-mono"
                 >
                   <span>Administration</span>
                 </div>
               {:else}
-                <div class="w-full h-px bg-slate-200 mb-2"></div>
+                <div class="w-full h-px bg-slate-800 mb-2"></div>
               {/if}
 
               <!-- Manage Users Link -->
@@ -496,12 +505,12 @@
                 href="/dashboard/users"
                 on:click={() => (isMobileMenuOpen = false)}
                 title="Users & Roles"
-                class="w-full flex items-center {isSidebarCollapsed
+                class="w-full flex items-center group/navitem {isSidebarCollapsed
                   ? 'justify-center px-0'
                   : 'justify-between px-3'} py-3 rounded-xl text-sm font-semibold transition-all {currentPath ===
                 '/dashboard/users'
-                  ? 'bg-[#ecff82] text-slate-900 shadow-sm'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}"
+                  ? 'bg-purple-900/30 border border-purple-500/50 text-purple-300 shadow-[0_0_15px_rgba(168,85,247,0.15)]'
+                  : 'text-slate-400 hover:bg-slate-800/80 hover:text-purple-400 border border-transparent'}"
               >
                 <div class="flex items-center gap-3">
                   <svg
@@ -510,9 +519,9 @@
                     height="20"
                     viewBox="0 0 24 24"
                     fill="none"
-                    class={currentPath === "/dashboard/users"
-                      ? "text-slate-900"
-                      : "text-slate-500"}
+                    class="transition-colors {currentPath === '/dashboard/users'
+                      ? 'text-purple-400'
+                      : 'text-slate-500 group-hover/navitem:text-purple-400'}"
                     stroke="currentColor"
                     stroke-width="2.5"
                     stroke-linecap="round"
@@ -530,12 +539,12 @@
               <!-- Projects Section Header -->
               {#if !isSidebarCollapsed}
                 <div
-                  class="px-3 pt-4 pb-1 text-[10px] uppercase font-bold text-slate-400 tracking-wider"
+                  class="px-3 pt-4 pb-1 text-[10px] uppercase font-bold text-slate-500 tracking-wider font-mono"
                 >
                   Projects
                 </div>
               {:else}
-                <div class="w-full h-px bg-slate-200 mt-3 mb-1"></div>
+                <div class="w-full h-px bg-slate-800 mt-3 mb-1"></div>
               {/if}
 
               <!-- Dynamic Project List -->
@@ -543,24 +552,28 @@
                 <div class="space-y-0.5">
                   {#each projects as project}
                     {@const isActive =
-                      currentPath === `/dashboard/projects/${project.id}`}
+                      currentPath.startsWith(
+                        `/dashboard/projects/${project.id}`,
+                      ) ||
+                      (!currentPath.startsWith("/dashboard/projects") &&
+                        selectedProjectId === project.id.toString())}
                     <a
                       href={`/dashboard/projects/${project.id}`}
                       on:click={() => (isMobileMenuOpen = false)}
                       title={project.name}
-                      class="w-full flex items-center {isSidebarCollapsed
+                      class="w-full flex items-center group/project {isSidebarCollapsed
                         ? 'justify-center py-2'
-                        : 'px-3 py-2'} rounded-xl text-sm font-medium transition-all {isActive
-                        ? 'bg-slate-100 text-slate-900'
-                        : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'}"
+                        : 'px-3 py-2'} rounded-xl text-sm font-medium transition-all border {isActive
+                        ? 'bg-slate-800 border-cyan-500/30 text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.1)]'
+                        : 'text-slate-400 border-transparent hover:bg-slate-800/50 hover:text-cyan-400'}"
                     >
                       {#if isSidebarCollapsed}
                         <!-- Collapsed: small circle avatar -->
                         <div
                           class="relative w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-bold uppercase shrink-0
                             {isActive
-                            ? 'bg-slate-900 text-white'
-                            : 'bg-slate-200 text-slate-600'}"
+                            ? 'bg-cyan-900 border border-cyan-400/50 text-cyan-300'
+                            : 'bg-slate-800 text-slate-500 group-hover/project:text-cyan-400'}"
                         >
                           {project.name.charAt(0)}
                         </div>
@@ -568,14 +581,14 @@
                         <!-- Expanded: dot + name + active badge -->
                         <div class="flex items-center gap-2.5 truncate w-full">
                           <div
-                            class="w-2 h-2 rounded-full shrink-0 {isActive
-                              ? 'bg-emerald-500'
-                              : 'bg-slate-300'}"
+                            class="w-2 h-2 rounded-full shrink-0 transition-colors {isActive
+                              ? 'bg-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.8)]'
+                              : 'bg-slate-600 group-hover/project:bg-cyan-500/50'}"
                           ></div>
                           <span class="truncate text-sm">{project.name}</span>
                           {#if isActive}
                             <span
-                              class="ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 shrink-0"
+                              class="ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-cyan-950 border border-cyan-500/40 text-cyan-400 shrink-0"
                               >Active</span
                             >
                           {/if}
@@ -594,13 +607,13 @@
         </div>
 
         <!-- Bottom User Section -->
-        <div class="mt-auto pt-4 border-t border-slate-200 flex flex-col gap-4">
+        <div class="mt-auto pt-4 border-t border-slate-800 flex flex-col gap-4">
           <!-- Help Center -->
-          <a
-            href="#"
+          <button
+            on:click={() => (showHelpModal = true)}
             class="w-full flex items-center {isSidebarCollapsed
               ? 'justify-center px-0'
-              : 'gap-3 px-3'} py-2 rounded-xl text-sm font-semibold transition-all text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+              : 'gap-3 px-3'} py-2 rounded-xl text-sm font-semibold transition-all text-slate-500 hover:bg-slate-800/80 hover:text-cyan-400 border border-transparent"
             title="Help center"
           >
             <svg
@@ -618,7 +631,7 @@
               ></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg
             >
             {#if !isSidebarCollapsed}<span>Help center</span>{/if}
-          </a>
+          </button>
 
           <!-- User Info -->
           <div
@@ -631,11 +644,11 @@
               title={user?.email || "Profile options"}
               class="w-full flex items-center {isSidebarCollapsed
                 ? 'justify-center p-0'
-                : 'justify-between p-2'} rounded-xl hover:bg-slate-100 transition-all text-left group relative"
+                : 'justify-between p-2'} rounded-xl hover:bg-slate-800 border border-transparent hover:border-slate-700 transition-all text-left group relative"
             >
               <div class="flex items-center gap-3 overflow-hidden min-w-0">
                 <div
-                  class="w-10 h-10 rounded-full bg-slate-900 flex shrink-0 items-center justify-center text-white font-bold text-sm shadow-sm uppercase relative border-2 border-slate-100 overflow-hidden"
+                  class="w-10 h-10 rounded-full bg-slate-900 flex shrink-0 items-center justify-center text-cyan-400 font-bold text-sm shadow-[0_0_10px_rgba(6,182,212,0.2)] uppercase relative border-2 border-slate-700 overflow-hidden"
                 >
                   {#if user?.profile_image_url}
                     <img
@@ -652,12 +665,13 @@
                     class="flex flex-col overflow-hidden min-w-0 flex-1 pr-2"
                   >
                     <span
-                      class="font-bold text-slate-900 text-sm leading-tight truncate capitalize"
+                      class="font-bold text-slate-200 text-sm leading-tight truncate capitalize"
                       >{user?.name ||
                         user?.email?.split("@")[0] ||
                         "User"}</span
                     >
-                    <span class="text-xs text-slate-500 font-medium truncate"
+                    <span
+                      class="text-xs text-slate-500 font-medium truncate font-mono"
                       >{user?.email || "user@example.com"}</span
                     >
                   </div>
@@ -674,7 +688,7 @@
                   stroke-width="2.5"
                   stroke-linecap="round"
                   stroke-linejoin="round"
-                  class="text-slate-400 group-hover:text-amber-500 transition-colors shrink-0"
+                  class="text-slate-600 group-hover:text-cyan-500 transition-colors shrink-0"
                   ><polyline points="18 15 12 9 6 15"></polyline></svg
                 >
               {/if}
@@ -685,12 +699,12 @@
               <div
                 class="absolute bottom-full left-0 {isSidebarCollapsed
                   ? 'ml-12'
-                  : 'w-full'} mb-2 bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden z-50 animate-in slide-in-from-bottom-2 duration-200 min-w-[160px]"
+                  : 'w-full'} mb-2 bg-slate-800 rounded-xl shadow-xl border border-slate-700 overflow-hidden z-50 animate-in slide-in-from-bottom-2 duration-200 min-w-[160px]"
               >
                 <div class="p-1">
                   <a
                     href="/dashboard/settings/profile"
-                    class="w-full text-left px-3 py-2.5 text-sm font-semibold text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors flex items-center gap-2"
+                    class="w-full text-left px-3 py-2.5 text-sm font-semibold text-slate-300 hover:text-cyan-400 hover:bg-slate-700/50 rounded-lg transition-colors flex items-center gap-2"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -710,7 +724,7 @@
                   </a>
                   <button
                     on:click={handleLogout}
-                    class="w-full text-left px-3 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-2"
+                    class="w-full text-left px-3 py-2.5 text-sm font-semibold text-red-500 hover:bg-red-500/10 rounded-lg transition-colors flex items-center gap-2"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -737,24 +751,99 @@
               </div>
             {/if}
 
-            <!-- Progress Bar (Static mock) -->
+            <!-- Copyright & Contact Icons -->
             {#if !isSidebarCollapsed}
-              <div class="px-2 mt-4 animate-in fade-in duration-300">
-                <div
-                  class="flex items-center justify-between gap-3 text-[11px] font-bold text-slate-800 mb-1.5"
+              <div
+                class="px-2 mt-4 animate-in fade-in duration-300 border-t border-slate-800/50 pt-4"
+              >
+                <p
+                  class="text-[9px] font-bold text-slate-500 mb-3 font-mono tracking-tighter uppercase text-center"
                 >
-                  <div
-                    class="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden"
+                  © 2024 TTT BROTHER CO., LTD.
+                </p>
+                <div class="flex items-center justify-center gap-3">
+                  <a
+                    href="https://www.facebook.com/TTTBrother/"
+                    target="_blank"
+                    title="Facebook"
+                    class="group/link no-underline"
                   >
                     <div
-                      class="h-full bg-emerald-500 rounded-full w-[70%] shadow-sm"
-                    ></div>
+                      class="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-950 border border-slate-800 group-hover/link:border-blue-500/50 group-hover/link:bg-blue-500/5 transition-all"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="text-slate-500 group-hover/link:text-blue-400"
+                        ><path
+                          d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"
+                        /></svg
+                      >
+                    </div>
+                  </a>
+                  <a
+                    href="https://tttbrother.com/"
+                    target="_blank"
+                    title="Website"
+                    class="group/link no-underline"
+                  >
+                    <div
+                      class="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-950 border border-slate-800 group-hover/link:border-cyan-500/50 group-hover/link:bg-cyan-500/5 transition-all"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="text-slate-500 group-hover/link:text-cyan-400"
+                        ><circle cx="12" cy="12" r="10" /><line
+                          x1="2"
+                          y1="12"
+                          x2="22"
+                          y2="12"
+                        /><path
+                          d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"
+                        /></svg
+                      >
+                    </div>
+                  </a>
+                  <div
+                    title="Call: 085 818 8910"
+                    class="group/link cursor-help"
+                  >
+                    <div
+                      class="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-950 border border-slate-800 hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-all"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="text-slate-500 group-hover/link:text-emerald-400"
+                        ><path
+                          d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"
+                        /></svg
+                      >
+                    </div>
                   </div>
-                  <span>70%</span>
                 </div>
-                <span class="text-[11px] font-medium text-slate-500"
-                  >Complete your profile</span
-                >
               </div>
             {/if}
           </div>
@@ -766,7 +855,7 @@
     <main class="flex-1 h-screen overflow-y-auto relative w-full pt-16 md:pt-0">
       <!-- Header decoration -->
       <div
-        class="fixed top-0 left-0 w-full h-64 bg-gradient-to-b from-blue-50/80 to-transparent pointer-events-none -z-10"
+        class="fixed top-0 left-0 w-full h-[500px] bg-gradient-to-b from-cyan-900/10 via-slate-900/5 to-transparent pointer-events-none -z-10"
       ></div>
 
       <div class="min-h-full p-6 md:p-8 max-w-7xl mx-auto w-full">
@@ -775,3 +864,301 @@
     </main>
   </div>
 {/if}
+
+<!-- Help Center Modal -->
+<Modal
+  bind:open={showHelpModal}
+  title="T-MONITOR HELP CENTER"
+  maxWidth="max-w-4xl"
+>
+  <div class="space-y-8 py-2">
+    <!-- Welcome Header -->
+    <div class="text-center space-y-2">
+      <div
+        class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 mb-2"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          ><circle cx="12" cy="12" r="10" /><path
+            d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"
+          /><line x1="12" y1="17" x2="12.01" y2="17" /></svg
+        >
+      </div>
+      <h3 class="text-xl font-bold text-white tracking-tight">
+        How T-Monitor Works
+      </h3>
+      <p class="text-sm text-slate-400 max-w-sm mx-auto">
+        Learn how to set up your API monitoring ecosystem in 4 simple steps.
+      </p>
+    </div>
+
+    <!-- Visual Flow Diagram (CSS Grid) -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 relative">
+      <!-- Connection Lines (Desktop only) -->
+      <div
+        class="hidden md:block absolute top-8 left-[12%] right-[12%] h-px bg-gradient-to-r from-transparent via-slate-700 to-transparent z-0"
+      ></div>
+
+      <!-- Step 1 -->
+      <div class="relative z-10 flex flex-col items-center text-center group">
+        <div
+          class="w-10 h-10 rounded-full bg-slate-900 border-2 border-slate-800 flex items-center justify-center text-xs font-bold text-slate-500 group-hover:border-purple-500/50 group-hover:text-purple-400 transition-all duration-300 mb-3 bg-clip-padding"
+        >
+          1
+        </div>
+        <div
+          class="p-4 rounded-2xl bg-slate-900/50 border border-slate-800 group-hover:bg-purple-500/5 group-hover:border-purple-500/30 transition-all duration-300 w-full"
+        >
+          <div class="text-purple-400 mb-2 flex justify-center">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              ><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><line
+                x1="12"
+                y1="8"
+                x2="12"
+                y2="16"
+              /><line x1="8" y1="12" x2="16" y2="12" /></svg
+            >
+          </div>
+          <p
+            class="text-[11px] font-bold text-slate-200 uppercase tracking-widest mb-1"
+          >
+            PROJET
+          </p>
+          <p class="text-[10px] text-slate-500 leading-relaxed font-medium">
+            Create workspace to group your APIs.
+          </p>
+        </div>
+      </div>
+
+      <!-- Step 2 -->
+      <div class="relative z-10 flex flex-col items-center text-center group">
+        <div
+          class="w-10 h-10 rounded-full bg-slate-900 border-2 border-slate-800 flex items-center justify-center text-xs font-bold text-slate-500 group-hover:border-cyan-500/50 group-hover:text-cyan-400 transition-all duration-300 mb-3 bg-clip-padding"
+        >
+          2
+        </div>
+        <div
+          class="p-4 rounded-2xl bg-slate-900/50 border border-slate-800 group-hover:bg-cyan-500/5 group-hover:border-cyan-500/30 transition-all duration-300 w-full"
+        >
+          <div class="text-cyan-400 mb-2 flex justify-center">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              ><path
+                d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"
+              /><path
+                d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"
+              /></svg
+            >
+          </div>
+          <p
+            class="text-[11px] font-bold text-slate-200 uppercase tracking-widest mb-1"
+          >
+            API REG
+          </p>
+          <p class="text-[10px] text-slate-500 leading-relaxed font-medium">
+            Add endpoints and expected status.
+          </p>
+        </div>
+      </div>
+
+      <!-- Step 3 -->
+      <div class="relative z-10 flex flex-col items-center text-center group">
+        <div
+          class="w-10 h-10 rounded-full bg-slate-900 border-2 border-slate-800 flex items-center justify-center text-xs font-bold text-slate-500 group-hover:border-amber-500/50 group-hover:text-amber-400 transition-all duration-300 mb-3 bg-clip-padding"
+        >
+          3
+        </div>
+        <div
+          class="p-4 rounded-2xl bg-slate-900/50 border border-slate-800 group-hover:bg-amber-500/5 group-hover:border-amber-500/30 transition-all duration-300 w-full"
+        >
+          <div class="text-amber-400 mb-2 flex justify-center">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              ><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path
+                d="M13.73 21a2 2 0 0 1-3.46 0"
+              /></svg
+            >
+          </div>
+          <p
+            class="text-[11px] font-bold text-slate-200 uppercase tracking-widest mb-1"
+          >
+            NOTIFY
+          </p>
+          <p class="text-[10px] text-slate-500 leading-relaxed font-medium">
+            Set Telegram/Gmail for instant alerts.
+          </p>
+        </div>
+      </div>
+
+      <!-- Step 4 -->
+      <div class="relative z-10 flex flex-col items-center text-center group">
+        <div
+          class="w-10 h-10 rounded-full bg-slate-900 border-2 border-slate-800 flex items-center justify-center text-xs font-bold text-slate-500 group-hover:border-emerald-500/50 group-hover:text-emerald-400 transition-all duration-300 mb-3 bg-clip-padding"
+        >
+          4
+        </div>
+        <div
+          class="p-4 rounded-2xl bg-slate-900/50 border border-slate-800 group-hover:bg-emerald-500/5 group-hover:border-emerald-500/30 transition-all duration-300 w-full"
+        >
+          <div class="text-emerald-400 mb-2 flex justify-center">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              ><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg
+            >
+          </div>
+          <p
+            class="text-[11px] font-bold text-slate-200 uppercase tracking-widest mb-1"
+          >
+            LIVE
+          </p>
+          <p class="text-[10px] text-slate-500 leading-relaxed font-medium">
+            Monitor health via Status Live screen.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Additional Help Sections -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div
+        class="p-5 rounded-2xl bg-slate-950/50 border border-slate-800/50 hover:border-slate-700 transition-colors"
+      >
+        <h4 class="text-sm font-bold text-white mb-3 flex items-center gap-2">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="text-cyan-400"
+            ><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline
+              points="22 4 12 14.01 9 11.01"
+            /></svg
+          >
+          What is "System Integrity"?
+        </h4>
+        <p class="text-[11px] text-slate-400 leading-relaxed">
+          It represents the overall health of your API ecosystem. It calculates
+          the percentage of healthy APIs across all your projects. A score below
+          100% means some services are failing.
+        </p>
+      </div>
+      <div
+        class="p-5 rounded-2xl bg-slate-950/50 border border-slate-800/50 hover:border-slate-700 transition-colors"
+      >
+        <h4 class="text-sm font-bold text-white mb-3 flex items-center gap-2">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="text-amber-400"
+            ><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path
+              d="M7 11V7a5 5 0 0 1 10 0v4"
+            /></svg
+          >
+          Gmail App Password?
+        </h4>
+        <p class="text-[11px] text-slate-400 leading-relaxed">
+          To send alerts via Gmail, you must use an <strong>App Password</strong
+          >. Enable 2FA in your Google Account settings, then search for "App
+          Passwords" to generate a unique 16-character code for this app.
+        </p>
+      </div>
+    </div>
+
+    <!-- Contact Support -->
+    <div
+      class="pt-4 border-t border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4"
+    >
+      <div class="flex items-center gap-3">
+        <div
+          class="w-8 h-8 rounded-full bg-cyan-500/10 flex items-center justify-center text-cyan-400"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            ><path
+              d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+            /></svg
+          >
+        </div>
+        <p class="text-xs font-medium text-slate-400">
+          Need more help? Contact our support team.
+        </p>
+      </div>
+      <div class="flex items-center gap-2">
+        <a
+          href="https://tttbrother.com/"
+          target="_blank"
+          class="px-4 py-2 rounded-xl bg-slate-800 text-xs font-bold text-white hover:bg-slate-700 transition-colors"
+          >Support Portal</a
+        >
+      </div>
+    </div>
+  </div>
+</Modal>
+
+<style>
+  /* Custom glassmorphism and subtle animations */
+  :global(.help-step-number) {
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.4);
+  }
+</style>

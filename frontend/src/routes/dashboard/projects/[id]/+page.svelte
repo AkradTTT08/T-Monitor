@@ -452,24 +452,34 @@
     fetchProjectDetails(projectId);
   }
 
-  async function fetchProjectDetails(id: string) {
+  async function fetchProjectDetails(id?: string) {
+    const targetId = id || projectId;
+    if (!targetId) return;
+
     isLoading = true;
     try {
       const token = localStorage.getItem("monitor_token");
 
       const [projRes, apisRes] = await Promise.all([
-        fetch(`http://localhost:5273/api/v1/projects/${id}`, {
+        fetch(`http://localhost:5273/api/v1/projects/${targetId}`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        fetch(`http://localhost:5273/api/v1/apis?project_id=${id}`, {
+        fetch(`http://localhost:5273/api/v1/apis?project_id=${targetId}`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
       ]);
 
-      if (projRes.ok) project = await projRes.json();
+      if (projRes.ok) {
+        project = await projRes.json();
+      } else {
+        localStorage.removeItem("monitor_selected_project");
+        window.location.href = "/dashboard";
+        return;
+      }
       if (apisRes.ok) apis = await apisRes.json();
     } catch (err) {
       console.error(err);
+      // window.location.href = "/dashboard"; // Removed to prevent accidental redirects during dev or transient errors
     } finally {
       isLoading = false;
     }
@@ -917,7 +927,7 @@
   {#if isLoading}
     <div class="flex justify-center p-12">
       <svg
-        class="animate-spin h-8 w-8 text-blue-600"
+        class="animate-spin h-8 w-8 text-cyan-400"
         xmlns="http://www.w3.org/2000/svg"
         fill="none"
         viewBox="0 0 24 24"
@@ -938,21 +948,21 @@
   {:else if project}
     <!-- Header -->
     <div
-      class="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm mb-8 relative overflow-hidden break-words"
+      class="bg-slate-800/40 backdrop-blur-xl p-6 md:p-8 rounded-3xl border border-slate-700/50 shadow-[0_8px_30px_rgb(0,0,0,0.5)] mb-8 relative overflow-hidden break-words group/header"
     >
       <!-- Decor -->
       <div
-        class="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-blue-50 to-cyan-50 rounded-bl-[100px] -z-10"
+        class="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-cyan-900/20 to-transparent rounded-bl-[100px] -z-10 group-hover/header:opacity-70 transition-opacity duration-500"
       ></div>
 
       <div
-        class="flex flex-col lg:flex-row lg:items-center justify-between gap-6"
+        class="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10"
       >
         <div class="min-w-0">
           <div class="flex items-center gap-3 mb-2">
             <a
               href="/dashboard"
-              class="text-slate-400 hover:text-blue-600 transition-colors shrink-0"
+              class="text-cyan-500/80 hover:text-cyan-400 transition-colors shrink-0"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -970,12 +980,14 @@
               >
             </a>
             <h1
-              class="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight truncate"
+              class="text-2xl md:text-3xl font-bold text-cyan-50 tracking-tight truncate font-mono"
             >
               {project.name}
             </h1>
           </div>
-          <p class="text-slate-500 max-w-2xl text-sm md:text-base">
+          <p
+            class="text-cyan-500/80 max-w-2xl text-sm md:text-base font-mono tracking-wide"
+          >
             {project.description}
           </p>
         </div>
@@ -983,33 +995,33 @@
         <div class="flex items-center gap-3 shrink-0 flex-wrap lg:flex-nowrap">
           <button
             on:click={openEnvVarsModal}
-            class="bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 font-medium py-2.5 px-5 rounded-xl shadow-sm transition-all flex items-center gap-2 text-sm w-full md:w-auto justify-center"
+            class="bg-emerald-950/30 border border-emerald-500/40 text-emerald-400 hover:bg-emerald-900/50 hover:border-emerald-400 font-bold py-2 px-4 rounded-lg shadow-[0_0_10px_rgba(16,185,129,0.15)] transition-all flex items-center gap-2 text-sm w-full md:w-auto justify-center font-mono tracking-wide"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              width="18"
-              height="18"
+              width="16"
+              height="16"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
               stroke-width="2"
               stroke-linecap="round"
               stroke-linejoin="round"
-              ><path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4"
+              ><path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2-2v4"
               ></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path
                 d="M10.4 12.6a2 2 0 1 1 3 3L8 21l-4 1 1.5-4.5L10.4 12.6z"
               ></path></svg
             >
-            Env Variables {"{x}"}
+            ENV_VARS {"{x}"}
           </button>
           <a
             href="/dashboard/projects/{projectId}/notifications"
-            class="bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 font-medium py-2.5 px-5 rounded-xl shadow-sm transition-all flex items-center gap-2 text-sm w-full md:w-auto justify-center"
+            class="bg-amber-950/30 border border-amber-500/40 text-amber-400 hover:bg-amber-900/50 hover:border-amber-400 font-bold py-2 px-4 rounded-lg shadow-[0_0_10px_rgba(245,158,11,0.15)] transition-all flex items-center gap-2 text-sm w-full md:w-auto justify-center font-mono tracking-wide"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              width="18"
-              height="18"
+              width="16"
+              height="16"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -1020,16 +1032,16 @@
                 points="22 4 12 14.01 9 11.01"
               ></polyline></svg
             >
-            Notification Channels
-          </a>>
+            CHANNELS
+          </a>
           <button
             on:click={() => (showFolderModal = true)}
-            class="bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 font-medium py-2.5 px-5 rounded-xl shadow-sm transition-all flex items-center gap-2 text-sm w-full md:w-auto justify-center"
+            class="bg-indigo-950/30 border border-indigo-500/40 text-indigo-400 hover:bg-indigo-900/50 hover:border-indigo-400 font-bold py-2 px-4 rounded-lg shadow-[0_0_10px_rgba(99,102,241,0.15)] transition-all flex items-center gap-2 text-sm w-full md:w-auto justify-center font-mono tracking-wide"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              width="18"
-              height="18"
+              width="16"
+              height="16"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -1045,37 +1057,42 @@
                 y2="14"
               ></line></svg
             >
-            + Folder
+            +FOLDER
           </button>
           <button
             on:click={openAddApiModal}
-            class="bg-blue-600 border border-transparent text-white hover:bg-blue-700 font-medium py-2.5 px-5 rounded-xl shadow-sm transition-all flex items-center gap-2 text-sm w-full md:w-auto justify-center"
+            class="bg-cyan-950 border border-cyan-500/50 text-cyan-400 hover:bg-cyan-900 hover:border-cyan-400 hover:text-cyan-300 font-bold py-2 px-4 rounded-lg shadow-[0_0_15px_rgba(6,182,212,0.3)] transition-all flex items-center gap-2 text-sm w-full md:w-auto justify-center font-mono tracking-wide relative overflow-hidden group"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              ><line x1="12" y1="5" x2="12" y2="19"></line><line
-                x1="5"
-                y1="12"
-                x2="19"
-                y2="12"
-              ></line></svg
-            >
-            Add API
+            <div
+              class="absolute inset-0 w-full h-full bg-cyan-400/10 -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] skew-x-12"
+            ></div>
+            <span class="relative z-10 flex items-center gap-2">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                ><line x1="12" y1="5" x2="12" y2="19"></line><line
+                  x1="5"
+                  y1="12"
+                  x2="19"
+                  y2="12"
+                ></line></svg
+              >
+              ADD_API
+            </span>
           </button>
           <label
-            class="cursor-pointer bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-medium py-2.5 px-5 rounded-xl shadow-sm transition-all flex items-center gap-2 text-sm w-full md:w-auto justify-center"
+            class="cursor-pointer bg-slate-900 border border-slate-700 text-slate-500 hover:bg-slate-800 hover:text-cyan-400 hover:border-cyan-500/50 font-bold py-2 px-4 rounded-lg shadow-sm transition-all flex items-center gap-2 text-sm w-full md:w-auto justify-center font-mono tracking-wide"
           >
             {#if isUploading}
               <svg
-                class="animate-spin h-4 w-4 text-slate-600"
+                class="animate-spin h-4 w-4 text-cyan-400"
                 xmlns="http://www.w3.org/2000/svg"
                 fill="none"
                 viewBox="0 0 24 24"
@@ -1128,27 +1145,31 @@
 
     <!-- API List -->
     <div
-      class="mb-4 flex flex-col md:flex-row md:items-center justify-between gap-4"
+      class="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 mt-6"
     >
       <div class="flex items-center gap-4">
-        <h2 class="text-lg md:text-xl font-bold text-slate-800">
-          Monitored Endpoints
+        <h2
+          class="text-xl md:text-2xl font-bold text-cyan-50 font-mono tracking-wide"
+        >
+          MONITORED_ENDPOINTS
         </h2>
         <span
-          class="bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-1 rounded-full w-fit"
-          >{apis.length} Total</span
+          class="bg-cyan-900 border border-cyan-500/50 text-cyan-300 text-xs font-bold px-3 py-1 rounded-md shadow-[0_0_10px_rgba(6,182,212,0.2)] font-mono tracking-wider w-fit"
+          >TOTAL: {apis.length}</span
         >
       </div>
 
       {#if selectedApiIds.length > 0}
-        <div class="flex items-center gap-3 animate-fade-in">
+        <div
+          class="flex items-center gap-3 animate-fade-in bg-slate-900/80 px-4 py-2 rounded-xl border border-slate-700/50 shadow-[0_0_15px_rgba(0,0,0,0.5)] backdrop-blur-xl"
+        >
           <span
-            class="text-sm font-medium text-slate-600 border-r border-slate-200 pr-3"
-            >{selectedApiIds.length} Selected</span
+            class="text-sm font-bold text-cyan-400 border-r border-slate-700 pr-4 font-mono tracking-wide"
+            >{selectedApiIds.length} SELECTED</span
           >
           <button
             on:click={() => (showBulkDeleteModal = true)}
-            class="bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 font-medium py-1.5 px-4 rounded-lg shadow-sm transition-colors text-sm flex items-center gap-2"
+            class="bg-red-500/10 text-red-500 hover:bg-red-500/20 hover:text-red-400 border border-red-500/30 font-bold py-1.5 px-4 rounded-lg shadow-[0_0_10px_rgba(239,68,68,0.1)] transition-colors text-sm flex items-center gap-2 font-mono tracking-wide"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -1172,22 +1193,25 @@
 
     {#if apis.length === 0}
       <div
-        class="border-2 border-dashed border-slate-200 rounded-2xl p-8 md:p-12 text-center bg-slate-50/50"
+        class="border-2 border-dashed border-slate-700 rounded-3xl p-8 md:p-12 text-center bg-slate-900/40 backdrop-blur-md shadow-[0_0_20px_rgba(0,0,0,0.3)] relative overflow-hidden"
       >
-        <p class="text-slate-500 font-medium mb-2">No APIs configured yet.</p>
-        <p class="text-sm text-slate-400">
-          Import a Postman Collection JSON file to auto-generate monitoring
-          endpoints.
+        <p class="text-cyan-400 font-bold mb-2 font-mono text-lg tracking-wide">
+          NO_ENDPOINTS_CONFIGURED
+        </p>
+        <p class="text-sm text-cyan-500/80 font-mono tracking-wide">
+          IMPORT A COLLECTION OR MANUAL ENDPOINT TO INITIATE MONITORING CYCLE.
         </p>
       </div>
     {:else}
       <div
-        class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-x-auto"
+        class="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.5)] overflow-x-auto"
       >
-        <table class="w-full text-left border-collapse min-w-[700px]">
+        <table
+          class="w-full text-left border-collapse min-w-[700px] font-mono text-sm tracking-wide"
+        >
           <thead>
             <tr
-              class="bg-slate-50 border-b border-slate-200 text-sm font-semibold text-slate-600"
+              class="bg-slate-950/80 border-b border-slate-700/80 text-xs font-bold text-slate-500 uppercase tracking-widest"
             >
               <th class="p-3 md:p-4 w-12 text-center">
                 <input
@@ -1195,7 +1219,7 @@
                   checked={allSelected}
                   {indeterminate}
                   on:change={toggleAllSelection}
-                  class="w-4 h-4 text-blue-600 bg-white border-slate-300 rounded focus:ring-blue-500/50 cursor-pointer"
+                  class="w-4 h-4 text-cyan-500 bg-slate-900 border border-slate-600 rounded focus:ring-cyan-500/50 focus:ring-offset-slate-900 cursor-pointer appearance-none checked:bg-cyan-500 checked:border-cyan-500 transition-colors shadow-[0_0_10px_rgba(6,182,212,0.2)]"
                 />
               </th>
               <th class="p-3 md:p-4">Method</th>
@@ -1209,9 +1233,10 @@
             {#each Object.entries(groupedApis) as [folderName, folderApis]}
               <!-- Folder Header Row -->
               <tr
-                class="bg-slate-50/80 border-y border-slate-200 transition-colors group"
-                class:bg-blue-50={dragOverItem?.folder === folderName &&
-                  dragOverItem?.index === -1}
+                class="bg-slate-800/60 border-y border-slate-700/80 transition-colors group hover:bg-slate-700/60 {dragOverItem?.folder ===
+                  folderName && dragOverItem?.index === -1
+                  ? '!bg-cyan-900/30'
+                  : ''}"
                 on:dragover={(e) => handleDragOver(e, folderName, -1)}
                 on:dragleave={handleDragLeave}
                 on:drop={(e) => handleDrop(e, folderName, -1)}
@@ -1219,7 +1244,7 @@
                 <td colspan="6" class="px-4 py-2">
                   <div class="flex items-center justify-between">
                     <div
-                      class="flex items-center gap-2 text-slate-700 font-semibold text-sm"
+                      class="flex items-center gap-2 text-cyan-100 font-bold text-sm tracking-wide"
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -1231,14 +1256,14 @@
                         stroke-width="2"
                         stroke-linecap="round"
                         stroke-linejoin="round"
-                        class="text-blue-500"
+                        class="text-cyan-400"
                         ><path
                           d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
                         ></path></svg
                       >
                       {folderName}
                       <span
-                        class="text-xs bg-white border border-slate-200 px-2 py-0.5 rounded-full text-slate-500 font-medium ml-2"
+                        class="text-[10px] bg-slate-900 border border-slate-700 px-2 py-0.5 rounded-md text-cyan-400 font-bold ml-2 shadow-[0_0_8px_rgba(6,182,212,0.2)]"
                         >{folderApis.length}</span
                       >
                     </div>
@@ -1248,7 +1273,7 @@
                       >
                         <button
                           on:click={() => openEditFolder(folderName)}
-                          class="text-slate-400 hover:text-blue-600 transition-colors p-1 rounded hover:bg-white"
+                          class="text-cyan-500/80 hover:text-cyan-400 transition-colors p-1 rounded hover:bg-slate-900 border border-transparent hover:border-cyan-500/30 hover:shadow-[0_0_10px_rgba(6,182,212,0.2)]"
                           title="Rename Folder"
                         >
                           <svg
@@ -1268,7 +1293,7 @@
                         </button>
                         <button
                           on:click={() => openDeleteFolder(folderName)}
-                          class="text-slate-400 hover:text-red-500 transition-colors p-1 rounded hover:bg-white"
+                          class="text-cyan-500/80 hover:text-red-400 transition-colors p-1 rounded hover:bg-slate-900 border border-transparent hover:border-red-500/30 hover:shadow-[0_0_10px_rgba(2ef,68,68,0.2)]"
                           title="Delete Folder"
                         >
                           <svg
@@ -1302,10 +1327,10 @@
                   on:dragover={(e) => handleDragOver(e, folderName, i)}
                   on:dragleave={handleDragLeave}
                   on:drop={(e) => handleDrop(e, folderName, i)}
-                  class="hover:bg-slate-50/50 transition-colors cursor-grab active:cursor-grabbing"
+                  class="hover:bg-slate-800/40 border-b border-slate-800 transition-colors cursor-grab active:cursor-grabbing group/apirow relative"
                   class:border-t-2={dragOverItem?.folder === folderName &&
                     dragOverItem?.index === i}
-                  class:border-blue-500={dragOverItem?.folder === folderName &&
+                  class:border-cyan-500={dragOverItem?.folder === folderName &&
                     dragOverItem?.index === i}
                 >
                   <td class="p-3 md:p-4 text-center">
@@ -1313,27 +1338,27 @@
                       type="checkbox"
                       checked={selectedApiIds.includes(api.id)}
                       on:change={() => toggleSelection(api.id)}
-                      class="w-4 h-4 text-blue-600 bg-white border border-slate-300 rounded focus:ring-blue-500/50 cursor-pointer"
+                      class="w-4 h-4 text-cyan-500 bg-slate-900 border border-slate-600 rounded focus:ring-cyan-500/50 focus:ring-offset-slate-900 cursor-pointer appearance-none checked:bg-cyan-500 checked:border-cyan-500 transition-colors shadow-[0_0_10px_rgba(6,182,212,0.2)]"
                     />
                   </td>
                   <td class="p-3 md:p-4">
                     <span
-                      class="px-2 py-1 rounded text-xs font-bold whitespace-nowrap
+                      class="px-2 py-0.5 rounded border text-[10px] font-bold whitespace-nowrap tracking-wider
                       {api.method === 'GET'
-                        ? 'bg-green-100 text-green-700'
+                        ? 'bg-emerald-950/50 border-emerald-500/40 text-emerald-400'
                         : api.method === 'POST'
-                          ? 'bg-blue-100 text-blue-700'
+                          ? 'bg-blue-950/50 border-blue-500/40 text-blue-400'
                           : api.method === 'PUT'
-                            ? 'bg-yellow-100 text-yellow-700'
+                            ? 'bg-amber-950/50 border-amber-500/40 text-amber-400'
                             : api.method === 'DELETE'
-                              ? 'bg-red-100 text-red-700'
-                              : 'bg-slate-100 text-slate-700'}"
+                              ? 'bg-red-950/50 border-red-500/40 text-red-400'
+                              : 'bg-slate-800 border-slate-600 text-slate-300'}"
                     >
                       {api.method}
                     </span>
                   </td>
                   <td
-                    class="p-3 md:p-4 font-medium text-slate-900 truncate max-w-[150px] md:max-w-xs"
+                    class="p-3 md:p-4 font-bold text-cyan-50 truncate max-w-[150px] md:max-w-xs"
                     >{api.name}</td
                   >
                   <td
@@ -1342,7 +1367,7 @@
                   >
                   <td class="p-3 md:p-4 text-slate-500 text-sm">
                     <span
-                      class="px-2 py-1 bg-slate-100 rounded text-xs font-mono"
+                      class="px-2 py-1 bg-slate-900 border border-slate-700 rounded text-[10px] font-mono"
                       >{api.expected_status_code}</span
                     >
                   </td>
@@ -1351,7 +1376,7 @@
                   >
                     <button
                       on:click={() => openEditApiModal(api)}
-                      class="text-slate-500 hover:text-blue-600 transition-colors p-1.5 rounded-lg hover:bg-blue-50"
+                      class="text-cyan-500/80 hover:text-cyan-400 transition-colors p-1.5 rounded-lg hover:bg-slate-900 border border-transparent hover:border-cyan-500/30 hover:shadow-[0_0_10px_rgba(6,182,212,0.2)]"
                       title="Edit Endpoint"
                     >
                       <svg
@@ -1371,7 +1396,7 @@
                     </button>
                     <button
                       on:click={() => openScheduleModal(api)}
-                      class="text-slate-500 hover:text-indigo-600 transition-colors p-1.5 rounded-lg hover:bg-indigo-50"
+                      class="text-cyan-500/80 hover:text-indigo-400 transition-colors p-1.5 rounded-lg hover:bg-slate-900 border border-transparent hover:border-indigo-500/30 hover:shadow-[0_0_10px_rgba(99,102,241,0.2)]"
                       title="Schedule Settings"
                     >
                       <svg
@@ -1391,7 +1416,7 @@
                     </button>
                     <button
                       on:click={() => openDeleteApiModal(api)}
-                      class="text-slate-500 hover:text-red-500 transition-colors p-1.5 rounded-lg hover:bg-red-50"
+                      class="text-cyan-500/80 hover:text-red-400 transition-colors p-1.5 rounded-lg hover:bg-slate-900 border border-transparent hover:border-red-500/30 hover:shadow-[0_0_10px_rgba(239,68,68,0.2)]"
                       title="Delete Endpoint"
                     >
                       <svg
@@ -1442,14 +1467,14 @@
 <!-- 1. Import Mode Conflict Modal -->
 <Modal bind:open={showImportModeModal} title="Import Collection">
   <div class="space-y-4">
-    <p class="text-sm text-slate-600">
+    <p class="text-sm text-slate-500">
       This workspace already contains APIs. How would you like to handle this
       import?
     </p>
     <div class="grid grid-cols-2 gap-3">
       <button
         on:click={() => executePostmanUpload("append")}
-        class="border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-xl p-4 flex flex-col items-center justify-center text-center transition-colors"
+        class="border border-cyan-500/30 bg-cyan-950/30 text-cyan-400 hover:bg-cyan-900/50 rounded-xl p-4 flex flex-col items-center justify-center text-center transition-colors"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -1470,14 +1495,14 @@
           ></line><line x1="8" y1="12" x2="16" y2="12"></line></svg
         >
         <span class="font-bold text-sm">Append Mode</span>
-        <span class="text-xs mt-1 text-slate-500"
+        <span class="text-xs mt-1 text-cyan-500/80"
           >Add new APIs alongside the existing ones.</span
         >
       </button>
 
       <button
         on:click={() => executePostmanUpload("replace")}
-        class="border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 rounded-xl p-4 flex flex-col items-center justify-center text-center transition-colors"
+        class="border border-red-500/30 bg-red-950/30 text-red-400 hover:bg-red-900/50 rounded-xl p-4 flex flex-col items-center justify-center text-center transition-colors"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -1499,7 +1524,7 @@
           ></line></svg
         >
         <span class="font-bold text-sm">Replace Mode</span>
-        <span class="text-xs mt-1 text-slate-500"
+        <span class="text-xs mt-1 text-cyan-500/80"
           >Delete all current APIs and use only the new ones.</span
         >
       </button>
@@ -1510,14 +1535,14 @@
 <!-- 2. Manual Add Mode Conflict Modal -->
 <Modal bind:open={showAddModeModal} title="Save API">
   <div class="space-y-4">
-    <p class="text-sm text-slate-600">
+    <p class="text-sm text-slate-500">
       You are about to add a manual API endpoint. How would you like to process
       this?
     </p>
     <div class="grid grid-cols-2 gap-3">
       <button
         on:click={() => executeAddApi("append")}
-        class="border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-xl p-4 flex flex-col items-center justify-center text-center transition-colors"
+        class="border border-cyan-500/30 bg-cyan-950/30 text-cyan-400 hover:bg-cyan-900/50 rounded-xl p-4 flex flex-col items-center justify-center text-center transition-colors"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -1538,14 +1563,14 @@
           ></line><line x1="8" y1="12" x2="16" y2="12"></line></svg
         >
         <span class="font-bold text-sm">Append Mode</span>
-        <span class="text-xs mt-1 text-slate-500"
+        <span class="text-xs mt-1 text-cyan-500/80"
           >Add alongside the existing APIs.</span
         >
       </button>
 
       <button
         on:click={() => executeAddApi("replace")}
-        class="border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 rounded-xl p-4 flex flex-col items-center justify-center text-center transition-colors"
+        class="border border-red-500/30 bg-red-950/30 text-red-400 hover:bg-red-900/50 rounded-xl p-4 flex flex-col items-center justify-center text-center transition-colors"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -1567,7 +1592,7 @@
           ></line></svg
         >
         <span class="font-bold text-sm">Replace Mode</span>
-        <span class="text-xs mt-1 text-slate-500"
+        <span class="text-xs mt-1 text-cyan-500/80"
           >Clear project and add only this API.</span
         >
       </button>
@@ -1583,19 +1608,19 @@
 >
   <form on:submit|preventDefault={handleAddApiSubmit} class="space-y-4">
     <div
-      class="grid grid-cols-1 md:grid-cols-2 gap-4 border-b border-slate-100 pb-4"
+      class="grid grid-cols-1 md:grid-cols-2 gap-4 border-b border-slate-800 pb-4"
     >
       <div class="md:col-span-1">
         <label
           for="api_folder"
-          class="block text-sm font-semibold text-slate-700 mb-1"
+          class="block text-sm font-semibold text-cyan-50 mb-1"
           >Folder Name (Optional)</label
         >
         <input
           id="api_folder"
           type="text"
           bind:value={apiForm.folder}
-          class="w-full px-4 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-sm"
+          class="w-full px-4 py-2 bg-slate-900/50 rounded-lg border border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all text-sm"
           placeholder="e.g. Authentication"
         />
       </div>
@@ -1603,7 +1628,7 @@
       <div class="md:col-span-1">
         <label
           for="api_name"
-          class="block text-sm font-semibold text-slate-700 mb-1"
+          class="block text-sm font-semibold text-cyan-50 mb-1"
           >Endpoint Name</label
         >
         <input
@@ -1611,7 +1636,7 @@
           type="text"
           bind:value={apiForm.name}
           required
-          class="w-full px-4 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-sm"
+          class="w-full px-4 py-2 bg-slate-900/50 rounded-lg border border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all text-sm"
           placeholder="e.g. Fetch User Data"
         />
       </div>
@@ -1619,12 +1644,12 @@
       <div class="md:col-span-1">
         <label
           for="api_method"
-          class="block text-sm font-semibold text-slate-700 mb-1">Method</label
+          class="block text-sm font-semibold text-cyan-50 mb-1">Method</label
         >
         <select
           id="api_method"
           bind:value={apiForm.method}
-          class="w-full px-4 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-sm font-medium"
+          class="w-full px-4 py-2 bg-slate-900/50 rounded-lg border border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all text-sm font-medium"
         >
           <option value="GET">GET</option>
           <option value="POST">POST</option>
@@ -1637,16 +1662,16 @@
       <div class="md:col-span-2">
         <label
           for="api_url"
-          class="block text-sm font-semibold text-slate-700 mb-1"
+          class="block text-sm font-semibold text-cyan-50 mb-1"
           >Request URL</label
         >
         <div class="flex">
           <span
-            class="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-slate-200 bg-slate-100 text-slate-500 text-sm font-medium"
+            class="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-slate-700/50 bg-slate-800 text-cyan-500/80 text-sm font-medium"
             >URL</span
           >
           <div
-            class="flex-1 w-full bg-slate-50 rounded-r-lg border border-slate-200 focus-within:ring-2 focus-within:ring-blue-500/50 transition-all text-sm overflow-hidden h-[38px] relative"
+            class="flex-1 w-full bg-slate-900/50 rounded-r-lg border border-slate-700/50 focus-within:ring-2 focus-within:ring-blue-500/50 transition-all text-sm overflow-hidden h-[38px] relative"
           >
             <InputWithVariables
               bind:value={apiForm.url}
@@ -1665,26 +1690,26 @@
       {#if ["GET", "PUT", "DELETE"].includes(apiForm.method)}
         <div>
           <div class="flex items-center justify-between mb-2">
-            <label class="block text-sm font-semibold text-slate-700"
+            <label class="block text-sm font-semibold text-cyan-50"
               >Query Parameters</label
             >
             <div
-              class="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200"
+              class="flex bg-slate-800 p-0.5 rounded-lg border border-slate-700/50"
             >
               <button
                 type="button"
                 class="px-3 py-1 text-xs font-semibold rounded-md transition-all {paramMode ===
                 'json'
-                  ? 'bg-white shadow-sm text-slate-800'
-                  : 'text-slate-500 hover:text-slate-700'}"
+                  ? 'bg-slate-900/40 shadow-sm text-cyan-300'
+                  : 'text-cyan-500/80 hover:text-cyan-50'}"
                 on:click={() => toggleParamMode("json")}>JSON</button
               >
               <button
                 type="button"
                 class="px-3 py-1 text-xs font-semibold rounded-md transition-all {paramMode ===
                 'kv'
-                  ? 'bg-white shadow-sm text-slate-800'
-                  : 'text-slate-500 hover:text-slate-700'}"
+                  ? 'bg-slate-900/40 shadow-sm text-cyan-300'
+                  : 'text-cyan-500/80 hover:text-cyan-50'}"
                 on:click={() => toggleParamMode("kv")}>Key-Value</button
               >
             </div>
@@ -1704,10 +1729,10 @@
                     type="text"
                     bind:value={param.key}
                     placeholder="Key"
-                    class="flex-1 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-xs font-mono"
+                    class="flex-1 px-3 py-2 bg-slate-900/50 rounded-lg border border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-xs font-mono"
                   />
                   <div
-                    class="flex-1 bg-slate-50 rounded-lg border border-slate-200 focus-within:ring-2 focus-within:ring-blue-500/50 text-xs font-mono h-[34px] overflow-hidden relative"
+                    class="flex-1 bg-slate-900/50 rounded-lg border border-slate-700/50 focus-within:ring-2 focus-within:ring-blue-500/50 text-xs font-mono h-[34px] overflow-hidden relative"
                   >
                     <InputWithVariables
                       bind:value={param.value}
@@ -1719,7 +1744,7 @@
                     type="button"
                     on:click={() =>
                       (paramsKV = paramsKV.filter((_, idx) => idx !== i))}
-                    class="p-2 text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 border border-slate-200 rounded-lg transition-colors"
+                    class="p-2 text-slate-500 hover:text-red-500 bg-slate-900/50 hover:bg-red-950/30 border border-slate-700/50 rounded-lg transition-colors"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -1743,7 +1768,7 @@
                 type="button"
                 on:click={() =>
                   (paramsKV = [...paramsKV, { key: "", value: "" }])}
-                class="text-xs font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1 mt-1"
+                class="text-xs font-medium text-cyan-400 hover:text-cyan-400 flex items-center gap-1 mt-1"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -1770,26 +1795,25 @@
       <!-- Headers Toggle -->
       <div>
         <div class="flex items-center justify-between mb-2">
-          <label class="block text-sm font-semibold text-slate-700"
-            >Headers</label
+          <label class="block text-sm font-semibold text-cyan-50">Headers</label
           >
           <div
-            class="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200"
+            class="flex bg-slate-800 p-0.5 rounded-lg border border-slate-700/50"
           >
             <button
               type="button"
               class="px-3 py-1 text-xs font-semibold rounded-md transition-all {headerMode ===
               'json'
-                ? 'bg-white shadow-sm text-slate-800'
-                : 'text-slate-500 hover:text-slate-700'}"
+                ? 'bg-slate-900/40 shadow-sm text-cyan-300'
+                : 'text-cyan-500/80 hover:text-cyan-50'}"
               on:click={() => toggleHeaderMode("json")}>JSON</button
             >
             <button
               type="button"
               class="px-3 py-1 text-xs font-semibold rounded-md transition-all {headerMode ===
               'kv'
-                ? 'bg-white shadow-sm text-slate-800'
-                : 'text-slate-500 hover:text-slate-700'}"
+                ? 'bg-slate-900/40 shadow-sm text-cyan-300'
+                : 'text-cyan-500/80 hover:text-cyan-50'}"
               on:click={() => toggleHeaderMode("kv")}>Key-Value</button
             >
           </div>
@@ -1809,10 +1833,10 @@
                   type="text"
                   bind:value={hdr.key}
                   placeholder="Header Key"
-                  class="flex-1 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-xs font-mono"
+                  class="flex-1 px-3 py-2 bg-slate-900/50 rounded-lg border border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-xs font-mono"
                 />
                 <div
-                  class="flex-1 bg-slate-50 rounded-lg border border-slate-200 focus-within:ring-2 focus-within:ring-blue-500/50 text-xs font-mono h-[34px] overflow-hidden relative"
+                  class="flex-1 bg-slate-900/50 rounded-lg border border-slate-700/50 focus-within:ring-2 focus-within:ring-blue-500/50 text-xs font-mono h-[34px] overflow-hidden relative"
                 >
                   <InputWithVariables
                     bind:value={hdr.value}
@@ -1824,7 +1848,7 @@
                   type="button"
                   on:click={() =>
                     (headersKV = headersKV.filter((_, idx) => idx !== i))}
-                  class="p-2 text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 border border-slate-200 rounded-lg transition-colors"
+                  class="p-2 text-slate-500 hover:text-red-500 bg-slate-900/50 hover:bg-red-950/30 border border-slate-700/50 rounded-lg transition-colors"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -1848,7 +1872,7 @@
               type="button"
               on:click={() =>
                 (headersKV = [...headersKV, { key: "", value: "" }])}
-              class="text-xs font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1 mt-1"
+              class="text-xs font-medium text-cyan-400 hover:text-cyan-400 flex items-center gap-1 mt-1"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -1874,19 +1898,19 @@
       <!-- Body Toggle -->
       <div class={apiForm.method === "GET" ? "opacity-50" : ""}>
         <div class="flex items-center justify-between mb-2">
-          <label class="block text-sm font-semibold text-slate-700"
+          <label class="block text-sm font-semibold text-cyan-50"
             >Body / Payload</label
           >
           <div
-            class="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200"
+            class="flex bg-slate-800 p-0.5 rounded-lg border border-slate-700/50"
           >
             <button
               type="button"
               disabled={apiForm.method === "GET"}
               class="px-3 py-1 text-xs font-semibold rounded-md transition-all {bodyMode ===
               'json'
-                ? 'bg-white shadow-sm text-slate-800'
-                : 'text-slate-500 hover:text-slate-700'} disabled:cursor-not-allowed"
+                ? 'bg-slate-900/40 shadow-sm text-cyan-300'
+                : 'text-cyan-500/80 hover:text-cyan-50'} disabled:cursor-not-allowed"
               on:click={() => toggleBodyMode("json")}>JSON</button
             >
             <button
@@ -1894,8 +1918,8 @@
               disabled={apiForm.method === "GET"}
               class="px-3 py-1 text-xs font-semibold rounded-md transition-all {bodyMode ===
               'kv'
-                ? 'bg-white shadow-sm text-slate-800'
-                : 'text-slate-500 hover:text-slate-700'} disabled:cursor-not-allowed"
+                ? 'bg-slate-900/40 shadow-sm text-cyan-300'
+                : 'text-cyan-500/80 hover:text-cyan-50'} disabled:cursor-not-allowed"
               on:click={() => toggleBodyMode("kv")}>Key-Value</button
             >
           </div>
@@ -1917,10 +1941,10 @@
                   bind:value={bdy.key}
                   disabled={apiForm.method === "GET"}
                   placeholder="Body Key"
-                  class="flex-1 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-xs font-mono disabled:cursor-not-allowed"
+                  class="flex-1 px-3 py-2 bg-slate-900/50 rounded-lg border border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-xs font-mono disabled:cursor-not-allowed"
                 />
                 <div
-                  class="flex-1 bg-slate-50 rounded-lg border border-slate-200 focus-within:ring-2 focus-within:ring-blue-500/50 text-xs font-mono h-[34px] overflow-hidden relative {apiForm.method ===
+                  class="flex-1 bg-slate-900/50 rounded-lg border border-slate-700/50 focus-within:ring-2 focus-within:ring-blue-500/50 text-xs font-mono h-[34px] overflow-hidden relative {apiForm.method ===
                   'GET'
                     ? 'opacity-50 cursor-not-allowed hidden'
                     : ''}"
@@ -1938,7 +1962,7 @@
                   bind:value={bdy.value}
                   disabled={true}
                   placeholder="Value"
-                  class="flex-1 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-xs font-mono disabled:cursor-not-allowed {apiForm.method !==
+                  class="flex-1 px-3 py-2 bg-slate-900/50 rounded-lg border border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-xs font-mono disabled:cursor-not-allowed {apiForm.method !==
                   'GET'
                     ? 'hidden'
                     : ''}"
@@ -1948,7 +1972,7 @@
                   disabled={apiForm.method === "GET"}
                   on:click={() =>
                     (bodyKV = bodyKV.filter((_, idx) => idx !== i))}
-                  class="p-2 text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 border border-slate-200 rounded-lg transition-colors disabled:cursor-not-allowed disabled:hover:bg-slate-50 disabled:hover:text-slate-400"
+                  class="p-2 text-slate-500 hover:text-red-500 bg-slate-900/50 hover:bg-red-950/30 border border-slate-700/50 rounded-lg transition-colors disabled:cursor-not-allowed disabled:hover:bg-slate-900/50 disabled:hover:text-slate-500"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -1972,7 +1996,7 @@
               type="button"
               disabled={apiForm.method === "GET"}
               on:click={() => (bodyKV = [...bodyKV, { key: "", value: "" }])}
-              class="text-xs font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1 mt-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-blue-600"
+              class="text-xs font-medium text-cyan-400 hover:text-cyan-400 flex items-center gap-1 mt-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-cyan-400"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -2003,7 +2027,7 @@
       <div class="w-full md:w-1/2">
         <label
           for="api_expected_status"
-          class="block text-sm font-semibold text-slate-700 mb-1"
+          class="block text-sm font-semibold text-cyan-50 mb-1"
           >Expected HTTP Status Code</label
         >
         <input
@@ -2013,23 +2037,25 @@
           max="599"
           bind:value={apiForm.expected_status_code}
           required
-          class="w-full px-4 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-sm font-mono"
+          class="w-full px-4 py-2 bg-slate-900/50 rounded-lg border border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all text-sm font-mono"
         />
       </div>
     </div>
 
+    <div class="pb-12"></div>
+
     <div
-      class="pt-4 flex justify-end gap-3 border-t border-slate-100 sticky bottom-0 bg-white z-10 -mx-6 px-6 -mb-6 pb-6 mt-4"
+      class="pt-3 flex justify-end gap-3 border-t border-slate-800 sticky bottom-0 bg-slate-900/40 z-10 -mx-6 px-6 -mb-6 pb-4 mt-2 backdrop-blur-md"
     >
       <button
         type="button"
         on:click={() => (showAddApiModal = false)}
-        class="px-5 py-2.5 rounded-xl font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors text-sm"
+        class="px-4 py-2 text-xs rounded-xl font-semibold text-slate-500 bg-slate-800 hover:bg-slate-700 transition-colors"
         >Cancel</button
       >
       <button
         type="submit"
-        class="px-5 py-2.5 rounded-xl font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-sm shadow-blue-500/20 text-sm"
+        class="px-4 py-2 text-xs rounded-xl font-semibold text-white bg-cyan-600 hover:bg-cyan-700 transition-colors shadow-sm shadow-cyan-500/20"
         >Save Endpoint</button
       >
     </div>
@@ -2044,19 +2070,19 @@
 >
   <form on:submit|preventDefault={handleEditApiSubmit} class="space-y-4">
     <div
-      class="grid grid-cols-1 md:grid-cols-2 gap-4 border-b border-slate-100 pb-4"
+      class="grid grid-cols-1 md:grid-cols-2 gap-4 border-b border-slate-800 pb-4"
     >
       <div class="md:col-span-1">
         <label
           for="api_folder_edit"
-          class="block text-sm font-semibold text-slate-700 mb-1"
+          class="block text-sm font-semibold text-cyan-50 mb-1"
           >Folder Name (Optional)</label
         >
         <input
           id="api_folder_edit"
           type="text"
           bind:value={apiForm.folder}
-          class="w-full px-4 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-sm"
+          class="w-full px-4 py-2 bg-slate-900/50 rounded-lg border border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all text-sm"
           placeholder="e.g. Authentication"
         />
       </div>
@@ -2064,7 +2090,7 @@
       <div class="md:col-span-1">
         <label
           for="api_name_edit"
-          class="block text-sm font-semibold text-slate-700 mb-1"
+          class="block text-sm font-semibold text-cyan-50 mb-1"
           >Endpoint Name</label
         >
         <input
@@ -2072,7 +2098,7 @@
           type="text"
           bind:value={apiForm.name}
           required
-          class="w-full px-4 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-sm"
+          class="w-full px-4 py-2 bg-slate-900/50 rounded-lg border border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all text-sm"
           placeholder="e.g. Fetch User Data"
         />
       </div>
@@ -2080,12 +2106,12 @@
       <div class="md:col-span-1">
         <label
           for="api_method_edit"
-          class="block text-sm font-semibold text-slate-700 mb-1">Method</label
+          class="block text-sm font-semibold text-cyan-50 mb-1">Method</label
         >
         <select
           id="api_method_edit"
           bind:value={apiForm.method}
-          class="w-full px-4 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-sm font-medium"
+          class="w-full px-4 py-2 bg-slate-900/50 rounded-lg border border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all text-sm font-medium"
         >
           <option value="GET">GET</option>
           <option value="POST">POST</option>
@@ -2098,16 +2124,16 @@
       <div class="md:col-span-2">
         <label
           for="api_url_edit"
-          class="block text-sm font-semibold text-slate-700 mb-1"
+          class="block text-sm font-semibold text-cyan-50 mb-1"
           >Request URL</label
         >
         <div class="flex">
           <span
-            class="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-slate-200 bg-slate-100 text-slate-500 text-sm font-medium"
+            class="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-slate-700/50 bg-slate-800 text-cyan-500/80 text-sm font-medium"
             >URL</span
           >
           <div
-            class="flex-1 w-full bg-slate-50 rounded-r-lg border border-slate-200 focus-within:ring-2 focus-within:ring-blue-500/50 transition-all text-sm overflow-hidden h-[38px] relative"
+            class="flex-1 w-full bg-slate-900/50 rounded-r-lg border border-slate-700/50 focus-within:ring-2 focus-within:ring-blue-500/50 transition-all text-sm overflow-hidden h-[38px] relative"
           >
             <InputWithVariables
               bind:value={apiForm.url}
@@ -2126,26 +2152,26 @@
       {#if ["GET", "PUT", "DELETE"].includes(apiForm.method)}
         <div>
           <div class="flex items-center justify-between mb-2">
-            <label class="block text-sm font-semibold text-slate-700"
+            <label class="block text-sm font-semibold text-cyan-50"
               >Query Parameters</label
             >
             <div
-              class="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200"
+              class="flex bg-slate-800 p-0.5 rounded-lg border border-slate-700/50"
             >
               <button
                 type="button"
                 class="px-3 py-1 text-xs font-semibold rounded-md transition-all {paramMode ===
                 'json'
-                  ? 'bg-white shadow-sm text-slate-800'
-                  : 'text-slate-500 hover:text-slate-700'}"
+                  ? 'bg-slate-900/40 shadow-sm text-cyan-300'
+                  : 'text-cyan-500/80 hover:text-cyan-50'}"
                 on:click={() => toggleParamMode("json")}>JSON</button
               >
               <button
                 type="button"
                 class="px-3 py-1 text-xs font-semibold rounded-md transition-all {paramMode ===
                 'kv'
-                  ? 'bg-white shadow-sm text-slate-800'
-                  : 'text-slate-500 hover:text-slate-700'}"
+                  ? 'bg-slate-900/40 shadow-sm text-cyan-300'
+                  : 'text-cyan-500/80 hover:text-cyan-50'}"
                 on:click={() => toggleParamMode("kv")}>Key-Value</button
               >
             </div>
@@ -2165,10 +2191,10 @@
                     type="text"
                     bind:value={param.key}
                     placeholder="Key"
-                    class="flex-1 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-xs font-mono"
+                    class="flex-1 px-3 py-2 bg-slate-900/50 rounded-lg border border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-xs font-mono"
                   />
                   <div
-                    class="flex-1 bg-slate-50 rounded-lg border border-slate-200 focus-within:ring-2 focus-within:ring-blue-500/50 text-xs font-mono h-[34px] overflow-hidden relative"
+                    class="flex-1 bg-slate-900/50 rounded-lg border border-slate-700/50 focus-within:ring-2 focus-within:ring-blue-500/50 text-xs font-mono h-[34px] overflow-hidden relative"
                   >
                     <InputWithVariables
                       bind:value={param.value}
@@ -2180,7 +2206,7 @@
                     type="button"
                     on:click={() =>
                       (paramsKV = paramsKV.filter((_, idx) => idx !== i))}
-                    class="p-2 text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 border border-slate-200 rounded-lg transition-colors"
+                    class="p-2 text-slate-500 hover:text-red-500 bg-slate-900/50 hover:bg-red-950/30 border border-slate-700/50 rounded-lg transition-colors"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -2204,7 +2230,7 @@
                 type="button"
                 on:click={() =>
                   (paramsKV = [...paramsKV, { key: "", value: "" }])}
-                class="text-xs font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1 mt-1"
+                class="text-xs font-medium text-cyan-400 hover:text-cyan-400 flex items-center gap-1 mt-1"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -2231,26 +2257,25 @@
       <!-- Headers Toggle -->
       <div>
         <div class="flex items-center justify-between mb-2">
-          <label class="block text-sm font-semibold text-slate-700"
-            >Headers</label
+          <label class="block text-sm font-semibold text-cyan-50">Headers</label
           >
           <div
-            class="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200"
+            class="flex bg-slate-800 p-0.5 rounded-lg border border-slate-700/50"
           >
             <button
               type="button"
               class="px-3 py-1 text-xs font-semibold rounded-md transition-all {headerMode ===
               'json'
-                ? 'bg-white shadow-sm text-slate-800'
-                : 'text-slate-500 hover:text-slate-700'}"
+                ? 'bg-slate-900/40 shadow-sm text-cyan-300'
+                : 'text-cyan-500/80 hover:text-cyan-50'}"
               on:click={() => toggleHeaderMode("json")}>JSON</button
             >
             <button
               type="button"
               class="px-3 py-1 text-xs font-semibold rounded-md transition-all {headerMode ===
               'kv'
-                ? 'bg-white shadow-sm text-slate-800'
-                : 'text-slate-500 hover:text-slate-700'}"
+                ? 'bg-slate-900/40 shadow-sm text-cyan-300'
+                : 'text-cyan-500/80 hover:text-cyan-50'}"
               on:click={() => toggleHeaderMode("kv")}>Key-Value</button
             >
           </div>
@@ -2270,10 +2295,10 @@
                   type="text"
                   bind:value={hdr.key}
                   placeholder="Header Key"
-                  class="flex-1 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-xs font-mono"
+                  class="flex-1 px-3 py-2 bg-slate-900/50 rounded-lg border border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-xs font-mono"
                 />
                 <div
-                  class="flex-1 bg-slate-50 rounded-lg border border-slate-200 focus-within:ring-2 focus-within:ring-blue-500/50 text-xs font-mono h-[34px] overflow-hidden relative"
+                  class="flex-1 bg-slate-900/50 rounded-lg border border-slate-700/50 focus-within:ring-2 focus-within:ring-blue-500/50 text-xs font-mono h-[34px] overflow-hidden relative"
                 >
                   <InputWithVariables
                     bind:value={hdr.value}
@@ -2285,7 +2310,7 @@
                   type="button"
                   on:click={() =>
                     (headersKV = headersKV.filter((_, idx) => idx !== i))}
-                  class="p-2 text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 border border-slate-200 rounded-lg transition-colors"
+                  class="p-2 text-slate-500 hover:text-red-500 bg-slate-900/50 hover:bg-red-950/30 border border-slate-700/50 rounded-lg transition-colors"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -2309,7 +2334,7 @@
               type="button"
               on:click={() =>
                 (headersKV = [...headersKV, { key: "", value: "" }])}
-              class="text-xs font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1 mt-1"
+              class="text-xs font-medium text-cyan-400 hover:text-cyan-400 flex items-center gap-1 mt-1"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -2335,19 +2360,19 @@
       <!-- Body Toggle -->
       <div class={apiForm.method === "GET" ? "opacity-50" : ""}>
         <div class="flex items-center justify-between mb-2">
-          <label class="block text-sm font-semibold text-slate-700"
+          <label class="block text-sm font-semibold text-cyan-50"
             >Body / Payload</label
           >
           <div
-            class="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200"
+            class="flex bg-slate-800 p-0.5 rounded-lg border border-slate-700/50"
           >
             <button
               type="button"
               disabled={apiForm.method === "GET"}
               class="px-3 py-1 text-xs font-semibold rounded-md transition-all {bodyMode ===
               'json'
-                ? 'bg-white shadow-sm text-slate-800'
-                : 'text-slate-500 hover:text-slate-700'} disabled:cursor-not-allowed"
+                ? 'bg-slate-900/40 shadow-sm text-cyan-300'
+                : 'text-cyan-500/80 hover:text-cyan-50'} disabled:cursor-not-allowed"
               on:click={() => toggleBodyMode("json")}>JSON</button
             >
             <button
@@ -2355,8 +2380,8 @@
               disabled={apiForm.method === "GET"}
               class="px-3 py-1 text-xs font-semibold rounded-md transition-all {bodyMode ===
               'kv'
-                ? 'bg-white shadow-sm text-slate-800'
-                : 'text-slate-500 hover:text-slate-700'} disabled:cursor-not-allowed"
+                ? 'bg-slate-900/40 shadow-sm text-cyan-300'
+                : 'text-cyan-500/80 hover:text-cyan-50'} disabled:cursor-not-allowed"
               on:click={() => toggleBodyMode("kv")}>Key-Value</button
             >
           </div>
@@ -2366,7 +2391,7 @@
             rows="3"
             bind:value={apiForm.body}
             disabled={apiForm.method === "GET"}
-            class="w-full font-mono px-4 py-3 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-xs resize-y disabled:cursor-not-allowed"
+            class="w-full font-mono px-4 py-3 bg-slate-900/50 rounded-lg border border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all text-xs resize-y disabled:cursor-not-allowed"
             placeholder={`{ "key": "value" }`}
           ></textarea>
         {:else}
@@ -2378,10 +2403,10 @@
                   bind:value={bdy.key}
                   disabled={apiForm.method === "GET"}
                   placeholder="Body Key"
-                  class="flex-1 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-xs font-mono disabled:cursor-not-allowed"
+                  class="flex-1 px-3 py-2 bg-slate-900/50 rounded-lg border border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-xs font-mono disabled:cursor-not-allowed"
                 />
                 <div
-                  class="flex-1 bg-slate-50 rounded-lg border border-slate-200 focus-within:ring-2 focus-within:ring-blue-500/50 text-xs font-mono h-[34px] overflow-hidden relative {apiForm.method ===
+                  class="flex-1 bg-slate-900/50 rounded-lg border border-slate-700/50 focus-within:ring-2 focus-within:ring-blue-500/50 text-xs font-mono h-[34px] overflow-hidden relative {apiForm.method ===
                   'GET'
                     ? 'opacity-50 cursor-not-allowed hidden'
                     : ''}"
@@ -2399,7 +2424,7 @@
                   bind:value={bdy.value}
                   disabled={true}
                   placeholder="Value"
-                  class="flex-1 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-xs font-mono disabled:cursor-not-allowed {apiForm.method !==
+                  class="flex-1 px-3 py-2 bg-slate-900/50 rounded-lg border border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-xs font-mono disabled:cursor-not-allowed {apiForm.method !==
                   'GET'
                     ? 'hidden'
                     : ''}"
@@ -2409,7 +2434,7 @@
                   disabled={apiForm.method === "GET"}
                   on:click={() =>
                     (bodyKV = bodyKV.filter((_, idx) => idx !== i))}
-                  class="p-2 text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 border border-slate-200 rounded-lg transition-colors disabled:cursor-not-allowed disabled:hover:bg-slate-50 disabled:hover:text-slate-400"
+                  class="p-2 text-slate-500 hover:text-red-500 bg-slate-900/50 hover:bg-red-950/30 border border-slate-700/50 rounded-lg transition-colors disabled:cursor-not-allowed disabled:hover:bg-slate-900/50 disabled:hover:text-slate-500"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -2433,7 +2458,7 @@
               type="button"
               disabled={apiForm.method === "GET"}
               on:click={() => (bodyKV = [...bodyKV, { key: "", value: "" }])}
-              class="text-xs font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1 mt-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-blue-600"
+              class="text-xs font-medium text-cyan-400 hover:text-cyan-400 flex items-center gap-1 mt-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-cyan-400"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -2464,7 +2489,7 @@
       <div class="w-full md:w-1/2">
         <label
           for="api_expected_status_edit"
-          class="block text-sm font-semibold text-slate-700 mb-1"
+          class="block text-sm font-semibold text-cyan-50 mb-1"
           >Expected HTTP Status Code</label
         >
         <input
@@ -2474,23 +2499,25 @@
           max="599"
           bind:value={apiForm.expected_status_code}
           required
-          class="w-full px-4 py-2 bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-sm font-mono"
+          class="w-full px-4 py-2 bg-slate-900/50 rounded-lg border border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all text-sm font-mono"
         />
       </div>
     </div>
 
+    <div class="pb-12"></div>
+
     <div
-      class="pt-4 flex justify-end gap-3 border-t border-slate-100 sticky bottom-0 bg-white z-10 -mx-6 px-6 -mb-6 pb-6 mt-4"
+      class="pt-3 flex justify-end gap-3 border-t border-slate-800 sticky bottom-0 bg-slate-900/40 z-10 -mx-6 px-6 -mb-6 pb-4 mt-2 backdrop-blur-md"
     >
       <button
         type="button"
         on:click={() => (showEditApiModal = false)}
-        class="px-5 py-2.5 rounded-xl font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors text-sm"
+        class="px-4 py-2 text-xs rounded-xl font-semibold text-slate-500 bg-slate-800 hover:bg-slate-700 transition-colors"
         >Cancel</button
       >
       <button
         type="submit"
-        class="px-5 py-2.5 rounded-xl font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-sm shadow-blue-500/20 text-sm"
+        class="px-4 py-2 text-xs rounded-xl font-semibold text-white bg-cyan-600 hover:bg-cyan-700 transition-colors shadow-sm shadow-cyan-500/20"
         >Save Changes</button
       >
     </div>
@@ -2525,9 +2552,9 @@
       >
       <div>
         <p class="font-bold text-sm">Warning: Removing API Endpoint</p>
-        <p class="text-xs mt-1 text-amber-700">
+        <p class="text-xs mt-1 text-amber-400">
           Are you sure you want to remove <span
-            class="font-semibold px-1 rounded bg-amber-100"
+            class="font-semibold px-1 rounded bg-amber-900/30"
             >{selectedApi?.name}</span
           >? This endpoint will become inactive and hidden from the dashboard,
           but monitoring history is preserved in the database for recovery.
@@ -2537,12 +2564,12 @@
     <div class="flex justify-end gap-3 pt-2">
       <button
         on:click={() => (showDeleteApiModal = false)}
-        class="px-5 py-2.5 rounded-xl font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors text-sm"
+        class="px-4 py-2 text-xs rounded-xl font-semibold text-slate-500 bg-slate-800 hover:bg-slate-700 transition-colors"
         >Cancel</button
       >
       <button
         on:click={handleDeleteApiSubmit}
-        class="px-5 py-2.5 rounded-xl font-semibold text-white bg-red-600 hover:bg-red-700 transition-colors shadow-sm shadow-red-500/20 text-sm"
+        class="px-4 py-2 text-xs rounded-xl font-semibold text-white bg-red-600 hover:bg-red-700 transition-colors shadow-sm shadow-red-500/20"
         >Yes, Remove</button
       >
     </div>
@@ -2553,7 +2580,7 @@
 <Modal bind:open={showBulkDeleteModal} title="Delete Selected APIs">
   <div class="space-y-4">
     <div
-      class="bg-red-50 text-red-800 p-4 rounded-xl border border-red-100 flex items-start gap-3"
+      class="bg-red-950/30 text-red-800 p-4 rounded-xl border border-red-100 flex items-start gap-3"
     >
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -2575,7 +2602,7 @@
       >
       <div>
         <p class="font-bold text-sm">Warning: Bulk Endpoint Deletion</p>
-        <p class="text-xs mt-1 text-red-700">
+        <p class="text-xs mt-1 text-red-400">
           Are you sure you want to delete <span class="font-bold"
             >{selectedApiIds.length}</span
           > selected endpoints? This action cannot be undone and will stop monitoring
@@ -2586,12 +2613,12 @@
     <div class="flex justify-end gap-3 pt-2">
       <button
         on:click={() => (showBulkDeleteModal = false)}
-        class="px-5 py-2.5 rounded-xl font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors text-sm"
+        class="px-4 py-2 text-xs rounded-xl font-semibold text-slate-500 bg-slate-800 hover:bg-slate-700 transition-colors"
         >Cancel</button
       >
       <button
         on:click={handleBulkDeleteSubmit}
-        class="px-5 py-2.5 rounded-xl font-semibold text-white bg-red-600 hover:bg-red-700 transition-colors shadow-sm shadow-red-500/20 text-sm flex items-center gap-2"
+        class="px-4 py-2 text-xs rounded-xl font-semibold text-white bg-red-600 hover:bg-red-700 transition-colors shadow-sm shadow-red-500/20 flex items-center gap-2"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -2619,14 +2646,14 @@
   title="Schedule Trigger ({selectedApi?.name})"
 >
   <div class="space-y-4">
-    <p class="text-sm text-slate-600 mb-2">
+    <p class="text-sm text-slate-500 mb-2">
       Set up when this API endpoint should be checked.
     </p>
 
     <div>
       <select
         bind:value={scheduleConfig.mode}
-        class="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none transition-all"
+        class="w-full bg-slate-900/50 border border-slate-600 text-cyan-50 rounded-xl focus:ring-cyan-500 focus:border-cyan-500 block p-2.5 outline-none transition-all"
       >
         {#each scheduleModes as mode}
           <option value={mode}>{mode}</option>
@@ -2637,24 +2664,23 @@
     {#if scheduleConfig.mode !== "Week timer"}
       <!-- Minute & Hour Timers -->
       <div
-        class="flex items-center justify-between border-b border-slate-200 pb-3"
+        class="flex items-center justify-between border-b border-slate-700/50 pb-3"
       >
-        <label class="text-sm font-medium text-slate-700">Check interval:</label
-        >
+        <label class="text-sm font-medium text-cyan-50">Check interval:</label>
       </div>
       <div class="flex items-center gap-3">
-        <span class="text-slate-700 font-medium text-sm">Every</span>
+        <span class="text-cyan-50 font-medium text-sm">Every</span>
         <input
           type="number"
           min="1"
           bind:value={scheduleConfig.value}
-          class="w-24 bg-white border border-slate-300 text-slate-900 rounded-xl focus:ring-blue-500 focus:border-blue-500 block p-2 outline-none transition-all text-center"
+          class="w-24 bg-slate-900/40 border border-slate-600 text-cyan-50 rounded-xl focus:ring-cyan-500 focus:border-cyan-500 block p-2 outline-none transition-all text-center"
         />
-        <span class="text-slate-700 font-medium"
+        <span class="text-cyan-50 font-medium"
           >{scheduleConfig.mode === "Minute timer" ? "minutes" : "hours"}</span
         >
       </div>
-      <p class="text-xs text-slate-500">
+      <p class="text-xs text-cyan-500/80">
         The endpoint will be constantly monitored every {scheduleConfig.value}
         {scheduleConfig.mode === "Minute timer" ? "minutes" : "hours"} based on this
         setting.
@@ -2665,7 +2691,7 @@
         <div>
           <select
             bind:value={scheduleConfig.day}
-            class="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none transition-all"
+            class="w-full bg-slate-900/50 border border-slate-600 text-cyan-50 rounded-xl focus:ring-cyan-500 focus:border-cyan-500 block p-2.5 outline-none transition-all"
           >
             {#each weekDays as day}
               <option value={day}>{day}</option>
@@ -2675,29 +2701,29 @@
         <div>
           <select
             bind:value={scheduleConfig.time}
-            class="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none transition-all"
+            class="w-full bg-slate-900/50 border border-slate-600 text-cyan-50 rounded-xl focus:ring-cyan-500 focus:border-cyan-500 block p-2.5 outline-none transition-all"
           >
             {#each timeOptions as time}
               <option value={time}>{time}</option>
             {/each}
           </select>
         </div>
-        <p class="text-xs text-slate-500 mt-2">
+        <p class="text-xs text-cyan-500/80 mt-2">
           The health checker will initiate an automatic check {scheduleConfig.day.toLowerCase()}
           at {scheduleConfig.time}.
         </p>
       </div>
     {/if}
 
-    <div class="flex gap-3 justify-end pt-5 mt-2 border-t border-slate-100">
+    <div class="flex gap-3 justify-end pt-5 mt-2 border-t border-slate-800">
       <button
         on:click={() => (showScheduleModal = false)}
-        class="px-5 py-2.5 text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 font-medium transition-colors text-sm"
+        class="px-4 py-2 text-xs text-cyan-50 bg-slate-900/40 border border-slate-600 rounded-xl hover:bg-slate-900/50 font-medium transition-colors"
         >Cancel</button
       >
       <button
         on:click={handleScheduleSubmit}
-        class="px-5 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-medium transition-colors shadow-sm text-sm"
+        class="px-4 py-2 text-xs bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-medium transition-colors shadow-sm"
       >
         Save Schedule
       </button>
@@ -2709,27 +2735,27 @@
 <Modal bind:open={showEditFolderModal} title="Rename Folder">
   <div class="space-y-4">
     <div>
-      <label class="block text-sm font-semibold text-slate-700 mb-1.5"
+      <label class="block text-sm font-semibold text-cyan-50 mb-1.5"
         >New Folder Name</label
       >
       <input
         type="text"
         bind:value={editFolderName}
-        class="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none transition-all"
+        class="w-full bg-slate-900/50 border border-slate-600 text-cyan-50 rounded-xl focus:ring-cyan-500 focus:border-cyan-500 block p-2.5 outline-none transition-all"
       />
     </div>
 
-    <div class="flex justify-end gap-3 pt-4 border-t border-slate-100">
+    <div class="flex justify-end gap-3 pt-3 border-t border-slate-800">
       <button
         on:click={() => (showEditFolderModal = false)}
-        class="px-5 py-2.5 text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 font-medium transition-colors text-sm"
+        class="px-4 py-2 text-xs text-cyan-50 bg-slate-900/40 border border-slate-600 rounded-xl hover:bg-slate-900/50 font-medium transition-colors"
         >Cancel</button
       >
       <button
         on:click={handleEditFolderSubmit}
         disabled={!editFolderName.trim() ||
           editFolderName.trim() === selectedFolderToEdit}
-        class="px-5 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-medium transition-colors shadow-sm text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+        class="px-4 py-2 text-xs bg-cyan-600 text-white rounded-xl hover:bg-cyan-700 font-medium transition-colors shadow-sm text-xs disabled:opacity-50 disabled:cursor-not-allowed"
       >
         Save Changes
       </button>
@@ -2765,9 +2791,9 @@
       >
       <div>
         <p class="font-bold text-sm">Warning: Removing Folder</p>
-        <p class="text-xs mt-1 text-amber-700">
+        <p class="text-xs mt-1 text-amber-400">
           Are you sure you want to delete <span
-            class="font-semibold px-1 rounded bg-amber-100"
+            class="font-semibold px-1 rounded bg-amber-900/30"
             >{selectedFolderToDelete}</span
           >? All endpoints inside will be moved to "Uncategorized".
         </p>
@@ -2776,12 +2802,12 @@
     <div class="flex justify-end gap-3 pt-2">
       <button
         on:click={() => (showDeleteFolderModal = false)}
-        class="px-5 py-2.5 rounded-xl font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors text-sm"
+        class="px-4 py-2 text-xs rounded-xl font-semibold text-slate-500 bg-slate-800 hover:bg-slate-700 transition-colors"
         >Cancel</button
       >
       <button
         on:click={handleDeleteFolderSubmit}
-        class="px-5 py-2.5 rounded-xl font-semibold text-white bg-red-600 hover:bg-red-700 transition-colors shadow-sm shadow-red-500/20 text-sm"
+        class="px-4 py-2 text-xs rounded-xl font-semibold text-white bg-red-600 hover:bg-red-700 transition-colors shadow-sm shadow-red-500/20"
         >Yes, Delete</button
       >
     </div>
@@ -2794,31 +2820,31 @@
   title="Environment Variables"
   maxWidth="max-w-2xl"
 >
-  <div class="space-y-4">
-    <p class="text-sm text-slate-600 mb-2">
+  <div class="space-y-4 relative">
+    <p class="text-sm text-slate-500 mb-2">
       Define variables that can be shared across all API endpoints in this
       project. Use <code>{`{{VariableName}}`}</code> in your API URLs, Headers, or
       Body.
     </p>
 
-    <div class="space-y-3">
+    <div class="space-y-3 pb-20">
       {#each envVarsKV as pair, i}
         <div class="flex gap-2 items-center">
           <input
             type="text"
             bind:value={pair.key}
             placeholder="Variable Key (e.g. base_url)"
-            class="flex-1 bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2 outline-none font-mono"
+            class="flex-1 bg-slate-900/50 border border-slate-700/50 text-cyan-50 text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block p-2 outline-none font-mono"
           />
           <input
             type="text"
             bind:value={pair.value}
             placeholder="Value"
-            class="flex-1 bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2 outline-none font-mono"
+            class="flex-1 bg-slate-900/50 border border-slate-700/50 text-cyan-50 text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block p-2 outline-none font-mono"
           />
           <button
             on:click={() => removeEnvVarRow(i)}
-            class="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+            class="p-2 text-cyan-500/80 hover:text-red-400 hover:bg-slate-800 rounded-lg transition-colors border border-transparent hover:border-red-500/30"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -2843,7 +2869,7 @@
 
       <button
         on:click={addEnvVarRow}
-        class="text-blue-600 hover:text-blue-700 text-sm font-semibold flex items-center gap-1.5 mt-2"
+        class="text-cyan-500 hover:text-cyan-400 text-sm font-semibold flex items-center gap-1.5 mt-2"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -2867,21 +2893,21 @@
     </div>
 
     <div
-      class="flex justify-end gap-3 pt-4 border-t border-slate-100 sticky bottom-0 bg-white z-10 -mx-6 px-6 -mb-6 pb-6 mt-4"
+      class="flex justify-end gap-3 pt-3 border-t border-slate-800 absolute bottom-0 left-0 w-full bg-slate-900/95 px-6 pb-4 mt-2"
     >
       <button
         on:click={() => (showEnvVarsModal = false)}
-        class="px-5 py-2.5 text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 font-medium transition-colors text-sm"
+        class="px-4 py-2 text-slate-500 bg-slate-800 border border-slate-700 rounded-xl hover:bg-slate-700 font-medium transition-colors text-xs"
         >Cancel</button
       >
       <button
         on:click={saveEnvVars}
         disabled={isSavingEnvVars}
-        class="px-6 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-medium transition-colors shadow-sm text-sm disabled:opacity-50 flex items-center gap-2"
+        class="px-4 py-2 bg-cyan-600 text-cyan-50 rounded-xl hover:bg-cyan-700 font-medium transition-colors shadow-[0_0_15px_rgba(6,182,212,0.3)] text-xs disabled:opacity-50 flex items-center gap-2"
       >
         {#if isSavingEnvVars}
           <svg
-            class="animate-spin h-4 w-4 text-white"
+            class="animate-spin h-4 w-4 text-cyan-50"
             xmlns="http://www.w3.org/2000/svg"
             fill="none"
             viewBox="0 0 24 24"
@@ -2910,32 +2936,32 @@
 <!-- 7. Create Folder Modal -->
 <Modal bind:open={showFolderModal} title="Create New Folder">
   <div class="space-y-4">
-    <p class="text-sm text-slate-600 mb-2">
+    <p class="text-xs text-slate-500 mb-2">
       Folders help you organize your endpoints logically.
     </p>
 
     <div>
-      <label class="block text-sm font-semibold text-slate-700 mb-1.5"
+      <label class="block text-xs font-semibold text-slate-500 mb-1.5"
         >Folder Name</label
       >
       <input
         type="text"
         bind:value={newFolderName}
         placeholder="e.g. Authentication APIs"
-        class="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none transition-all"
+        class="w-full bg-slate-900/50 border border-slate-700/50 text-cyan-50 rounded-xl focus:ring-cyan-500 focus:border-cyan-500 block p-2.5 outline-none transition-all text-sm"
       />
     </div>
 
-    <div class="flex justify-end gap-3 pt-4 border-t border-slate-100">
+    <div class="flex justify-end gap-3 pt-3 border-t border-slate-800">
       <button
         on:click={() => (showFolderModal = false)}
-        class="px-5 py-2.5 text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 font-medium transition-colors text-sm"
+        class="px-4 py-2 text-slate-500 bg-slate-800 border border-slate-700 rounded-xl hover:bg-slate-700 font-medium transition-colors text-xs"
         >Cancel</button
       >
       <button
         on:click={handleAddFolder}
         disabled={!newFolderName.trim()}
-        class="px-5 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-medium transition-colors shadow-sm text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+        class="px-4 py-2 bg-cyan-600 text-cyan-50 rounded-xl hover:bg-cyan-700 font-medium transition-colors shadow-[0_0_15px_rgba(6,182,212,0.3)] text-xs disabled:opacity-50 disabled:cursor-not-allowed"
       >
         Create Folder
       </button>

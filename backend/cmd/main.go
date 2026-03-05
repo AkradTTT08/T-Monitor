@@ -97,5 +97,6 @@ func setupRoutes(app *fiber.App) {
 	users.Put("/:id/role", handlers.UpdateUserRole)
 	users.Put("/:id/approve", handlers.ApproveUser)
 	users.Delete("/:id/disapprove", handlers.DisapproveUser)
+	users.Put("/:id/block", handlers.ToggleBlockUser)
 	users.Put("/:id/reset-password", handlers.ResetPassword)
 }

@@ -80,6 +80,10 @@ func Login(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Waiting for admin approval"})
 	}
 
+	if user.IsBlocked {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Your account has been blocked by an administrator"})
+	}
+
 	token, err := middleware.GenerateToken(user)
 	if err != nil {
 		log.Println("Error generating token:", err)

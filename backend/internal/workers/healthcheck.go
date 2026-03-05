@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io"
 	"log"
 	"net/http"
+	"net/smtp"
 	"net/url"
 	"os"
 	"regexp"
@@ -196,44 +198,198 @@ func handleResult(api models.API, statusCode int, duration int64, isSuccess bool
 
 	database.DB.Create(&logEntry)
 
-	// If failed, trigger webhook to n8n
+	// If failed, send notifications
 	if !isSuccess {
 		var config models.NotificationConfig
-		err := database.DB.Where("project_id = ?", api.ProjectID).First(&config).Error
+		// Use Last() to get the most recently updated config
+		err := database.DB.Where("project_id = ?", api.ProjectID).Last(&config).Error
 
-		// If config is genuinely missing, initialize an empty default to suppress error logs
+		// If no config is set for this project, skip notification
 		if err != nil {
-			config = models.NotificationConfig{
-				ProjectID: api.ProjectID,
-			}
-			database.DB.Create(&config)
+			log.Printf("[Notify] No notification config found for project %d, skipping", api.ProjectID)
+			return
 		}
 
-		triggerN8nWebhook(api, logEntry, &config)
+		// Send Telegram notification directly
+		if config.EnableTelegram && config.TelegramBotToken != "" && config.TelegramChatID != "" {
+			go sendTelegramMessage(api, logEntry, &config)
+		}
+
+		// Send Email notification directly
+		if config.EnableEmail && config.EmailAddress != "" {
+			go sendEmailNotification(api, logEntry, &config)
+		}
 	}
 }
 
-func triggerN8nWebhook(api models.API, entry models.MonitorLog, config *models.NotificationConfig) {
-	webhookURL := os.Getenv("N8N_WEBHOOK_URL")
-	if webhookURL == "" {
-		log.Println("N8N_WEBHOOK_URL is not configured")
-		return
-	}
+func sendTelegramMessage(api models.API, entry models.MonitorLog, config *models.NotificationConfig) {
+	message := fmt.Sprintf(
+		"🚨 *API Alert - Project %d*\n\n"+
+			"*API:* %s\n"+
+			"*URL:* `%s`\n"+
+			"*Status Code:* `%d`\n"+
+			"*Error:* %s\n"+
+			"*Time:* %s",
+		api.ProjectID,
+		api.Name,
+		api.URL,
+		entry.StatusCode,
+		entry.ErrorMessage,
+		entry.CheckedAt.Format("2006-01-02 15:04:05"),
+	)
+
+	telegramURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", config.TelegramBotToken)
 
 	payload := map[string]interface{}{
-		"api_id":        api.ID,
-		"project_id":    api.ProjectID,
-		"api_name":      api.Name,
-		"url":           api.URL,
-		"status_code":   entry.StatusCode,
-		"error_message": entry.ErrorMessage,
-		"config":        config,
+		"chat_id":    config.TelegramChatID,
+		"text":       message,
+		"parse_mode": "Markdown",
 	}
 
 	jsonPayload, _ := json.Marshal(payload)
 
-	_, err := http.Post(webhookURL, "application/json", bytes.NewBuffer(jsonPayload))
+	resp, err := http.Post(telegramURL, "application/json", bytes.NewBuffer(jsonPayload))
 	if err != nil {
-		fmt.Printf("Error triggering n8n webhook: %v\n", err)
+		log.Printf("[Notify] Failed to send Telegram message: %v", err)
+		return
 	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 200 {
+		log.Printf("[Notify] ✅ Telegram alert sent for API '%s' (project %d)", api.Name, api.ProjectID)
+	} else {
+		body, _ := io.ReadAll(resp.Body)
+		log.Printf("[Notify] ❌ Telegram API error %d: %s", resp.StatusCode, string(body))
+	}
+}
+
+func sendEmailNotification(api models.API, entry models.MonitorLog, config *models.NotificationConfig) {
+	if config.SmtpHost == "" || config.SmtpUser == "" || config.SmtpPass == "" {
+		log.Printf("[Notify] SMTP settings missing for project %d, skipping email", api.ProjectID)
+		return
+	}
+
+	// Split multiple emails
+	recipients := strings.Split(config.EmailAddress, ",")
+	for i := range recipients {
+		recipients[i] = strings.TrimSpace(recipients[i])
+	}
+
+	subject := fmt.Sprintf("Subject: 🚨 API Alert: %s is DOWN\n", api.Name)
+	mime := "MIME-version: 1.0;\nContent-Type: text/html; charset=\"UTF-8\";\n\n"
+
+	// HTML Template Data
+	data := struct {
+		ApiName    string
+		Url        string
+		StatusCode int
+		ErrorMsg   string
+		Time       string
+		ProjectId  uint
+	}{
+		ApiName:    api.Name,
+		Url:        api.URL,
+		StatusCode: entry.StatusCode,
+		ErrorMsg:   entry.ErrorMessage,
+		Time:       entry.CheckedAt.Format("2006-01-02 15:04:05"),
+		ProjectId:  api.ProjectID,
+	}
+
+	tmpl, err := template.New("email").Parse(htmlTemplate)
+	if err != nil {
+		log.Printf("[Notify] Error parsing email template: %v", err)
+		return
+	}
+
+	var body bytes.Buffer
+	if err := tmpl.Execute(&body, data); err != nil {
+		log.Printf("[Notify] Error executing email template: %v", err)
+		return
+	}
+
+	msg := []byte(subject + mime + body.String())
+	auth := smtp.PlainAuth("", config.SmtpUser, config.SmtpPass, config.SmtpHost)
+
+	addr := fmt.Sprintf("%s:%d", config.SmtpHost, config.SmtpPort)
+	err = smtp.SendMail(addr, auth, config.SmtpUser, recipients, msg)
+
+	if err != nil {
+		log.Printf("[Notify] ❌ Failed to send email alert: %v", err)
+	} else {
+		log.Printf("[Notify] ✅ Email alert sent to %d recipients for API '%s'", len(recipients), api.Name)
+	}
+}
+
+const htmlTemplate = `
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f172a; color: #f8fafc; margin: 0; padding: 0; }
+        .container { max-width: 600px; margin: 40px auto; background-color: #1e293b; border-radius: 16px; border: 1px solid #334155; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4); }
+        .header { background: linear-gradient(135deg, #ef4444 0%, #7f1d1d 100%); padding: 30px; text-align: center; }
+        .header h1 { margin: 0; font-size: 24px; letter-spacing: 2px; text-transform: uppercase; color: #fff; }
+        .content { padding: 40px; }
+        .alert-box { background-color: #0f172a; border-left: 4px solid #ef4444; padding: 20px; border-radius: 8px; margin-bottom: 30px; }
+        .label { color: #94a3b8; font-size: 12px; font-weight: bold; text-transform: uppercase; margin-bottom: 4px; }
+        .value { color: #f1f5f9; font-size: 16px; margin-bottom: 16px; font-family: 'Courier New', Courier, monospace; }
+        .footer { padding: 20px; text-align: center; font-size: 12px; color: #64748b; border-top: 1px solid #334155; }
+        .btn { display: inline-block; padding: 12px 24px; background-color: #ef4444; color: #fff; text-decoration: none; border-radius: 8px; font-weight: bold; margin-top: 20px; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚨 API CRITICAL ALERT</h1>
+        </div>
+        <div class="content">
+            <p style="font-size: 16px; color: #cbd5e1; margin-top: 0;">An endpoint health check has failed. Action may be required.</p>
+            
+            <div class="alert-box">
+                <div class="label">API NAME</div>
+                <div class="value">{{.ApiName}}</div>
+                
+                <div class="label">ENDPOINT URL</div>
+                <div class="value">{{.Url}}</div>
+                
+                <div class="label">STATUS CODE</div>
+                <div class="value" style="color: #ef4444; font-weight: bold;">{{.StatusCode}}</div>
+                
+                <div class="label">ERROR MESSAGE</div>
+                <div class="value">{{.ErrorMsg}}</div>
+                
+                <div class="label">CHECKED AT</div>
+                <div class="value">{{.Time}}</div>
+            </div>
+            
+            <div style="text-align: center;">
+                <a href="http://localhost:5173/dashboard/projects/{{.ProjectId}}" class="btn">VIEW IN DASHBOARD</a>
+            </div>
+        </div>
+        <div class="footer">
+            <div style="margin-bottom: 6px;">© 2024 TTT BROTHER CO., LTD.</div>
+            <div style="font-size: 11px;">
+                Facebook: <a href="https://www.facebook.com/TTTBrother/" style="color: #64748b; text-decoration: none;">facebook.com/TTTBrother</a> | 
+                Website: <a href="https://tttbrother.com/" style="color: #64748b; text-decoration: none;">tttbrother.com</a><br>
+                Tell: 085 818 8910
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+`
+
+// kept for reference; no longer used after switching to native Telegram
+func triggerN8nWebhook_legacy(api models.API, entry models.MonitorLog, config *models.NotificationConfig) {
+	webhookURL := os.Getenv("N8N_WEBHOOK_URL")
+	if webhookURL == "" {
+		return
+	}
+	payload := map[string]interface{}{
+		"api_id": api.ID, "api_name": api.Name,
+		"status_code": entry.StatusCode, "error_message": entry.ErrorMessage,
+		"config": config,
+	}
+	jsonPayload, _ := json.Marshal(payload)
+	http.Post(webhookURL, "application/json", bytes.NewBuffer(jsonPayload))
 }

@@ -18,6 +18,7 @@ type User struct {
 	ProfileImageURL string    `gorm:"type:text" json:"profile_image_url"`
 	Role            string    `gorm:"type:varchar(20);default:'user'" json:"role"` // 'admin' or 'user'
 	IsApproved      bool      `gorm:"default:false" json:"is_approved"`
+	IsBlocked       bool      `gorm:"default:false" json:"is_blocked"`
 	Projects        []Project `gorm:"foreignKey:UserID" json:"projects,omitempty"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
@@ -73,15 +74,20 @@ type MonitorLog struct {
 
 // NotificationConfig stores channel preferences for alerting when an API fails
 type NotificationConfig struct {
-	ID              uint      `gorm:"primaryKey" json:"id"`
-	ProjectID       uint      `gorm:"index;not null" json:"project_id"`
-	EnableTelegram  bool      `gorm:"default:false" json:"enable_telegram"`
-	TelegramChatID  string    `json:"telegram_chat_id"`
-	EnableLINE      bool      `gorm:"default:false" json:"enable_line"`
-	LINEUserID      string    `json:"line_user_id"`
-	EnableEmail     bool      `gorm:"default:false" json:"enable_email"`
-	EmailAddress    string    `json:"email_address"`
-	EnableTicketing bool      `gorm:"default:false" json:"enable_ticketing"` // Open external tickets?
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	ID               uint      `gorm:"primaryKey" json:"id"`
+	ProjectID        uint      `gorm:"index;not null" json:"project_id"`
+	EnableTelegram   bool      `gorm:"default:false" json:"enable_telegram"`
+	TelegramBotToken string    `json:"telegram_bot_token"`
+	TelegramChatID   string    `json:"telegram_chat_id"`
+	EnableLINE       bool      `gorm:"default:false" json:"enable_line"`
+	LINEUserID       string    `json:"line_user_id"`
+	EnableEmail      bool      `gorm:"default:false" json:"enable_email"`
+	EmailAddress     string    `json:"email_address"` // Multi-email as comma-separated
+	SmtpHost         string    `json:"smtp_host"`
+	SmtpPort         int       `json:"smtp_port"`
+	SmtpUser         string    `json:"smtp_user"`
+	SmtpPass         string    `json:"smtp_pass"`
+	EnableTicketing  bool      `gorm:"default:false" json:"enable_ticketing"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
