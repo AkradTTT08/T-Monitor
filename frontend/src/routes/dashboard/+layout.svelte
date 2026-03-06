@@ -17,6 +17,11 @@
     }
   }
 
+  $: selectedProject = projects.find(
+    (p) => p.id.toString() === selectedProjectId,
+  );
+  $: apiCount = selectedProject?.APIs?.length || 0;
+
   function handleProjectChange(e: Event) {
     const target = e.target as HTMLSelectElement;
     const newId = target.value;
@@ -285,26 +290,13 @@
             : 'gap-3'}"
         >
           <div
-            class="w-10 h-10 rounded-xl bg-slate-900 border border-cyan-500/40 flex shrink-0 items-center justify-center text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.3)] relative overflow-hidden group/logo"
+            class="w-10 h-10 flex shrink-0 items-center justify-center relative overflow-hidden"
           >
-            <div
-              class="absolute inset-0 bg-cyan-400/20 mix-blend-screen filter blur-md opacity-20 group-hover/logo:opacity-50 transition-opacity duration-500"
-            ></div>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="relative z-10"
-              ><path d="M20.2 7.8l-7.7 7.7-4-4-5.7 5.7" /><path
-                d="M15 7h6v6"
-              /></svg
-            >
+            <img
+              src="/t-monitor-logo.svg"
+              alt="T-Monitor Logo"
+              class="w-full h-full object-contain relative z-10"
+            />
           </div>
           {#if !isSidebarCollapsed}
             <div class="flex flex-col overflow-hidden min-w-0 flex-1">
@@ -313,8 +305,8 @@
                 >T-Monitor</span
               >
               <span
-                class="text-[10px] text-cyan-500/80 truncate font-mono tracking-wider"
-                >UNIT COMMAND</span
+                class="text-[10px] text-cyan-500/80 truncate font-mono tracking-wider uppercase"
+                >{user.role || "UNIT COMMAND"}</span
               >
             </div>
           {/if}
@@ -397,8 +389,8 @@
                 stroke-width="2.5"
                 stroke-linecap="round"
                 stroke-linejoin="round"
-                ><path d="M12 2v20" /><path
-                  d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"
+                ><polyline points="16 18 22 12 16 6" /><polyline
+                  points="8 6 2 12 8 18"
                 /></svg
               >
               {#if !isSidebarCollapsed}<span>Open APIs</span>{/if}
@@ -406,7 +398,7 @@
             {#if !isSidebarCollapsed}
               <span
                 class="bg-cyan-500/20 border border-cyan-500/50 text-cyan-300 text-[10px] font-bold px-2 py-0.5 rounded-md shadow-[0_0_10px_rgba(6,182,212,0.2)]"
-                >8</span
+                >{apiCount}</span
               >
             {:else}
               <span

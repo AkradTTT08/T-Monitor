@@ -30,6 +30,8 @@ type Project struct {
 	Name                 string               `gorm:"not null" json:"name"`
 	Description          string               `json:"description"`
 	EnvironmentVariables string               `gorm:"type:text;default:'{}'" json:"environment_variables"`
+	CoverImageURL        string               `gorm:"type:text" json:"cover_image_url"`
+	CoverPosition        int                  `gorm:"default:50" json:"cover_position"`
 	UserID               uint                 `gorm:"not null" json:"user_id"`
 	APIs                 []API                `gorm:"foreignKey:ProjectID" json:"apis,omitempty"`
 	NotificationConfigs  []NotificationConfig `gorm:"foreignKey:ProjectID" json:"notification_configs,omitempty"`

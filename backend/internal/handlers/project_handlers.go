@@ -1,6 +1,11 @@
 package handlers
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"time"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/monitor-api/backend/internal/database"
 	"github.com/monitor-api/backend/internal/models"
@@ -10,6 +15,59 @@ type ProjectInput struct {
 	Name                 string `json:"name"`
 	Description          string `json:"description"`
 	EnvironmentVariables string `json:"environment_variables"`
+	CoverImageURL        string `json:"cover_image_url"`
+	CoverPosition        int    `json:"cover_position"`
+}
+
+func UploadProjectCover(c *fiber.Ctx) error {
+	id := c.Params("id")
+	userID := c.Locals("user_id").(uint)
+	role := c.Locals("role").(string)
+
+	var project models.Project
+	query := database.DB
+	if role != "admin" {
+		query = query.Where("user_id = ?", userID)
+	}
+
+	if err := query.First(&project, id).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Project not found or unauthorized"})
+	}
+
+	file, err := c.FormFile("cover")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "No file uploaded"})
+	}
+
+	// Create directory if not exists
+	uploadDir := "./uploads/projects"
+	if _, err := os.Stat(uploadDir); os.IsNotExist(err) {
+		os.MkdirAll(uploadDir, 0755)
+	}
+
+	// Generate filename
+	ext := filepath.Ext(file.Filename)
+	filename := fmt.Sprintf("project_%d_%d%s", project.ID, time.Now().Unix(), ext)
+	savePath := filepath.Join(uploadDir, filename)
+	absPath, _ := filepath.Abs(savePath)
+	fmt.Printf("Attempting to save file. Relative: %s, Absolute: %s\n", savePath, absPath)
+
+	if err := c.SaveFile(file, savePath); err != nil {
+		fmt.Printf("Error saving file: %v\n", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to save file"})
+	}
+
+	fmt.Printf("File saved successfully to: %s\n", savePath)
+
+	// Update DB
+	project.CoverImageURL = "/uploads/projects/" + filename
+	// Default position 50 if not set, but we usually want to keep it if it exists
+	database.DB.Save(&project)
+
+	return c.JSON(fiber.Map{
+		"message":         "Cover image uploaded successfully",
+		"cover_image_url": project.CoverImageURL,
+	})
 }
 
 func CreateProject(c *fiber.Ctx) error {
@@ -29,6 +87,7 @@ func CreateProject(c *fiber.Ctx) error {
 		Name:                 input.Name,
 		Description:          input.Description,
 		EnvironmentVariables: input.EnvironmentVariables,
+		CoverPosition:        input.CoverPosition,
 		UserID:               userID,
 	}
 
@@ -108,6 +167,7 @@ func UpdateProject(c *fiber.Ctx) error {
 	project.Name = input.Name
 	project.Description = input.Description
 	project.EnvironmentVariables = input.EnvironmentVariables
+	project.CoverPosition = input.CoverPosition
 
 	database.DB.Save(&project)
 

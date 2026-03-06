@@ -255,41 +255,6 @@
         MANAGE AND MONITOR HEALTH ACROSS ALL REGISTERED API ENDPOINTS.
       </p>
     </div>
-
-    <div class="flex items-center gap-3">
-      <div class="relative min-w-[200px]">
-        <select
-          bind:value={selectedProjectId}
-          on:change={handleFilterChange}
-          class="w-full appearance-none bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 text-cyan-50 py-2.5 pl-4 pr-10 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 transition-all font-mono tracking-wide text-sm cursor-pointer shadow-[0_0_15px_rgba(0,0,0,0.5)]"
-        >
-          <option value="" class="bg-slate-800 text-slate-300"
-            >ALL PROJECTS</option
-          >
-          {#each projects as project}
-            <option value={project.id} class="bg-slate-800 text-slate-300"
-              >{project.name}</option
-            >
-          {/each}
-        </select>
-        <div
-          class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-cyan-500/50"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            ><polyline points="6 9 12 15 18 9"></polyline></svg
-          >
-        </div>
-      </div>
-    </div>
   </div>
 
   <!-- Content -->

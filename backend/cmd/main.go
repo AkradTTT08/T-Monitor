@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"os"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -33,6 +34,15 @@ func main() {
 		AllowOrigins: "*", // Adjust for production security
 		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
 	}))
+
+	// Serve static files
+	uploadPath := "./uploads"
+	if _, err := os.Stat(uploadPath); os.IsNotExist(err) {
+		log.Printf("Warning: Uploads directory %s does not exist yet", uploadPath)
+	} else {
+		log.Printf("Serving static files from %s", uploadPath)
+	}
+	app.Static("/uploads", uploadPath)
 
 	// API Routes setup
 	setupRoutes(app)
@@ -73,6 +83,7 @@ func setupRoutes(app *fiber.App) {
 	project.Get("/:id", handlers.GetProject)
 	project.Put("/:id", handlers.UpdateProject)
 	project.Delete("/:id", handlers.DeleteProject)
+	project.Post("/:id/cover", handlers.UploadProjectCover)
 
 	// API Management Routes
 	apis := protected.Group("/apis")
