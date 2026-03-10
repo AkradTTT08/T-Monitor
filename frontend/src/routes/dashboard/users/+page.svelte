@@ -1,11 +1,16 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import Modal from "$lib/components/Modal.svelte";
 
   let users: any[] = [];
   let isLoading = true;
   let currentUser: any = null;
   let errorMsg = "";
   let successMsg = "";
+
+  // Detail Modal State
+  let showDetailModal = false;
+  let selectedUser: any = null;
 
   onMount(async () => {
     const userData = localStorage.getItem("monitor_user");
@@ -166,6 +171,11 @@
       console.error(err);
     }
   }
+
+  function openDetailModal(user: any) {
+    selectedUser = user;
+    showDetailModal = true;
+  }
 </script>
 
 <div class="fade-in max-w-7xl mx-auto w-full overflow-hidden">
@@ -238,6 +248,7 @@
           {#each users as u}
             <tr
               class="hover:bg-slate-800/50 transition-colors group cursor-pointer active:bg-slate-800"
+              on:click={() => openDetailModal(u)}
             >
               <td class="p-4 pl-6">
                 <div class="flex items-center gap-3">
@@ -341,14 +352,14 @@
                 >
                   {#if !u.is_approved && (!currentUser || currentUser.id !== u.id)}
                     <button
-                      on:click={() => approveUser(u.id)}
+                      on:click|stopPropagation={() => approveUser(u.id)}
                       class="text-emerald-400 hover:text-emerald-300 transition-colors bg-emerald-950/30 hover:bg-emerald-900/50 px-3 py-1.5 rounded-lg border border-emerald-500/30 hover:border-emerald-400/50 shadow-[0_0_10px_rgba(52,211,153,0.1)] hover:shadow-[0_0_15px_rgba(52,211,153,0.3)] text-[10px] font-bold font-mono tracking-widest uppercase flex items-center gap-1"
                       title="Approve this user"
                     >
                       APPROVE
                     </button>
                     <button
-                      on:click={() => disapproveUser(u.id)}
+                      on:click|stopPropagation={() => disapproveUser(u.id)}
                       class="text-red-400 hover:text-red-300 transition-colors bg-red-950/30 hover:bg-red-900/50 px-3 py-1.5 rounded-lg border border-red-500/30 hover:border-red-400/50 shadow-[0_0_10px_rgba(239,68,68,0.1)] hover:shadow-[0_0_15px_rgba(239,68,68,0.3)] text-[10px] font-bold font-mono tracking-widest uppercase flex items-center gap-1"
                       title="Disapprove (Reject) this user"
                     >
@@ -357,7 +368,7 @@
                   {/if}
 
                   <button
-                    on:click={() => resetPassword(u.id)}
+                    on:click|stopPropagation={() => resetPassword(u.id)}
                     class="text-slate-500 hover:text-cyan-400 transition-colors flex items-center gap-1 font-mono tracking-widest uppercase text-[10px] font-bold disabled:opacity-50 disabled:hover:text-slate-500"
                     title="Reset Password"
                     disabled={currentUser && currentUser.id === u.id}
@@ -381,7 +392,7 @@
                   </button>
 
                   <button
-                    on:click={() => toggleRole(u.id, u.role)}
+                    on:click|stopPropagation={() => toggleRole(u.id, u.role)}
                     disabled={currentUser && currentUser.id === u.id}
                     class="transition-colors whitespace-nowrap ml-2 font-mono tracking-widest uppercase text-[10px] font-bold px-3 py-1.5 rounded-lg border
                       {currentUser && currentUser.id === u.id
@@ -394,7 +405,7 @@
                   </button>
 
                   <button
-                    on:click={() => toggleBlock(u.id)}
+                    on:click|stopPropagation={() => toggleBlock(u.id)}
                     disabled={currentUser &&
                       (currentUser.id === u.id || u.role === "admin")}
                     class="transition-all whitespace-nowrap ml-2 font-mono tracking-widest uppercase text-[10px] font-bold px-3 py-1.5 rounded-lg border flex items-center gap-2
@@ -453,4 +464,129 @@
       </table>
     {/if}
   </div>
+
+  <!-- User Detail Modal -->
+  <Modal bind:open={showDetailModal} title="User Detail">
+    {#if selectedUser}
+      <div class="space-y-6">
+        <!-- Profile Header -->
+        <div
+          class="flex flex-col items-center gap-4 py-4 border-b border-slate-700/50"
+        >
+          <div
+            class="w-24 h-24 rounded-full bg-slate-900 border-2 border-cyan-500/30 flex items-center justify-center text-3xl font-bold text-cyan-400 uppercase shadow-[0_0_20px_rgba(6,182,212,0.2)] overflow-hidden"
+          >
+            {#if selectedUser.profile_image_url}
+              <img
+                src={selectedUser.profile_image_url}
+                alt={selectedUser.name}
+                class="w-full h-full object-cover"
+              />
+            {:else}
+              {selectedUser.name?.charAt(0) || selectedUser.email.charAt(0)}
+            {/if}
+          </div>
+          <div class="text-center">
+            <h2 class="text-xl font-bold text-cyan-50 font-mono tracking-wide">
+              {selectedUser.name || "UNNAMED_USER"}
+            </h2>
+            <p class="text-slate-400 text-sm font-mono">{selectedUser.email}</p>
+          </div>
+        </div>
+
+        <!-- Info Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div class="space-y-4">
+            <div>
+              <p
+                class="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono mb-1"
+              >
+                DEPARTMENT
+              </p>
+              <p class="text-sm text-cyan-50 font-mono">
+                {selectedUser.department || "N/A"}
+              </p>
+            </div>
+            <div>
+              <p
+                class="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono mb-1"
+              >
+                POSITION
+              </p>
+              <p class="text-sm text-cyan-50 font-mono">
+                {selectedUser.position || "N/A"}
+              </p>
+            </div>
+            <div>
+              <p
+                class="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono mb-1"
+              >
+                PHONE
+              </p>
+              <p class="text-sm text-cyan-50 font-mono">
+                {selectedUser.phone || "N/A"}
+              </p>
+            </div>
+          </div>
+
+          <div class="space-y-4">
+            <div>
+              <p
+                class="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono mb-1"
+              >
+                ROLE
+              </p>
+              <span
+                class="px-2 py-0.5 rounded border text-[10px] font-bold uppercase tracking-widest
+                {selectedUser.role === 'admin'
+                  ? 'bg-fuchsia-950/50 text-fuchsia-400 border-fuchsia-500/30 shadow-[0_0_8px_rgba(217,70,239,0.3)]'
+                  : 'bg-slate-800 text-slate-400 border-slate-700'}"
+              >
+                {selectedUser.role}
+              </span>
+            </div>
+            <div>
+              <p
+                class="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono mb-1"
+              >
+                STATUS
+              </p>
+              {#if selectedUser.is_approved}
+                <span class="text-emerald-400 text-xs font-bold font-mono"
+                  >ACTIVE</span
+                >
+              {:else if selectedUser.is_blocked}
+                <span class="text-red-400 text-xs font-bold font-mono"
+                  >BLOCKED</span
+                >
+              {:else}
+                <span class="text-amber-400 text-xs font-bold font-mono"
+                  >PENDING</span
+                >
+              {/if}
+            </div>
+            <div>
+              <p
+                class="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono mb-1"
+              >
+                JOINED DATE
+              </p>
+              <p class="text-sm text-cyan-50 font-mono">
+                {new Date(selectedUser.created_at).toLocaleString()}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="pt-6 border-t border-slate-700/50 flex justify-end">
+          <button
+            on:click={() => (showDetailModal = false)}
+            class="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold font-mono transition-colors border border-slate-700 hover:border-slate-500"
+          >
+            CLOSE_PROFILE
+          </button>
+        </div>
+      </div>
+    {/if}
+  </Modal>
 </div>

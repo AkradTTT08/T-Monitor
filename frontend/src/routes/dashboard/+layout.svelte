@@ -20,7 +20,7 @@
   $: selectedProject = projects.find(
     (p) => p.id.toString() === selectedProjectId,
   );
-  $: apiCount = selectedProject?.APIs?.length || 0;
+  $: apiCount = selectedProject?.apis?.length || 0;
 
   function handleProjectChange(e: Event) {
     const target = e.target as HTMLSelectElement;

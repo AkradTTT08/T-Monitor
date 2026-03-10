@@ -39,25 +39,34 @@ func UploadProjectCover(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "No file uploaded"})
 	}
 
+	// Get absolute path for upload directory
+	uploadDir, err := filepath.Abs("./uploads/projects")
+	if err != nil {
+		fmt.Printf("Error getting absolute path: %v\n", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Internal server error: path resolution failed"})
+	}
+
 	// Create directory if not exists
-	uploadDir := "./uploads/projects"
 	if _, err := os.Stat(uploadDir); os.IsNotExist(err) {
-		os.MkdirAll(uploadDir, 0755)
+		fmt.Printf("Creating uploads directory: %s\n", uploadDir)
+		if err := os.MkdirAll(uploadDir, 0755); err != nil {
+			fmt.Printf("Error creating directory: %v\n", err)
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create upload directory"})
+		}
 	}
 
 	// Generate filename
 	ext := filepath.Ext(file.Filename)
 	filename := fmt.Sprintf("project_%d_%d%s", project.ID, time.Now().Unix(), ext)
 	savePath := filepath.Join(uploadDir, filename)
-	absPath, _ := filepath.Abs(savePath)
-	fmt.Printf("Attempting to save file. Relative: %s, Absolute: %s\n", savePath, absPath)
+	fmt.Printf("Attempting to save project cover: ProjectID=%d, Filename=%s, FullPath=%s\n", project.ID, filename, savePath)
 
 	if err := c.SaveFile(file, savePath); err != nil {
-		fmt.Printf("Error saving file: %v\n", err)
+		fmt.Printf("❌ Failed to save file for Project ID %d: %v\n", project.ID, err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to save file"})
 	}
 
-	fmt.Printf("File saved successfully to: %s\n", savePath)
+	fmt.Printf("✅ File saved successfully: %s\n", savePath)
 
 	// Update DB
 	project.CoverImageURL = "/uploads/projects/" + filename
