@@ -18,8 +18,8 @@ FROM alpine:latest
 
 WORKDIR /app
 
-# Add CA certificates for HTTPS requests if the backend needs to call external APIs
-RUN apk add --no-cache ca-certificates
+# Add CA certificates and timezone data
+RUN apk add --no-cache ca-certificates tzdata
 
 COPY --from=builder /app/monitor-backend .
 
