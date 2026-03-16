@@ -3,6 +3,8 @@
   import { fade, fly } from 'svelte/transition';
   import logoUrl from '../image/SVG/Logo-T-monitor.svg';
 
+  import { API_BASE_URL } from '$lib/config';
+
   let email = "";
   let password = "";
   let name = "";
@@ -72,7 +74,7 @@
         ? { email, password } 
         : { email, password, name, phone, department, position };
 
-      const res = await fetch(`http://localhost:5273/api/v1${endpoint}`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

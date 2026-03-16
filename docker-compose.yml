@@ -1,33 +1,54 @@
 version: '3.8'
 
 services:
+  database:
+    image: postgres:15-alpine
+    container_name: monitor-postgres
+    ports:
+      - "5440:5432"
+    environment:
+      - POSTGRES_USER=monitor_user
+      - POSTGRES_PASSWORD=monitor_password
+      - POSTGRES_DB=monitor_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - monitor-network
+
   backend:
     build:
       context: ./backend
     container_name: monitor-backend
     ports:
-      - "5273:5273"
+      - "8082:8082"
     environment:
-      - DB_HOST=monitor-postgres
+      - DB_HOST=database
       - DB_PORT=5432
       - DB_USER=monitor_user
       - DB_PASSWORD=monitor_password
       - DB_NAME=monitor_db
       - DB_SSLMODE=disable
+      - JWT_SECRET_KEY=yoursupersecurejwtsecretkey
+      - N8N_WEBHOOK_URL=http://localhost:5678/webhook/api-healthcheck
+    depends_on:
+      - database
     networks:
-      - default
-      - infrastructure_ext
+      - monitor-network
 
   frontend:
     build:
       context: ./frontend
     container_name: monitor-frontend
     ports:
-      - "4173:4173"
+      - "3001:3001"
     depends_on:
       - backend
+    networks:
+      - monitor-network
 
 networks:
-  infrastructure_ext:
-    name: infrastructure_default
-    external: true
+  monitor-network:
+    driver: bridge
+
+volumes:
+  postgres_data:

@@ -3,6 +3,7 @@
   import { page } from "$app/stores";
   import { goto } from "$app/navigation";
   import Modal from "$lib/components/Modal.svelte";
+  import { API_BASE_URL } from "$lib/config";
 
   let projects: any[] = [];
   let selectedProjectId = "";
@@ -63,7 +64,7 @@
   onMount(async () => {
     try {
       const token = localStorage.getItem("monitor_token");
-      const res = await fetch("http://localhost:5273/api/v1/projects", {
+      const res = await fetch(`${API_BASE_URL}/api/v1/projects`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -154,7 +155,7 @@
       const token = localStorage.getItem("monitor_token");
       if (!token) return;
 
-      const res = await fetch("http://localhost:5273/api/v1/auth/refresh", {
+      const res = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,

@@ -32,8 +32,9 @@ func main() {
 	app.Use(logger.New())
 	app.Use(cors.New(cors.Config{
 		AllowOrigins: "*", // Adjust for production security
-		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
+		AllowHeaders: "Origin, Content-Type, Accept, Authorization, X-Health-Check",
 	}))
+	app.Use(middleware.TestDryRunMiddleware())
 
 	// Serve static files
 	uploadPath := "./uploads"
@@ -48,7 +49,7 @@ func main() {
 	setupRoutes(app)
 
 	// Start Server
-	log.Fatal(app.Listen(":5273"))
+	log.Fatal(app.Listen(":8082"))
 }
 
 func setupRoutes(app *fiber.App) {

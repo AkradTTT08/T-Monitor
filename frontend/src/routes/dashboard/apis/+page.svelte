@@ -4,6 +4,7 @@
   import Modal from "$lib/components/Modal.svelte";
   import InputWithVariables from "$lib/components/InputWithVariables.svelte";
   import TextareaWithVariables from "$lib/components/TextareaWithVariables.svelte";
+  import { API_BASE_URL } from "$lib/config";
 
   let apis: any[] = [];
   let projects: any[] = [];
@@ -67,7 +68,7 @@
   async function fetchProjects() {
     try {
       const token = localStorage.getItem("monitor_token");
-      const res = await fetch("http://localhost:5273/api/v1/projects", {
+      const res = await fetch(`${API_BASE_URL}/api/v1/projects`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -82,7 +83,7 @@
     isLoading = true;
     try {
       const token = localStorage.getItem("monitor_token");
-      let url = "http://localhost:5273/api/v1/apis";
+      let url = `${API_BASE_URL}/api/v1/apis`;
       if (selectedProjectId) {
         url += `?project_id=${selectedProjectId}`;
       }
@@ -213,7 +214,7 @@
 
     try {
       const token = localStorage.getItem("monitor_token");
-      const res = await fetch("http://localhost:5273/api/v1/apis/test", {
+      const res = await fetch(`${API_BASE_URL}/api/v1/apis/test`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,

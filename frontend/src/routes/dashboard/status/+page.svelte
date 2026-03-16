@@ -3,6 +3,8 @@
   import { page } from "$app/stores";
   import Chart from "chart.js/auto";
 
+  import { API_BASE_URL } from "$lib/config";
+
   let logs: any[] = [];
   let isLoading = true;
   let summary = { total: 0, up: 0, down: 0 };
@@ -223,7 +225,7 @@
   async function fetchLogs() {
     try {
       const token = localStorage.getItem("monitor_token");
-      let url = "http://localhost:5273/api/v1/logs";
+      let url = `${API_BASE_URL}/api/v1/logs`;
       if (selectedProjectId) {
         url += `?project_id=${selectedProjectId}`;
       }

@@ -100,6 +100,13 @@ func CreateProject(c *fiber.Ctx) error {
 		UserID:               userID,
 	}
 
+	if c.Locals("is_dry_run") == true {
+		return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+			"message": "DRY_RUN: Project validation successful. Data not persisted.",
+			"data":    project,
+		})
+	}
+
 	if err := database.DB.Create(&project).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create project"})
 	}

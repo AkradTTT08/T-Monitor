@@ -1,6 +1,7 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import Swal from "sweetalert2";
+    import { API_BASE_URL } from "$lib/config";
 
     let user = {
         email: "",
@@ -99,7 +100,7 @@
         initialLoading = true;
         try {
             const token = localStorage.getItem("monitor_token");
-            const res = await fetch("http://localhost:5273/api/v1/profile", {
+            const res = await fetch(`${API_BASE_URL}/api/v1/profile`, {
                 headers: {
                     Authorization: `Bearer ${token}`,
                 },
@@ -121,7 +122,7 @@
         isProfileLoading = true;
         try {
             const token = localStorage.getItem("monitor_token");
-            const res = await fetch("http://localhost:5273/api/v1/profile", {
+            const res = await fetch(`${API_BASE_URL}/api/v1/profile`, {
                 method: "PUT",
                 headers: {
                     Authorization: `Bearer ${token}`,
@@ -197,7 +198,7 @@
         try {
             const token = localStorage.getItem("monitor_token");
             const res = await fetch(
-                "http://localhost:5273/api/v1/profile/password",
+                `${API_BASE_URL}/api/v1/profile/password`,
                 {
                     method: "PUT",
                     headers: {

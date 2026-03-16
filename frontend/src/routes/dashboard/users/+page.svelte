@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import Modal from "$lib/components/Modal.svelte";
+  import { API_BASE_URL } from "$lib/config";
 
   let users: any[] = [];
   let isLoading = true;
@@ -31,7 +32,7 @@
 
     try {
       const token = localStorage.getItem("monitor_token");
-      const res = await fetch("http://localhost:5273/api/v1/users", {
+      const res = await fetch(`${API_BASE_URL}/api/v1/users`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -53,7 +54,7 @@
     try {
       const token = localStorage.getItem("monitor_token");
       const res = await fetch(
-        `http://localhost:5273/api/v1/users/${userId}/role`,
+        `${API_BASE_URL}/api/v1/users/${userId}/role`,
         {
           method: "PUT",
           headers: {
@@ -76,7 +77,7 @@
     try {
       const token = localStorage.getItem("monitor_token");
       const res = await fetch(
-        `http://localhost:5273/api/v1/users/${userId}/approve`,
+        `${API_BASE_URL}/api/v1/users/${userId}/approve`,
         {
           method: "PUT",
           headers: { Authorization: `Bearer ${token}` },
@@ -101,7 +102,7 @@
     try {
       const token = localStorage.getItem("monitor_token");
       const res = await fetch(
-        `http://localhost:5273/api/v1/users/${userId}/disapprove`,
+        `${API_BASE_URL}/api/v1/users/${userId}/disapprove`,
         {
           method: "DELETE",
           headers: { Authorization: `Bearer ${token}` },
@@ -130,7 +131,7 @@
     try {
       const token = localStorage.getItem("monitor_token");
       const res = await fetch(
-        `http://localhost:5273/api/v1/users/${userId}/reset-password`,
+        `${API_BASE_URL}/api/v1/users/${userId}/reset-password`,
         {
           method: "PUT",
           headers: { Authorization: `Bearer ${token}` },
@@ -152,7 +153,7 @@
     try {
       const token = localStorage.getItem("monitor_token");
       const res = await fetch(
-        `http://localhost:5273/api/v1/users/${userId}/block`,
+        `${API_BASE_URL}/api/v1/users/${userId}/block`,
         {
           method: "PUT",
           headers: { Authorization: `Bearer ${token}` },

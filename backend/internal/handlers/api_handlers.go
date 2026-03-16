@@ -71,6 +71,13 @@ func CreateAPI(c *fiber.Ctx) error {
 		OrderIndex:         input.OrderIndex,
 	}
 
+	if c.Locals("is_dry_run") == true {
+		return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+			"message": "DRY_RUN: API validation successful. Data not persisted.",
+			"data":    api,
+		})
+	}
+
 	if err := database.DB.Create(&api).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create API endpoint"})
 	}

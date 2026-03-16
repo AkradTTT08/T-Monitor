@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import Modal from "$lib/components/Modal.svelte";
+  import { API_BASE_URL } from "$lib/config";
 
   let projects: any[] = [];
   let isLoading = true;
@@ -49,7 +50,7 @@
     isLoading = true;
     try {
       const token = localStorage.getItem("monitor_token");
-      const res = await fetch("http://localhost:5273/api/v1/projects", {
+      const res = await fetch(`${API_BASE_URL}/api/v1/projects`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -69,7 +70,7 @@
     formData.append("cover", file);
     const token = localStorage.getItem("monitor_token");
     const res = await fetch(
-      `http://localhost:5273/api/v1/projects/${projectId}/cover`,
+      `${API_BASE_URL}/api/v1/projects/${projectId}/cover`,
       {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
@@ -83,7 +84,7 @@
     if (!newProjectName) return;
     try {
       const token = localStorage.getItem("monitor_token");
-      const res = await fetch("http://localhost:5273/api/v1/projects", {
+      const res = await fetch(`${API_BASE_URL}/api/v1/projects`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -133,7 +134,7 @@
     try {
       const token = localStorage.getItem("monitor_token");
       const res = await fetch(
-        `http://localhost:5273/api/v1/projects/${editingProjectId}`,
+        `${API_BASE_URL}/api/v1/projects/${editingProjectId}`,
         {
           method: "PUT",
           headers: {
@@ -165,7 +166,7 @@
     try {
       const token = localStorage.getItem("monitor_token");
       const res = await fetch(
-        `http://localhost:5273/api/v1/projects/${deletingProjectId}`,
+        `${API_BASE_URL}/api/v1/projects/${deletingProjectId}`,
         {
           method: "DELETE",
           headers: {
@@ -311,7 +312,7 @@
               <img
                 src={project.cover_image_url.startsWith("http")
                   ? project.cover_image_url
-                  : `http://localhost:5273${project.cover_image_url}`}
+                  : `${API_BASE_URL}${project.cover_image_url}`}
                 alt={project.name}
                 style={`object-position: 50% ${project.cover_position ?? 50}%`}
                 class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
