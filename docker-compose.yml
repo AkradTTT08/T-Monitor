@@ -11,6 +11,7 @@ services:
       - POSTGRES_USER=monitor_user
       - POSTGRES_PASSWORD=monitor_password
       - POSTGRES_DB=monitor_db
+      - TZ=Asia/Bangkok
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -44,6 +45,9 @@ services:
     restart: always
     ports:
       - "3001:3001"
+    environment:
+      - PORT=3001
+      - HOST=0.0.0.0
     depends_on:
       - backend
     networks:
