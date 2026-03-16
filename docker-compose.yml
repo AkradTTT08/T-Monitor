@@ -41,6 +41,8 @@ services:
   frontend:
     build:
       context: ./frontend
+      args:
+        - VITE_API_URL=http://203.151.56.27:8082
     container_name: monitor-frontend
     restart: always
     ports:

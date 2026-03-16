@@ -8,6 +8,11 @@ RUN npm install
 
 COPY . .
 
+# Accept VITE_API_URL as a build argument
+ARG VITE_API_URL
+# Set it as an environment variable for the build process
+ENV VITE_API_URL=${VITE_API_URL}
+
 RUN npm run build
 
 # Final stage
