@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/monitor-api/backend/internal/models"
@@ -24,9 +25,21 @@ func ConnectDB() {
 		os.Getenv("DB_PORT"),
 	)
 
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	var db *gorm.DB
+	var err error
+	maxRetries := 5
+
+	for i := 1; i <= maxRetries; i++ {
+		db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
+		if err == nil {
+			break
+		}
+		log.Printf("Failed to connect to database (attempt %d/%d). Retrying in 5s...", i, maxRetries)
+		time.Sleep(5 * time.Second)
+	}
+
 	if err != nil {
-		log.Fatal("Failed to connect to database. \n", err)
+		log.Fatal("Failed to connect to database after maximum retries. \n", err)
 	}
 
 	log.Println("Database connection successfully opened")
