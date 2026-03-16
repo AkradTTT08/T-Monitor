@@ -27,19 +27,19 @@ func ConnectDB() {
 
 	var db *gorm.DB
 	var err error
-	maxRetries := 5
-
-	for i := 1; i <= maxRetries; i++ {
+	
+	// Retry connection loop
+	for i := 1; i <= 10; i++ {
 		db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
 		if err == nil {
 			break
 		}
-		log.Printf("Failed to connect to database (attempt %d/%d). Retrying in 5s...", i, maxRetries)
-		time.Sleep(5 * time.Second)
+		log.Printf("Attempt %d: Failed to connect to database. Retrying in 2 seconds...", i)
+		time.Sleep(2 * time.Second)
 	}
 
 	if err != nil {
-		log.Fatal("Failed to connect to database after maximum retries. \n", err)
+		log.Fatal("Failed to connect to database after several attempts. \n", err)
 	}
 
 	log.Println("Database connection successfully opened")

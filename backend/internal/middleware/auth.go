@@ -11,14 +11,17 @@ import (
 	"github.com/monitor-api/backend/internal/models"
 )
 
-var jwtSecret = []byte(os.Getenv("JWT_SECRET_KEY"))
+func getJWTSecret() []byte {
+	secret := os.Getenv("JWT_SECRET_KEY")
+	if secret == "" {
+		return []byte("super-secret-monitor-key")
+	}
+	return []byte(secret)
+}
 
 // GenerateToken creates a JWT token for standard user login
 func GenerateToken(user models.User) (string, error) {
-	// If secret is not set, use a fallback (FOR DEVELOPMENT SECRECY ONLY)
-	if len(jwtSecret) == 0 {
-		jwtSecret = []byte("super-secret-monitor-key")
-	}
+	secret := getJWTSecret()
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"user_id": user.ID,
@@ -26,7 +29,7 @@ func GenerateToken(user models.User) (string, error) {
 		"exp":     time.Now().Add(time.Hour * 1).Unix(), // 1 hour expiration
 	})
 
-	return token.SignedString(jwtSecret)
+	return token.SignedString(secret)
 }
 
 // Protected route middleware
@@ -44,15 +47,13 @@ func Protected() fiber.Handler {
 
 		tokenString := parts[1]
 		
-		if len(jwtSecret) == 0 {
-			jwtSecret = []byte("super-secret-monitor-key")
-		}
+		secret := getJWTSecret()
 
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, errors.New("unexpected signing method")
 			}
-			return jwtSecret, nil
+			return secret, nil
 		})
 
 		if err != nil || !token.Valid {
