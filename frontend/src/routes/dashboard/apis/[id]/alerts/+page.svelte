@@ -1,6 +1,7 @@
 <script lang="ts">
   import { page } from "$app/stores";
   import { onMount } from "svelte";
+  import { API_BASE_URL } from "$lib/config";
 
   let apiId = $page.params.id;
 
@@ -26,7 +27,7 @@
     try {
       const token = localStorage.getItem("monitor_token");
       // Fetch the API to get its current notification config
-      const res = await fetch(`http://localhost:5273/api/v1/apis?project_id=`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/apis?project_id=`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -57,7 +58,7 @@
 
     try {
       const token = localStorage.getItem("monitor_token");
-      const res = await fetch(`http://localhost:5273/api/v1/notifications`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/notifications`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,

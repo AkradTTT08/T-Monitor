@@ -2,6 +2,7 @@
   import { page } from "$app/stores";
   import { onMount, tick } from "svelte";
   import Swal from "sweetalert2";
+  import { API_BASE_URL } from "$lib/config";
   import Modal from "$lib/components/Modal.svelte";
   import InputWithVariables from "$lib/components/InputWithVariables.svelte";
   import TextareaWithVariables from "$lib/components/TextareaWithVariables.svelte";
@@ -432,7 +433,7 @@
       }));
 
       const res = await fetch(
-        `http://localhost:5273/api/v1/apis/reorder/${projectId}`,
+        `${API_BASE_URL}/api/v1/apis/reorder/${projectId}`,
         {
           method: "PUT",
           headers: {
@@ -461,10 +462,10 @@
       const token = localStorage.getItem("monitor_token");
 
       const [projRes, apisRes] = await Promise.all([
-        fetch(`http://localhost:5273/api/v1/projects/${targetId}`, {
+        fetch(`${API_BASE_URL}/api/v1/projects/${targetId}`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        fetch(`http://localhost:5273/api/v1/apis?project_id=${targetId}`, {
+        fetch(`${API_BASE_URL}/api/v1/apis?project_id=${targetId}`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
       ]);
@@ -533,7 +534,7 @@
       formData.append("collection", pendingFile);
 
       const res = await fetch(
-        `http://localhost:5273/api/v1/apis/import-postman?project_id=${projectId}&mode=${mode}`,
+        `${API_BASE_URL}/api/v1/apis/import-postman?project_id=${projectId}&mode=${mode}`,
         {
           method: "POST",
           headers: { Authorization: `Bearer ${token}` },
@@ -664,7 +665,7 @@
     try {
       const token = localStorage.getItem("monitor_token");
       const res = await fetch(
-        `http://localhost:5273/api/v1/apis/${selectedApi.id}`,
+        `${API_BASE_URL}/api/v1/apis/${selectedApi.id}`,
         {
           method: "PUT",
           headers: {
@@ -707,7 +708,7 @@
     try {
       const token = localStorage.getItem("monitor_token");
       const res = await fetch(
-        `http://localhost:5273/api/v1/apis/${selectedApi.id}`,
+        `${API_BASE_URL}/api/v1/apis/${selectedApi.id}`,
         {
           method: "PUT",
           headers: {
@@ -762,7 +763,7 @@
     try {
       const token = localStorage.getItem("monitor_token");
       const res = await fetch(
-        `http://localhost:5273/api/v1/apis/${selectedApi.id}`,
+        `${API_BASE_URL}/api/v1/apis/${selectedApi.id}`,
         {
           method: "DELETE",
           headers: {
@@ -784,7 +785,7 @@
       const token = localStorage.getItem("monitor_token");
       // Fire requests concurrently using Promise.all
       const deletePromises = selectedApiIds.map((id) =>
-        fetch(`http://localhost:5273/api/v1/apis/${id}`, {
+        fetch(`${API_BASE_URL}/api/v1/apis/${id}`, {
           method: "DELETE",
           headers: { Authorization: `Bearer ${token}` },
         }),
@@ -813,7 +814,7 @@
     try {
       const token = localStorage.getItem("monitor_token");
       const res = await fetch(
-        `http://localhost:5273/api/v1/apis?mode=${mode}`,
+        `${API_BASE_URL}/api/v1/apis?mode=${mode}`,
         {
           method: "POST",
           headers: {
@@ -896,7 +897,7 @@
     try {
       const token = localStorage.getItem("monitor_token");
       const res = await fetch(
-        `http://localhost:5273/api/v1/projects/${projectId}`,
+        `${API_BASE_URL}/api/v1/projects/${projectId}`,
         {
           method: "PUT",
           headers: {

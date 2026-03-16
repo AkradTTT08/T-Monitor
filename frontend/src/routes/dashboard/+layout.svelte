@@ -443,7 +443,9 @@
 
           <!-- Notification Channels Link -->
           <a
-            href={`/dashboard/projects/${selectedProjectId}/notifications`}
+            href={selectedProjectId && selectedProjectId !== "undefined"
+              ? `/dashboard/projects/${selectedProjectId}/notifications`
+              : "/dashboard"}
             on:click={() => (isMobileMenuOpen = false)}
             title="Alerts & Channels"
             class="w-full flex items-center group/navitem {isSidebarCollapsed
