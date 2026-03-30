@@ -46,6 +46,7 @@ func ConnectDB() {
 	
 	err = db.AutoMigrate(
 		&models.Company{},
+		&models.CompanyMember{},
 		&models.User{},
 		&models.Project{},
 		&models.API{},

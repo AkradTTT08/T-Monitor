@@ -8,14 +8,25 @@ import (
 
 // Company represents a business entity that groups multiple projects
 type Company struct {
-	ID          uint      `gorm:"primaryKey" json:"id"`
-	Name        string    `gorm:"not null" json:"name"`
-	Description string    `json:"description"`
-	LogoURL     string    `gorm:"type:text" json:"logo_url"`
-	UserID      uint      `gorm:"not null" json:"user_id"`
-	Projects    []Project `gorm:"foreignKey:CompanyID" json:"projects,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID          uint            `gorm:"primaryKey" json:"id"`
+	Name        string          `gorm:"not null" json:"name"`
+	Description string          `json:"description"`
+	LogoURL     string          `gorm:"type:text" json:"logo_url"`
+	UserID      uint            `gorm:"not null" json:"user_id"`
+	Projects    []Project       `gorm:"foreignKey:CompanyID" json:"projects,omitempty"`
+	Members     []CompanyMember `gorm:"foreignKey:CompanyID" json:"members,omitempty"`
+	CreatedAt   time.Time       `json:"created_at"`
+	UpdatedAt   time.Time       `json:"updated_at"`
+}
+
+// CompanyMember links users to companies they have been invited to
+type CompanyMember struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	CompanyID uint      `gorm:"not null;index" json:"company_id"`
+	UserID    uint      `gorm:"not null;index" json:"user_id"`
+	Role      string    `gorm:"type:varchar(20);default:'member'" json:"role"` // 'owner' or 'member'
+	User      *User     `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // User represents an administrator or standard user in the system
