@@ -4,6 +4,7 @@
   import { goto } from "$app/navigation";
   import Modal from "$lib/components/Modal.svelte";
   import { API_BASE_URL } from "$lib/config";
+  import Swal from "sweetalert2";
 
   let projects: any[] = [];
   let selectedProjectId = "";
@@ -183,6 +184,20 @@
     localStorage.removeItem("monitor_token");
     localStorage.removeItem("monitor_user");
     window.location.href = "/";
+  }
+
+  function handleAlertsClick(e: Event) {
+    if (!selectedProjectId || selectedProjectId === "undefined") {
+      e.preventDefault();
+      Swal.fire({
+        icon: "info",
+        title: "Please Create a Project First",
+        text: "Notification channels are configured on a per-project basis. Please create a project and select it from the sidebar to manage alerts.",
+        background: "#0f172a",
+        color: "#94a3b8",
+        confirmButtonColor: "#0891b2",
+      });
+    }
   }
 </script>
 
@@ -446,7 +461,10 @@
             href={selectedProjectId && selectedProjectId !== "undefined"
               ? `/dashboard/projects/${selectedProjectId}/notifications`
               : "/dashboard"}
-            on:click={() => (isMobileMenuOpen = false)}
+            on:click={(e) => {
+              isMobileMenuOpen = false;
+              handleAlertsClick(e);
+            }}
             title="Alerts & Channels"
             class="w-full flex items-center group/navitem {isSidebarCollapsed
               ? 'justify-center px-0'
