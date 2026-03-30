@@ -224,6 +224,29 @@ func handleResult(api models.API, statusCode int, duration int64, isSuccess bool
 		if config.EnableEmail && config.EmailAddress != "" {
 			go sendEmailNotification(api, logEntry, &config)
 		}
+
+		// Create RepairTask if not exists (open or pending)
+		var existingTask models.RepairTask
+		err = database.DB.Where("api_id = ? AND status IN ?", api.ID, []string{"open", "pending"}).First(&existingTask).Error
+		if err != nil {
+			// No existing task, create a new one
+			newTask := models.RepairTask{
+				ProjectID:    api.ProjectID,
+				ApiID:        api.ID,
+				Status:       "open",
+				ErrorMessage: errorMsg,
+			}
+			database.DB.Create(&newTask)
+
+			// Create Dashboard Notification
+			notification := models.DashboardNotification{
+				ProjectID: api.ProjectID,
+				Type:      "api_fail",
+				Title:     "API Failure Detected",
+				Message:   "API '" + api.Name + "' has failed: " + errorMsg,
+			}
+			database.DB.Create(&notification)
+		}
 	}
 }
 

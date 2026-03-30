@@ -6,62 +6,58 @@ import (
 	"github.com/monitor-api/backend/internal/models"
 )
 
-type NotificationConfigInput struct {
-	ProjectID        uint   `json:"project_id"`
-	EnableTelegram   bool   `json:"enable_telegram"`
-	TelegramBotToken string `json:"telegram_bot_token"`
-	TelegramChatID   string `json:"telegram_chat_id"`
-	EnableLINE       bool   `json:"enable_line"`
-	LINEUserID       string `json:"line_user_id"`
-	EnableEmail      bool   `json:"enable_email"`
-	EmailAddress     string `json:"email_address"`
-	SmtpHost         string `json:"smtp_host"`
-	SmtpPort         int    `json:"smtp_port"`
-	SmtpUser         string `json:"smtp_user"`
-	SmtpPass         string `json:"smtp_pass"`
-	EnableTicketing  bool   `json:"enable_ticketing"`
+func GetNotifications(c *fiber.Ctx) error {
+	role := c.Locals("role").(string)
+
+	var notifications []models.DashboardNotification
+	
+	query := database.DB.Where("is_read = ?", false)
+	
+	// For now, let's keep it simple: admins see everything, users see system-wide (userID=0)
+	// We can refine this later if project-specific user targeting is needed
+	if role != "admin" {
+		query = query.Where("user_id = 0")
+	}
+	
+	query.Order("created_at DESC").Limit(20).Find(&notifications)
+
+	return c.JSON(notifications)
+}
+
+func MarkNotificationRead(c *fiber.Ctx) error {
+	notificationID := c.Params("id")
+	
+	if err := database.DB.Model(&models.DashboardNotification{}).Where("id = ?", notificationID).Update("is_read", true).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to mark notification as read"})
+	}
+
+	return c.JSON(fiber.Map{"message": "Notification marked as read"})
 }
 
 func GetNotificationConfig(c *fiber.Ctx) error {
 	projectID := c.Params("projectId")
 	var config models.NotificationConfig
-
-	err := database.DB.Where("project_id = ?", projectID).Last(&config).Error
-	if err != nil {
-		return c.JSON(fiber.Map{"config": nil})
+	if err := database.DB.Where("project_id = ?", projectID).First(&config).Error; err != nil {
+		return c.JSON(models.NotificationConfig{ProjectID: 0}) // Return empty instead of error maybe? 
 	}
-
-	return c.JSON(fiber.Map{"config": config})
+	return c.JSON(config)
 }
 
 func UpsertNotificationConfig(c *fiber.Ctx) error {
-	var input NotificationConfigInput
+	var input models.NotificationConfig
 	if err := c.BodyParser(&input); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid input"})
 	}
 
-	// Delete all existing rows for this project (raw SQL avoids GORM zero-value guard)
-	database.DB.Exec("DELETE FROM notification_configs WHERE project_id = ?", input.ProjectID)
-
-	config := models.NotificationConfig{
-		ProjectID:        input.ProjectID,
-		EnableTelegram:   input.EnableTelegram,
-		TelegramBotToken: input.TelegramBotToken,
-		TelegramChatID:   input.TelegramChatID,
-		EnableLINE:       input.EnableLINE,
-		LINEUserID:       input.LINEUserID,
-		EnableEmail:      input.EnableEmail,
-		EmailAddress:     input.EmailAddress,
-		SmtpHost:         input.SmtpHost,
-		SmtpPort:         input.SmtpPort,
-		SmtpUser:         input.SmtpUser,
-		SmtpPass:         input.SmtpPass,
-		EnableTicketing:  input.EnableTicketing,
+	var existing models.NotificationConfig
+	result := database.DB.Where("project_id = ?", input.ProjectID).First(&existing)
+	
+	if result.RowsAffected > 0 {
+		input.ID = existing.ID
+		database.DB.Save(&input)
+	} else {
+		database.DB.Create(&input)
 	}
 
-	if err := database.DB.Create(&config).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to save config: " + err.Error()})
-	}
-
-	return c.JSON(config)
+	return c.JSON(input)
 }

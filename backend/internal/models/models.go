@@ -134,11 +134,25 @@ type RepairTask struct {
 	ErrorMessage string         `gorm:"type:text" json:"error_message"`
 	Description  string         `gorm:"type:text" json:"description"`  // For 'failed' status or general notes
 	Reason       string         `gorm:"type:text" json:"reason"`       // For 'closed' status
-	DocumentURL  string         `gorm:"type:text" json:"document_url"` // For 'closed' status
+	DocumentURL  string         `gorm:"type:text" json:"document_url"` // Legacy for 'closed' status
+	Documents    string         `gorm:"type:text" json:"documents"`    // JSON array of document URLs
 	ApprovedBy   *uint          `json:"approved_by"`
 	ApprovedAt   *time.Time     `json:"approved_at"`
 	ClosedAt     *time.Time     `json:"closed_at"`
 	CreatedAt    time.Time      `json:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at"`
 	DeletedAt    gorm.DeletedAt `gorm:"index" json:"deleted_at"`
+}
+
+// DashboardNotification represents a popup alert for the UI
+type DashboardNotification struct {
+	ID        uint           `gorm:"primaryKey" json:"id"`
+	UserID    uint           `gorm:"index" json:"user_id"` // 0 for system-wide/all admins
+	ProjectID uint           `gorm:"index" json:"project_id"`
+	Type      string         `json:"type"` // 'api_fail', 'task_approve', 'task_close', 'task_fail'
+	Title     string         `json:"title"`
+	Message   string         `json:"message"`
+	IsRead    bool           `gorm:"default:false" json:"is_read"`
+	CreatedAt time.Time      `json:"created_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"deleted_at"`
 }

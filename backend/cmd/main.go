@@ -117,6 +117,17 @@ func setupRoutes(app *fiber.App) {
 	// Logs
 	protected.Get("/logs", handlers.GetMonitorLogs)
 
+	// Repair Task Routes
+	protected.Post("/upload", handlers.UploadMultipleFiles)
+	protected.Get("/projects/:id/repair-tasks", handlers.GetRepairTasks)
+	protected.Post("/repair-tasks/:id/approve", handlers.ApproveRepairTask)
+	protected.Post("/repair-tasks/:id/close", handlers.CloseRepairTask)
+	protected.Post("/repair-tasks/:id/fail", handlers.FailRepairTask)
+
+	// Dashboard Notification Routes
+	protected.Get("/notifications/unread", handlers.GetNotifications)
+	protected.Put("/notifications/:id/read", handlers.MarkNotificationRead)
+
 	// Admin User Routes
 	users := protected.Group("/users", middleware.AdminOnly())
 	users.Get("/", handlers.GetAllUsers)

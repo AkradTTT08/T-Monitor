@@ -98,8 +98,72 @@
   const TOKEN_REFRESH_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
   let lastTokenRefresh = Date.now();
 
+  // Notification State
+  let unreadNotifications: any[] = [];
+  let showNotificationCenter = false;
+  $: unreadCount = unreadNotifications.length;
+
   function updateActivity() {
     lastActivityTimestamp = Date.now();
+  }
+
+  // Dashboard Notification Polling
+  async function checkNotifications() {
+    try {
+      const token = localStorage.getItem("monitor_token");
+      if (!token) return;
+      
+      const res = await fetch(`${API_BASE_URL}/api/v1/notifications/unread`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        
+        // Find truly new notifications to show Toast
+        const newOnes = data.filter((n: any) => !unreadNotifications.find((un: any) => un.id === n.id));
+        
+        for (const note of newOnes) {
+          Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: note.type === 'api_fail' ? 'error' : 'info',
+            title: note.title,
+            text: note.message,
+            showConfirmButton: false,
+            timer: 8000,
+            timerProgressBar: true,
+            background: '#1e293b',
+            color: '#f8fafc',
+            customClass: {
+              popup: 'border border-slate-700 shadow-2xl rounded-2xl'
+            }
+          });
+        }
+        
+        unreadNotifications = data;
+      }
+    } catch (err) {
+      // Silent error for polling
+    }
+  }
+
+  async function markAllNotificationsRead() {
+    try {
+      const token = localStorage.getItem("monitor_token");
+      // For simplicity, we can iterate or have a bulk endpoint. 
+      // Let's use the individual one for each in unreadNotifications for now or just clear frontend state if backend is updated later
+      for (const note of unreadNotifications) {
+        await fetch(`${API_BASE_URL}/api/v1/notifications/${note.id}/read`, {
+          method: 'PUT',
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      }
+      unreadNotifications = [];
+      showNotificationCenter = false;
+    } catch (err) {
+      console.error(err);
+    }
   }
 
   // Separate mount call for project fetching (no cleanup needed)
@@ -197,6 +261,10 @@
     // Setup Session Manager Interval (Runs every 5 minutes)
     sessionInterval = setInterval(checkSessionStatus, 5 * 60 * 1000);
 
+    // Setup Notification Polling (Runs every 10 seconds)
+    checkNotifications();
+    const notificationInterval = setInterval(checkNotifications, 10 * 1000);
+
     return () => {
       window.fetch = originalFetch; // Restore original fetch
       window.removeEventListener("mousemove", updateActivity);
@@ -205,6 +273,7 @@
       window.removeEventListener("scroll", updateActivity);
       window.removeEventListener("user-updated", handleUserUpdate);
       if (sessionInterval) clearInterval(sessionInterval);
+      if (notificationInterval) clearInterval(notificationInterval);
     };
   });
 
@@ -535,6 +604,34 @@
             {/if}
           </a>
 
+          <!-- Repair API Link — Level 3: requires Project -->
+          <a
+            href={hasProject ? `/dashboard/projects/${selectedProjectId}/repair` : '#'}
+            on:click={(e) => { isMobileMenuOpen = false; handleRequireProject(e); }}
+            title="Repair API"
+            class="w-full flex items-center group/navitem {isSidebarCollapsed
+              ? 'justify-center px-0'
+              : 'justify-between px-3'} py-2.5 rounded-xl text-sm font-semibold transition-all
+              {!hasProject
+                ? 'opacity-40 cursor-not-allowed border border-transparent text-slate-500'
+                : currentPath.includes('/repair')
+                  ? 'bg-rose-900/30 border border-rose-500/50 text-rose-300 shadow-[0_0_15px_rgba(244,63,94,0.15)]'
+                  : 'text-slate-400 hover:bg-slate-800/80 hover:text-rose-400 border border-transparent'}"
+          >
+            <div class="flex items-center gap-3">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                class="transition-colors {currentPath.includes('/repair') ? 'text-rose-400' : 'text-slate-500 group-hover/navitem:text-rose-400'}"
+                stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+              ><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+              {#if !isSidebarCollapsed}<span>Repair API</span>{/if}
+            </div>
+            {#if !isSidebarCollapsed && !hasProject}
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-600 shrink-0">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+            {/if}
+          </a>
+
           <!-- Notification Channels Link — Level 3: requires Project -->
           <a
             href={hasProject ? `/dashboard/projects/${selectedProjectId}/notifications` : '#'}
@@ -685,8 +782,43 @@
         </div>
 
         <!-- Bottom User Section -->
-        <div class="mt-auto pt-4 border-t border-slate-800 flex flex-col gap-4">
-          <!-- Help Center -->
+        <div class="mt-auto pt-4 border-t border-slate-800 flex flex-col gap-2">
+          <!-- Notifications Bell -->
+          <button
+            on:click={() => (showNotificationCenter = true)}
+            class="w-full flex items-center {isSidebarCollapsed
+              ? 'justify-center px-0'
+              : 'gap-3 px-3'} py-2 rounded-xl text-sm font-semibold transition-all text-slate-500 hover:bg-slate-800/80 hover:text-rose-400 border border-transparent relative group/bell"
+            title="Notifications"
+          >
+            <div class="relative">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="transition-colors group-hover/bell:text-rose-400"
+                ><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path
+                  d="M13.73 21a2 2 0 0 1-3.46 0"
+                ></path></svg
+              >
+              {#if unreadCount > 0}
+                <span
+                  class="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold text-white shadow-lg ring-2 ring-slate-900 animate-pulse"
+                >
+                  {unreadCount}
+                </span>
+              {/if}
+            </div>
+            {#if !isSidebarCollapsed}<span>Notifications</span>{/if}
+          </button>
+
+          <!-- Help center -->
           <button
             on:click={() => (showHelpModal = true)}
             class="w-full flex items-center {isSidebarCollapsed
@@ -710,30 +842,31 @@
             >
             {#if !isSidebarCollapsed}<span>Help center</span>{/if}
           </button>
+        </div>
 
-          <!-- User Info -->
-          <div
-            class="w-full flex flex-col {isSidebarCollapsed
-              ? 'pt-0'
-              : 'pt-2'} relative"
+        <!-- User Info -->
+        <div
+          class="w-full flex flex-col {isSidebarCollapsed
+            ? 'pt-0'
+            : 'pt-2'} relative"
+        >
+          <button
+            on:click={toggleProfileMenu}
+            title={user?.email || "Profile options"}
+            class="w-full flex items-center {isSidebarCollapsed
+              ? 'justify-center p-0'
+              : 'justify-between p-2'} rounded-xl hover:bg-slate-800 border border-transparent hover:border-slate-700 transition-all text-left group relative"
           >
-            <button
-              on:click={toggleProfileMenu}
-              title={user?.email || "Profile options"}
-              class="w-full flex items-center {isSidebarCollapsed
-                ? 'justify-center p-0'
-                : 'justify-between p-2'} rounded-xl hover:bg-slate-800 border border-transparent hover:border-slate-700 transition-all text-left group relative"
-            >
-              <div class="flex items-center gap-3 overflow-hidden min-w-0">
-                <div
-                  class="w-10 h-10 rounded-full bg-slate-900 flex shrink-0 items-center justify-center text-cyan-400 font-bold text-sm shadow-[0_0_10px_rgba(6,182,212,0.2)] uppercase relative border-2 border-slate-700 overflow-hidden"
-                >
-                  {#if user?.profile_image_url}
-                    <img
-                      src={user.profile_image_url}
-                      alt="Profile"
-                      class="w-full h-full object-cover"
-                    />
+            <div class="flex items-center gap-3 overflow-hidden min-w-0">
+              <div
+                class="w-10 h-10 rounded-full bg-slate-900 flex shrink-0 items-center justify-center text-cyan-400 font-bold text-sm shadow-[0_0_10px_rgba(6,182,212,0.2)] uppercase relative border-2 border-slate-700 overflow-hidden"
+              >
+                {#if user?.profile_image_url}
+                  <img
+                    src={user.profile_image_url}
+                    alt="Profile"
+                    class="w-full h-full object-cover"
+                  />
                   {:else}
                     {user?.email?.charAt(0) || "U"}
                   {/if}
@@ -925,9 +1058,8 @@
               </div>
             {/if}
           </div>
-        </div>
-      </aside>
-    </div>
+        </aside>
+      </div>
 
     <!-- Main Content Area -->
     <main class="flex-1 h-screen overflow-y-auto relative w-full pt-16 md:pt-0">
@@ -1231,6 +1363,49 @@
         >
       </div>
     </div>
+  </div>
+</Modal>
+
+<!-- Notification Center Modal -->
+<Modal bind:open={showNotificationCenter} title="NOTIFICATION CENTER">
+  <div class="space-y-6">
+    {#if unreadNotifications.length === 0}
+      <div class="py-12 text-center space-y-4">
+        <div class="w-16 h-16 bg-slate-800/50 rounded-full flex items-center justify-center mx-auto text-slate-600">
+           <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+        </div>
+        <p class="text-slate-500 font-medium font-mono text-sm tracking-widest uppercase">No unread notifications</p>
+      </div>
+    {:else}
+      <div class="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+        {#each unreadNotifications as note}
+          <div class="p-4 rounded-2xl bg-slate-900 border border-slate-800 flex items-start gap-4 transition-all hover:bg-slate-800/50">
+             <div class="mt-1 w-8 h-8 rounded-lg flex items-center justify-center shrink-0 {note.type === 'api_fail' ? 'bg-rose-500/10 text-rose-500' : 'bg-blue-500/10 text-blue-500'}">
+                {#if note.type === 'api_fail'}
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                {:else}
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                {/if}
+             </div>
+             <div class="space-y-1">
+                <h4 class="text-sm font-bold text-slate-100">{note.title}</h4>
+                <p class="text-xs text-slate-400 leading-relaxed">{note.message}</p>
+                <p class="text-[10px] text-slate-600 font-bold uppercase tracking-tighter pt-1">{new Date(note.created_at).toLocaleString()}</p>
+             </div>
+          </div>
+        {/each}
+      </div>
+      
+      <div class="flex justify-between items-center pt-4 border-t border-slate-800">
+        <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest leading-none">Showing {unreadNotifications.length} alerts</p>
+        <button 
+          on:click={markAllNotificationsRead}
+          class="px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-rose-900/20"
+        >
+          MARK ALL AS READ
+        </button>
+      </div>
+    {/if}
   </div>
 </Modal>
 
