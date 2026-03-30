@@ -63,6 +63,11 @@ func checkAPIs() {
 
 	now := time.Now()
 	for _, api := range apis {
+		// Skip if explicitly paused
+		if api.PausedUntil != nil && api.PausedUntil.After(now) {
+			continue
+		}
+
 		// Check if this specific API is due based on its interval
 		if lastCheck, exists := lastCheckMap[api.ID]; exists {
 			// api.Interval is in seconds

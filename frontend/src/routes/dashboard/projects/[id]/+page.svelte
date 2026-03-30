@@ -34,6 +34,10 @@
   let showDeleteApiModal = false;
   let showImportModeModal = false;
   let showAddModeModal = false;
+  let showPauseApiModal = false;
+  let pauseDurationHours: number = 1;
+  let pauseMinutes: number = 60;
+  let pauseType: 'duration' | 'indefinite' | 'resume' = 'duration';
 
   // API Reference for Edit/Delete
   let selectedApi: any = null;
@@ -780,6 +784,58 @@
     }
   }
 
+  function openPauseApiModal(api: any) {
+    selectedApi = api;
+    pauseMinutes = 60;
+    pauseType = 'duration';
+    showPauseApiModal = true;
+  }
+
+  async function handlePauseApiSubmit() {
+    showPauseApiModal = false;
+    let pause_hours = 0;
+    let label = '';
+    if (pauseType === 'indefinite') {
+      pause_hours = -1;
+      label = 'Monitor paused indefinitely.';
+    } else if (pauseType === 'duration') {
+      pause_hours = pauseMinutes / 60;
+      label = `Monitor paused for ${pauseMinutes} minute(s).`;
+    } else {
+      pause_hours = 0;
+      label = 'Monitor resumed.';
+    }
+    try {
+      const token = localStorage.getItem("monitor_token");
+      const res = await fetch(
+        `${API_BASE_URL}/api/v1/apis/${selectedApi.id}/pause`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ pause_hours }),
+        },
+      );
+
+      if (res.ok) {
+        await fetchProjectDetails();
+        Swal.fire({
+          icon: "success",
+          title: pause_hours !== 0 ? "Monitor Paused" : "Monitor Resumed",
+          text: label,
+          toast: true,
+          position: "top-end",
+          showConfirmButton: false,
+          timer: 3000,
+        });
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
   async function handleBulkDeleteSubmit() {
     try {
       const token = localStorage.getItem("monitor_token");
@@ -1359,9 +1415,15 @@
                     </span>
                   </td>
                   <td
-                    class="p-3 md:p-4 font-bold text-cyan-50 truncate max-w-[150px] md:max-w-xs"
-                    >{api.name}</td
+                    class="p-3 md:p-4 text-cyan-50 truncate max-w-[150px] md:max-w-xs"
                   >
+                    <div class="flex items-center gap-2">
+                      <span class="font-bold">{api.name}</span>
+                      {#if api.paused_until && new Date(api.paused_until) > new Date()}
+                        <span class="px-1.5 py-0.5 bg-amber-950/50 border border-amber-500/40 text-amber-400 text-[9px] font-bold rounded tracking-wider">PAUSED</span>
+                      {/if}
+                    </div>
+                  </td>
                   <td
                     class="p-3 md:p-4 text-slate-500 text-sm truncate max-w-[150px] md:max-w-xs"
                     title={api.url}>{api.url}</td
@@ -1414,6 +1476,26 @@
                         ></path><path d="M13.73 21a2 2 0 0 1-3.46 0"
                         ></path></svg
                       >
+                    </button>
+                    <button
+                      on:click={() => openPauseApiModal(api)}
+                      class="text-cyan-500/80 hover:text-amber-400 transition-colors p-1.5 rounded-lg hover:bg-slate-900 border border-transparent hover:border-amber-500/30 hover:shadow-[0_0_10px_rgba(245,158,11,0.2)]"
+                      title="Pause/Resume Monitor"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <rect x="6" y="4" width="4" height="16"></rect>
+                        <rect x="14" y="4" width="4" height="16"></rect>
+                      </svg>
                     </button>
                     <button
                       on:click={() => openDeleteApiModal(api)}
@@ -2942,10 +3024,11 @@
     </p>
 
     <div>
-      <label class="block text-xs font-semibold text-slate-500 mb-1.5"
+      <label class="block text-xs font-semibold text-slate-500 mb-1.5" for="new_folder_name_input"
         >Folder Name</label
       >
       <input
+        id="new_folder_name_input"
         type="text"
         bind:value={newFolderName}
         placeholder="e.g. Authentication APIs"
@@ -2965,6 +3048,100 @@
         class="px-4 py-2 bg-cyan-600 text-cyan-50 rounded-xl hover:bg-cyan-700 font-medium transition-colors shadow-[0_0_15px_rgba(6,182,212,0.3)] text-xs disabled:opacity-50 disabled:cursor-not-allowed"
       >
         Create Folder
+      </button>
+    </div>
+  </div>
+</Modal>
+
+<!-- Pause API Modal -->
+<Modal bind:open={showPauseApiModal} title="Pause Monitor ({selectedApi?.name})">
+  <div class="space-y-4">
+
+    <!-- Type selector tabs -->
+    <div class="flex gap-2 bg-slate-900/60 border border-slate-700/50 rounded-xl p-1">
+      <button
+        type="button"
+        on:click={() => (pauseType = 'duration')}
+        class="flex-1 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all {pauseType === 'duration' ? 'bg-amber-600 text-white shadow' : 'text-slate-400 hover:text-cyan-50'}"
+      >Pause for duration</button>
+      <button
+        type="button"
+        on:click={() => (pauseType = 'indefinite')}
+        class="flex-1 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all {pauseType === 'indefinite' ? 'bg-amber-600 text-white shadow' : 'text-slate-400 hover:text-cyan-50'}"
+      >Indefinite</button>
+      <button
+        type="button"
+        on:click={() => (pauseType = 'resume')}
+        class="flex-1 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all {pauseType === 'resume' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-cyan-50'}"
+      >Resume Now</button>
+    </div>
+
+    {#if pauseType === 'duration'}
+      <!-- Preset buttons -->
+      <div>
+        <p class="text-xs font-semibold text-slate-400 mb-2">Quick presets</p>
+        <div class="flex flex-wrap gap-2">
+          {#each [15, 30, 60, 180, 360, 720, 1440] as min}
+            <button
+              type="button"
+              on:click={() => (pauseMinutes = min)}
+              class="px-3 py-1 text-xs rounded-lg border transition-all {pauseMinutes === min ? 'bg-amber-600 border-amber-500 text-white' : 'border-slate-700 bg-slate-900/50 text-slate-300 hover:border-amber-500/50 hover:text-amber-300'}"
+            >
+              {min < 60 ? `${min}m` : min === 60 ? '1h' : min < 1440 ? `${min/60}h` : '24h'}
+            </button>
+          {/each}
+        </div>
+      </div>
+
+      <!-- Custom minute input -->
+      <div>
+        <label for="pause_minutes_input" class="block text-xs font-semibold text-cyan-50 mb-1.5">
+          Custom duration (minutes)
+        </label>
+        <div class="flex items-center gap-3">
+          <input
+            id="pause_minutes_input"
+            type="number"
+            min="1"
+            max="43200"
+            bind:value={pauseMinutes}
+            class="w-32 px-3 py-2 bg-slate-900/50 border border-slate-700/50 text-cyan-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all text-sm font-mono"
+          />
+          <span class="text-sm text-slate-400">
+            {#if pauseMinutes < 60}
+              {pauseMinutes} minute(s)
+            {:else}
+              {(pauseMinutes / 60).toFixed(1)} hour(s)
+            {/if}
+          </span>
+        </div>
+      </div>
+    {:else if pauseType === 'indefinite'}
+      <div class="bg-amber-950/30 border border-amber-500/30 rounded-xl p-3 flex items-start gap-2">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0 mt-0.5 text-amber-400"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <p class="text-xs text-amber-300">Monitor จะถูกหยุดแบบไม่มีกำหนด จนกว่าจะ Resume ด้วยตนเอง</p>
+      </div>
+    {:else}
+      <div class="bg-emerald-950/30 border border-emerald-500/30 rounded-xl p-3 flex items-start gap-2">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0 mt-0.5 text-emerald-400"><polyline points="20 6 9 17 4 12"/></svg>
+        <p class="text-xs text-emerald-300">Monitor จะกลับมา Check ตาม Schedule ที่กำหนดไว้ทันที</p>
+      </div>
+    {/if}
+
+    <div class="flex justify-end gap-3 pt-3 border-t border-slate-800">
+      <button
+        type="button"
+        on:click={() => (showPauseApiModal = false)}
+        class="px-4 py-2 text-xs text-cyan-50 bg-slate-900/40 border border-slate-600 rounded-xl hover:bg-slate-900/50 font-medium transition-colors"
+      >
+        Cancel
+      </button>
+      <button
+        type="button"
+        on:click={handlePauseApiSubmit}
+        class="px-4 py-2 text-xs font-semibold text-white rounded-xl transition-colors shadow-sm {pauseType === 'resume' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-amber-600 hover:bg-amber-700'}"
+      >
+        {pauseType === 'resume' ? 'Resume Monitor' : 'Confirm Pause'}
       </button>
     </div>
   </div>

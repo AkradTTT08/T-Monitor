@@ -86,12 +86,21 @@ func setupRoutes(app *fiber.App) {
 	project.Delete("/:id", handlers.DeleteProject)
 	project.Post("/:id/cover", handlers.UploadProjectCover)
 
+	// Company Routes
+	companies := protected.Group("/companies")
+	companies.Get("/", handlers.GetCompanies)
+	companies.Post("/", handlers.CreateCompany)
+	companies.Put("/:id", handlers.UpdateCompany)
+	companies.Delete("/:id", handlers.DeleteCompany)
+	companies.Post("/:id/logo", handlers.UploadCompanyLogo)
+
 	// API Management Routes
 	apis := protected.Group("/apis")
 	apis.Post("/", handlers.CreateAPI)
 	apis.Get("/", handlers.GetAPIs)
 	apis.Put("/reorder/:id", handlers.ReorderAPIs)
 	apis.Post("/test", handlers.TestAPI) // Added this line based on the instruction
+	apis.Post("/:id/pause", handlers.PauseAPI)
 	apis.Put("/:id", handlers.UpdateAPI)
 	apis.Delete("/:id", handlers.DeleteAPI)
 	apis.Post("/import-postman", handlers.UploadPostmanCollection)

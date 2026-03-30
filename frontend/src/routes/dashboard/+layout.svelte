@@ -8,13 +8,23 @@
 
   let projects: any[] = [];
   let selectedProjectId = "";
+  let selectedCompanyId = ""; // Level 1: must select a company first
 
-  // Listen to page changes to auto-select the right project ID
+  // Listen to page changes to auto-select the right project/company ID
   $: {
     if ($page.params.id) {
-      selectedProjectId = $page.params.id;
-      if (typeof window !== "undefined") {
-        localStorage.setItem("monitor_selected_project", selectedProjectId);
+      // Company route: /dashboard/companies/[id]
+      if (currentPath.startsWith('/dashboard/companies/')) {
+        selectedCompanyId = $page.params.id;
+        if (typeof window !== "undefined") {
+          localStorage.setItem("monitor_selected_company", selectedCompanyId);
+        }
+      } else {
+        // Project route: /dashboard/projects/[id]
+        selectedProjectId = $page.params.id;
+        if (typeof window !== "undefined") {
+          localStorage.setItem("monitor_selected_project", selectedProjectId);
+        }
       }
     }
   }
@@ -63,6 +73,10 @@
 
   // Separate mount call for project fetching (no cleanup needed)
   onMount(async () => {
+    // Restore company selection
+    const savedCompany = localStorage.getItem("monitor_selected_company");
+    if (savedCompany) selectedCompanyId = savedCompany;
+
     try {
       const token = localStorage.getItem("monitor_token");
       const res = await fetch(`${API_BASE_URL}/api/v1/projects`, {
@@ -81,6 +95,34 @@
       console.error("Failed to load projects for sidebar", err);
     }
   });
+
+  // Computed access levels
+  $: hasCompany = !!selectedCompanyId && selectedCompanyId !== "undefined";
+  $: hasProject = !!selectedProjectId && selectedProjectId !== "undefined";
+
+  function handleRequireCompany(e: Event) {
+    if (!hasCompany) {
+      e.preventDefault();
+      Swal.fire({
+        icon: 'info',
+        title: 'Select a Company First',
+        text: 'Please select a company from Company Monitor before accessing Project APIs.',
+        background: '#0f172a', color: '#94a3b8', confirmButtonColor: '#0891b2',
+      });
+    }
+  }
+
+  function handleRequireProject(e: Event) {
+    if (!hasProject) {
+      e.preventDefault();
+      Swal.fire({
+        icon: 'info',
+        title: 'Select a Project First',
+        text: 'Please open a project from Project APIs before accessing this section.',
+        background: '#0f172a', color: '#94a3b8', confirmButtonColor: '#0891b2',
+      });
+    }
+  }
 
   // Session management mount (returns cleanup fn)
   onMount(() => {
@@ -335,171 +377,163 @@
             : 'pr-1'} hide-scrollbar"
         >
           <a
-            href={!selectedProjectId || selectedProjectId === "undefined"
-              ? "/dashboard"
-              : `/dashboard/projects/${selectedProjectId}`}
+            href="/dashboard/companies"
             on:click={() => (isMobileMenuOpen = false)}
+            title="Company Monitor"
+            class="w-full flex items-center group/navitem {isSidebarCollapsed
+              ? 'justify-center px-0'
+              : 'justify-between px-3'} py-3 rounded-xl text-sm font-semibold transition-all {currentPath.startsWith(
+            '/dashboard/companies',
+          )
+              ? 'bg-cyan-900/30 border border-cyan-500/50 text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.15)]'
+              : 'text-slate-400 hover:bg-slate-800/80 hover:text-cyan-400 border border-transparent'}"
+          >
+            <div class="flex items-center gap-3">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                class="transition-colors {currentPath.startsWith('/dashboard/companies')
+                  ? 'text-cyan-400'
+                  : 'text-slate-500 group-hover/navitem:text-cyan-400'}"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                ><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg
+              >
+              {#if !isSidebarCollapsed}<span>Company Monitor</span>{/if}
+            </div>
+          </a>
+
+          <!-- Project APIs Link — Level 2: requires Company -->
+          <a
+            href={hasCompany ? `/dashboard/companies/${selectedCompanyId}` : '#'}
+            on:click={(e) => { isMobileMenuOpen = false; handleRequireCompany(e); }}
             title="Project APIs"
             class="w-full flex items-center group/navitem {isSidebarCollapsed
               ? 'justify-center px-0'
-              : 'justify-between px-3'} py-3 rounded-xl text-sm font-semibold transition-all {currentPath ===
-            '/dashboard'
-              ? 'bg-cyan-900/30 border border-cyan-500/50 text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.15)]'
-              : 'text-slate-400 hover:bg-slate-800/80 hover:text-cyan-400 border border-transparent'}"
+              : 'justify-between px-3'} py-3 rounded-xl text-sm font-semibold transition-all
+              {!hasCompany
+                ? 'opacity-40 cursor-not-allowed border border-transparent text-slate-500'
+                : currentPath === '/dashboard' || currentPath.startsWith('/dashboard/projects') || currentPath.startsWith('/dashboard/companies/')
+                  ? 'bg-cyan-900/30 border border-cyan-500/50 text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.15)]'
+                  : 'text-slate-400 hover:bg-slate-800/80 hover:text-cyan-400 border border-transparent'}"
           >
             <div class="flex items-center gap-3">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                class="transition-colors {currentPath === '/dashboard'
-                  ? 'text-cyan-400'
-                  : 'text-slate-500 group-hover/navitem:text-cyan-400'}"
-                stroke="currentColor"
-                stroke-width="2.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                ><rect x="3" y="3" width="7" height="9" rx="1" /><rect
-                  x="14"
-                  y="3"
-                  width="7"
-                  height="5"
-                  rx="1"
-                /><rect x="14" y="12" width="7" height="9" rx="1" /><rect
-                  x="3"
-                  y="16"
-                  width="7"
-                  height="5"
-                  rx="1"
-                /></svg
-              >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                class="transition-colors {currentPath === '/dashboard' || currentPath.startsWith('/dashboard/projects') || currentPath.startsWith('/dashboard/companies/')
+                  ? 'text-cyan-400' : 'text-slate-500 group-hover/navitem:text-cyan-400'}"
+                stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+              ><rect x="3" y="3" width="7" height="9" rx="1" /><rect x="14" y="3" width="7" height="5" rx="1" /><rect x="14" y="12" width="7" height="9" rx="1" /><rect x="3" y="16" width="7" height="5" rx="1" /></svg>
               {#if !isSidebarCollapsed}<span>Project APIs</span>{/if}
             </div>
-          </a>
-
-          <!-- Open APIs Link -->
-          <a
-            href={`/dashboard/apis?project_id=${selectedProjectId}`}
-            on:click={() => (isMobileMenuOpen = false)}
-            title="Open APIs"
-            class="w-full flex items-center group/navitem {isSidebarCollapsed
-              ? 'justify-center px-0 relative'
-              : 'justify-between px-3'} py-3 rounded-xl text-sm font-semibold transition-all {currentPath ===
-            '/dashboard/apis'
-              ? 'bg-cyan-900/30 border border-cyan-500/50 text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.15)]'
-              : 'text-slate-400 hover:bg-slate-800/80 hover:text-cyan-400 border border-transparent'}"
-          >
-            <div class="flex items-center gap-3">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                class="transition-colors {currentPath === '/dashboard/apis'
-                  ? 'text-cyan-400'
-                  : 'text-slate-500 group-hover/navitem:text-cyan-400'}"
-                stroke="currentColor"
-                stroke-width="2.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                ><polyline points="16 18 22 12 16 6" /><polyline
-                  points="8 6 2 12 8 18"
-                /></svg
-              >
-              {#if !isSidebarCollapsed}<span>Open APIs</span>{/if}
-            </div>
-            {#if !isSidebarCollapsed}
-              <span
-                class="bg-cyan-500/20 border border-cyan-500/50 text-cyan-300 text-[10px] font-bold px-2 py-0.5 rounded-md shadow-[0_0_10px_rgba(6,182,212,0.2)]"
-                >{apiCount}</span
-              >
-            {:else}
-              <span
-                class="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-cyan-400 border border-slate-900 rounded-full shadow-[0_0_10px_rgba(6,182,212,0.8)]"
-              ></span>
+            {#if !isSidebarCollapsed && !hasCompany}
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-600 shrink-0">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
             {/if}
           </a>
 
-          <!-- Status Live Link -->
+          <!-- Indent marker for Level 3 items -->
+          <div class="{isSidebarCollapsed ? '' : 'ml-3 pl-3 border-l border-slate-700/60'} space-y-0.5">
+
+          <!-- Open APIs Link — Level 3: requires Project -->
           <a
-            href={`/dashboard/status?project_id=${selectedProjectId}`}
-            on:click={() => (isMobileMenuOpen = false)}
+            href={hasProject ? `/dashboard/apis?project_id=${selectedProjectId}` : '#'}
+            on:click={(e) => { isMobileMenuOpen = false; handleRequireProject(e); }}
+            title="Open APIs"
+            class="w-full flex items-center group/navitem {isSidebarCollapsed
+              ? 'justify-center px-0 relative'
+              : 'justify-between px-3'} py-2.5 rounded-xl text-sm font-semibold transition-all
+              {!hasProject
+                ? 'opacity-40 cursor-not-allowed border border-transparent text-slate-500'
+                : currentPath === '/dashboard/apis'
+                  ? 'bg-cyan-900/30 border border-cyan-500/50 text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.15)]'
+                  : 'text-slate-400 hover:bg-slate-800/80 hover:text-cyan-400 border border-transparent'}"
+          >
+            <div class="flex items-center gap-3">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                class="transition-colors {currentPath === '/dashboard/apis' ? 'text-cyan-400' : 'text-slate-500 group-hover/navitem:text-cyan-400'}"
+                stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+              ><polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" /></svg>
+              {#if !isSidebarCollapsed}<span>Open APIs</span>{/if}
+            </div>
+            {#if !isSidebarCollapsed}
+              {#if !hasProject}
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-600 shrink-0">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+              {:else}
+                <span class="bg-cyan-500/20 border border-cyan-500/50 text-cyan-300 text-[10px] font-bold px-2 py-0.5 rounded-md">{apiCount}</span>
+              {/if}
+            {:else}
+              {#if hasProject}
+                <span class="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-cyan-400 border border-slate-900 rounded-full shadow-[0_0_10px_rgba(6,182,212,0.8)]"></span>
+              {/if}
+            {/if}
+          </a>
+
+          <!-- Status Live Link — Level 3: requires Project -->
+          <a
+            href={hasProject ? `/dashboard/status?project_id=${selectedProjectId}` : '#'}
+            on:click={(e) => { isMobileMenuOpen = false; handleRequireProject(e); }}
             title="Status Live"
             class="w-full flex items-center group/navitem {isSidebarCollapsed
               ? 'justify-center px-0'
-              : 'justify-between px-3'} py-3 rounded-xl text-sm font-semibold transition-all {currentPath ===
-            '/dashboard/status'
-              ? 'bg-cyan-900/30 border border-cyan-500/50 text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.15)]'
-              : 'text-slate-400 hover:bg-slate-800/80 hover:text-cyan-400 border border-transparent'}"
+              : 'justify-between px-3'} py-2.5 rounded-xl text-sm font-semibold transition-all
+              {!hasProject
+                ? 'opacity-40 cursor-not-allowed border border-transparent text-slate-500'
+                : currentPath === '/dashboard/status'
+                  ? 'bg-cyan-900/30 border border-cyan-500/50 text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.15)]'
+                  : 'text-slate-400 hover:bg-slate-800/80 hover:text-cyan-400 border border-transparent'}"
           >
             <div class="flex items-center gap-3">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                class="transition-colors {currentPath === '/dashboard/status'
-                  ? 'text-cyan-400'
-                  : 'text-slate-500 group-hover/navitem:text-cyan-400'}"
-                stroke="currentColor"
-                stroke-width="2.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                ><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"
-                ></polyline></svg
-              >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                class="transition-colors {currentPath === '/dashboard/status' ? 'text-cyan-400' : 'text-slate-500 group-hover/navitem:text-cyan-400'}"
+                stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+              ><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
               {#if !isSidebarCollapsed}<span>Status Live</span>{/if}
             </div>
+            {#if !isSidebarCollapsed && !hasProject}
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-600 shrink-0">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+            {/if}
           </a>
 
-          <!-- Notification Channels Link -->
+          <!-- Notification Channels Link — Level 3: requires Project -->
           <a
-            href={selectedProjectId && selectedProjectId !== "undefined"
-              ? `/dashboard/projects/${selectedProjectId}/notifications`
-              : "/dashboard"}
-            on:click={(e) => {
-              isMobileMenuOpen = false;
-              handleAlertsClick(e);
-            }}
+            href={hasProject ? `/dashboard/projects/${selectedProjectId}/notifications` : '#'}
+            on:click={(e) => { isMobileMenuOpen = false; handleRequireProject(e); }}
             title="Alerts & Channels"
             class="w-full flex items-center group/navitem {isSidebarCollapsed
               ? 'justify-center px-0'
-              : 'justify-between px-3'} py-3 rounded-xl text-sm font-semibold transition-all {currentPath.includes(
-              'notifications',
-            )
-              ? 'bg-amber-900/30 border border-amber-500/50 text-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.15)]'
-              : 'text-slate-400 hover:bg-slate-800/80 hover:text-amber-400 border border-transparent'}"
+              : 'justify-between px-3'} py-2.5 rounded-xl text-sm font-semibold transition-all
+              {!hasProject
+                ? 'opacity-40 cursor-not-allowed border border-transparent text-slate-500'
+                : currentPath.includes('notifications')
+                  ? 'bg-amber-900/30 border border-amber-500/50 text-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.15)]'
+                  : 'text-slate-400 hover:bg-slate-800/80 hover:text-amber-400 border border-transparent'}"
           >
             <div class="flex items-center gap-3">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                class="transition-colors {currentPath.includes('notifications')
-                  ? 'text-amber-400'
-                  : 'text-slate-500 group-hover/navitem:text-amber-400'}"
-                stroke="currentColor"
-                stroke-width="2.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                ><path
-                  d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
-                ></path><line x1="12" y1="9" x2="12" y2="13"></line><line
-                  x1="12"
-                  y1="17"
-                  x2="12.01"
-                  y2="17"
-                ></line></svg
-              >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                class="transition-colors {currentPath.includes('notifications') ? 'text-amber-400' : 'text-slate-500 group-hover/navitem:text-amber-400'}"
+                stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+              ><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
               {#if !isSidebarCollapsed}<span>Alerts & Channels</span>{/if}
             </div>
+            {#if !isSidebarCollapsed && !hasProject}
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-600 shrink-0">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+            {/if}
           </a>
+
+          </div><!-- end Level 3 indent -->
+
 
           {#if user.role === "admin"}
             <div class="pt-4 pb-1">

@@ -466,3 +466,56 @@ func UploadPostmanCollection(c *fiber.Ctx) error {
 		"count":   len(parsedAPIs),
 	})
 }
+
+// PauseAPI allows a user to pause monitoring for a specific endpoint temporarily
+func PauseAPI(c *fiber.Ctx) error {
+	apiID := c.Params("id")
+	userID := c.Locals("user_id").(uint)
+	role := c.Locals("role").(string)
+
+	var api models.API
+	if err := database.DB.First(&api, apiID).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "API not found"})
+	}
+
+	var project models.Project
+	if err := database.DB.Select("user_id").First(&project, api.ProjectID).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Associated project not found"})
+	}
+
+	// Verify project ownership
+	if role != "admin" && project.UserID != userID {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Unauthorized to modify this API"})
+	}
+
+	type PauseInput struct {
+		PauseHours float64 `json:"pause_hours"`
+	}
+	var input PauseInput
+	if err := c.BodyParser(&input); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
+	}
+
+	var baseAPI models.API
+	database.DB.First(&baseAPI, apiID)
+	
+	if input.PauseHours > 0 {
+		pausedTime := time.Now().Add(time.Duration(input.PauseHours * float64(time.Hour)))
+		baseAPI.PausedUntil = &pausedTime
+	} else if input.PauseHours < 0 {
+		// Indefinite pause — set to a far future date
+		indefinite := time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
+		baseAPI.PausedUntil = &indefinite
+	} else {
+		baseAPI.PausedUntil = nil
+	}
+
+	if err := database.DB.Save(&baseAPI).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update API pause status"})
+	}
+
+	return c.JSON(fiber.Map{
+		"message":      "API pause status updated successfully",
+		"paused_until": baseAPI.PausedUntil,
+	})
+}

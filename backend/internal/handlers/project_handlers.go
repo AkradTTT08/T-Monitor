@@ -17,6 +17,7 @@ type ProjectInput struct {
 	EnvironmentVariables string `json:"environment_variables"`
 	CoverImageURL        string `json:"cover_image_url"`
 	CoverPosition        int    `json:"cover_position"`
+	CompanyID            *uint  `json:"company_id"`
 }
 
 func UploadProjectCover(c *fiber.Ctx) error {
@@ -98,6 +99,7 @@ func CreateProject(c *fiber.Ctx) error {
 		EnvironmentVariables: input.EnvironmentVariables,
 		CoverPosition:        input.CoverPosition,
 		UserID:               userID,
+		CompanyID:            input.CompanyID,
 	}
 
 	if c.Locals("is_dry_run") == true {
@@ -184,6 +186,7 @@ func UpdateProject(c *fiber.Ctx) error {
 	project.Description = input.Description
 	project.EnvironmentVariables = input.EnvironmentVariables
 	project.CoverPosition = input.CoverPosition
+	project.CompanyID = input.CompanyID
 
 	database.DB.Save(&project)
 

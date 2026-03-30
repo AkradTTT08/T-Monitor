@@ -45,6 +45,7 @@ func ConnectDB() {
 	log.Println("Database connection successfully opened")
 	
 	err = db.AutoMigrate(
+		&models.Company{},
 		&models.User{},
 		&models.Project{},
 		&models.API{},

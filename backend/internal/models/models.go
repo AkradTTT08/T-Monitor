@@ -6,6 +6,18 @@ import (
 	"gorm.io/gorm"
 )
 
+// Company represents a business entity that groups multiple projects
+type Company struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	Name        string    `gorm:"not null" json:"name"`
+	Description string    `json:"description"`
+	LogoURL     string    `gorm:"type:text" json:"logo_url"`
+	UserID      uint      `gorm:"not null" json:"user_id"`
+	Projects    []Project `gorm:"foreignKey:CompanyID" json:"projects,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
 // User represents an administrator or standard user in the system
 type User struct {
 	ID              uint      `gorm:"primaryKey" json:"id"`
@@ -33,6 +45,7 @@ type Project struct {
 	CoverImageURL        string               `gorm:"type:text" json:"cover_image_url"`
 	CoverPosition        int                  `gorm:"default:50" json:"cover_position"`
 	UserID               uint                 `gorm:"not null" json:"user_id"`
+	CompanyID            *uint                `json:"company_id"`
 	APIs                 []API                `gorm:"foreignKey:ProjectID" json:"apis,omitempty"`
 	NotificationConfigs  []NotificationConfig `gorm:"foreignKey:ProjectID" json:"notification_configs,omitempty"`
 	CreatedAt            time.Time            `json:"created_at"`
@@ -55,6 +68,7 @@ type API struct {
 	ScheduleConfig     string         `gorm:"type:text" json:"schedule_config"` // JSON Schedule settings mapping n8n
 	OrderIndex         int            `gorm:"default:0" json:"order_index"`
 	IsActive           bool           `gorm:"default:true" json:"is_active"`
+	PausedUntil        *time.Time     `json:"paused_until"` // Added for pause feature
 	Logs               []MonitorLog   `gorm:"foreignKey:ApiID" json:"logs,omitempty"`
 	CreatedAt          time.Time      `json:"created_at"`
 	UpdatedAt          time.Time      `json:"updated_at"`
