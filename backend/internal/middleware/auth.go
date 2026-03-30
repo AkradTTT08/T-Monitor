@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -65,8 +66,21 @@ func Protected() fiber.Handler {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Could not parse claims"})
 		}
 
-		userID := claims["user_id"].(float64)
-		role := claims["role"].(string)
+		fmt.Printf(">>> JWT Claims: %v\n", claims)
+
+		userID, ok := claims["user_id"].(float64)
+		if !ok {
+			fmt.Printf(">>> ERROR: user_id claim is NOT float64 but %T\n", claims["user_id"])
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid user_id in token"})
+		}
+		
+		role, ok := claims["role"].(string)
+		if !ok {
+			fmt.Printf(">>> ERROR: role claim is NOT string but %T\n", claims["role"])
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid role in token"})
+		}
+
+		fmt.Printf(">>> Auth Success: userID=%v, role=%s\n", userID, role)
 
 		c.Locals("user_id", uint(userID))
 		c.Locals("role", role)

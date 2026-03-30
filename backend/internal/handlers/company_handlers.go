@@ -73,9 +73,15 @@ func UpdateCompany(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Company not found or unauthorized"})
 	}
 
-	company.Name = input.Name
-	company.Description = input.Description
-	database.DB.Save(&company)
+	// Use Updates with a map to avoid overwriting LogoURL
+	updateData := map[string]interface{}{
+		"name":        input.Name,
+		"description": input.Description,
+	}
+
+	if err := database.DB.Model(&company).Updates(updateData).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update company"})
+	}
 
 	return c.JSON(company)
 }
@@ -95,8 +101,8 @@ func DeleteCompany(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Company not found or unauthorized"})
 	}
 
-	// Disassociate projects (set company_id to null) instead of deleting them
-	database.DB.Model(&models.Project{}).Where("company_id = ?", company.ID).Update("company_id", nil)
+	// Soft-delete projects associated with the company
+	database.DB.Where("company_id = ?", company.ID).Delete(&models.Project{})
 
 	database.DB.Delete(&company)
 
@@ -104,9 +110,17 @@ func DeleteCompany(c *fiber.Ctx) error {
 }
 
 func UploadCompanyLogo(c *fiber.Ctx) error {
+	fmt.Println(">>> Starting UploadCompanyLogo")
 	id := c.Params("id")
-	userID := c.Locals("user_id").(uint)
-	role := c.Locals("role").(string)
+	fmt.Printf(">>> ID: %s\n", id)
+
+	rawUserID := c.Locals("user_id")
+	fmt.Printf(">>> Raw UserID: %v\n", rawUserID)
+	userID := rawUserID.(uint)
+
+	rawRole := c.Locals("role")
+	fmt.Printf(">>> Raw Role: %v\n", rawRole)
+	role := rawRole.(string)
 
 	var company models.Company
 	query := database.DB
@@ -142,8 +156,11 @@ func UploadCompanyLogo(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to save file"})
 	}
 
+	// Update DB - only the logo_url field
 	company.LogoURL = "/uploads/companies/" + filename
-	database.DB.Save(&company)
+	if err := database.DB.Model(&company).Update("logo_url", company.LogoURL).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update database"})
+	}
 
 	return c.JSON(fiber.Map{
 		"message":  "Logo uploaded successfully",

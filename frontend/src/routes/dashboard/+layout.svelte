@@ -10,11 +10,13 @@
   let selectedProjectId = "";
   let selectedCompanyId = ""; // Level 1: must select a company first
 
+  $: currentPath = $page.url.pathname;
+
   // Listen to page changes to auto-select the right project/company ID
   $: {
     if ($page.params.id) {
       // Company route: /dashboard/companies/[id]
-      if (currentPath.startsWith('/dashboard/companies/')) {
+      if (currentPath.startsWith("/dashboard/companies/")) {
         selectedCompanyId = $page.params.id;
         if (typeof window !== "undefined") {
           localStorage.setItem("monitor_selected_company", selectedCompanyId);
@@ -26,6 +28,13 @@
           localStorage.setItem("monitor_selected_project", selectedProjectId);
         }
       }
+    } else if (currentPath === "/dashboard/companies") {
+      selectedCompanyId = "";
+      selectedProjectId = "";
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("monitor_selected_company");
+        localStorage.removeItem("monitor_selected_project");
+      }
     }
   }
 
@@ -33,6 +42,30 @@
     (p) => p.id.toString() === selectedProjectId,
   );
   $: apiCount = selectedProject?.apis?.length || 0;
+
+  // Derive the most accurate company ID: from URL param, localStorage, or the selected project's company
+  $: effectiveCompanyId = (() => {
+    // If we're on a project route, the project's company context should lead
+    if (selectedProject?.company_id) return selectedProject.company_id.toString();
+    // Fallback to explicitly selected company
+    if (selectedCompanyId && selectedCompanyId !== "undefined") return selectedCompanyId;
+    return "";
+  })();
+
+  // Keep selectedCompanyId in sync when a project is active
+  $: if (selectedProject?.company_id) {
+    const cid = selectedProject.company_id.toString();
+    if (selectedCompanyId !== cid) {
+      selectedCompanyId = cid;
+      if (typeof window !== "undefined") {
+        localStorage.setItem("monitor_selected_company", cid);
+      }
+    }
+  }
+
+  $: filteredProjects = effectiveCompanyId
+    ? projects.filter((p) => p.company_id?.toString() === effectiveCompanyId)
+    : [];
 
   function handleProjectChange(e: Event) {
     const target = e.target as HTMLSelectElement;
@@ -50,8 +83,6 @@
   let isMobileMenuOpen = false;
   let isSidebarCollapsed = false;
   let showHelpModal = false;
-
-  $: currentPath = $page.url.pathname;
 
   let showProfileMenu = false;
 
@@ -410,27 +441,27 @@
 
           <!-- Project APIs Link — Level 2: requires Company -->
           <a
-            href={hasCompany ? `/dashboard/companies/${selectedCompanyId}` : '#'}
-            on:click={(e) => { isMobileMenuOpen = false; handleRequireCompany(e); }}
+            href={effectiveCompanyId ? `/dashboard/companies/${effectiveCompanyId}` : '#'}
+            on:click={(e) => { isMobileMenuOpen = false; if (!effectiveCompanyId) { e.preventDefault(); handleRequireCompany(e); } }}
             title="Project APIs"
             class="w-full flex items-center group/navitem {isSidebarCollapsed
               ? 'justify-center px-0'
               : 'justify-between px-3'} py-3 rounded-xl text-sm font-semibold transition-all
-              {!hasCompany
+              {!effectiveCompanyId
                 ? 'opacity-40 cursor-not-allowed border border-transparent text-slate-500'
-                : currentPath === '/dashboard' || currentPath.startsWith('/dashboard/projects') || currentPath.startsWith('/dashboard/companies/')
+                : currentPath.startsWith('/dashboard/projects') || currentPath.startsWith('/dashboard/companies/')
                   ? 'bg-cyan-900/30 border border-cyan-500/50 text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.15)]'
                   : 'text-slate-400 hover:bg-slate-800/80 hover:text-cyan-400 border border-transparent'}"
           >
             <div class="flex items-center gap-3">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
-                class="transition-colors {currentPath === '/dashboard' || currentPath.startsWith('/dashboard/projects') || currentPath.startsWith('/dashboard/companies/')
+                class="transition-colors {currentPath.startsWith('/dashboard/projects') || currentPath.startsWith('/dashboard/companies/')
                   ? 'text-cyan-400' : 'text-slate-500 group-hover/navitem:text-cyan-400'}"
                 stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
               ><rect x="3" y="3" width="7" height="9" rx="1" /><rect x="14" y="3" width="7" height="5" rx="1" /><rect x="14" y="12" width="7" height="9" rx="1" /><rect x="3" y="16" width="7" height="5" rx="1" /></svg>
               {#if !isSidebarCollapsed}<span>Project APIs</span>{/if}
             </div>
-            {#if !isSidebarCollapsed && !hasCompany}
+            {#if !isSidebarCollapsed && !effectiveCompanyId}
               <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-600 shrink-0">
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
               </svg>
@@ -595,9 +626,9 @@
               {/if}
 
               <!-- Dynamic Project List -->
-              {#if projects.length > 0}
+              {#if filteredProjects.length > 0}
                 <div class="space-y-0.5">
-                  {#each projects as project}
+                  {#each filteredProjects as project}
                     {@const isActive =
                       currentPath.startsWith(
                         `/dashboard/projects/${project.id}`,

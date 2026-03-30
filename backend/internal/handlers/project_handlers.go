@@ -21,9 +21,17 @@ type ProjectInput struct {
 }
 
 func UploadProjectCover(c *fiber.Ctx) error {
+	fmt.Println(">>> Starting UploadProjectCover")
 	id := c.Params("id")
-	userID := c.Locals("user_id").(uint)
-	role := c.Locals("role").(string)
+	fmt.Printf(">>> ID: %s\n", id)
+	
+	rawUserID := c.Locals("user_id")
+	fmt.Printf(">>> Raw UserID: %v\n", rawUserID)
+	userID := rawUserID.(uint)
+	
+	rawRole := c.Locals("role")
+	fmt.Printf(">>> Raw Role: %v\n", rawRole)
+	role := rawRole.(string)
 
 	var project models.Project
 	query := database.DB
@@ -32,26 +40,31 @@ func UploadProjectCover(c *fiber.Ctx) error {
 	}
 
 	if err := query.First(&project, id).Error; err != nil {
+		fmt.Printf(">>> Project not found: %v\n", err)
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Project not found or unauthorized"})
 	}
+	fmt.Println(">>> Project loaded")
 
 	file, err := c.FormFile("cover")
 	if err != nil {
+		fmt.Printf(">>> FormFile error: %v\n", err)
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "No file uploaded"})
 	}
+	fmt.Printf(">>> File received: %s, Size: %d\n", file.Filename, file.Size)
 
 	// Get absolute path for upload directory
 	uploadDir, err := filepath.Abs("./uploads/projects")
 	if err != nil {
-		fmt.Printf("Error getting absolute path: %v\n", err)
+		fmt.Printf(">>> filepath.Abs error: %v\n", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Internal server error: path resolution failed"})
 	}
+	fmt.Printf(">>> Upload dir: %s\n", uploadDir)
 
 	// Create directory if not exists
 	if _, err := os.Stat(uploadDir); os.IsNotExist(err) {
-		fmt.Printf("Creating uploads directory: %s\n", uploadDir)
+		fmt.Printf(">>> Creating directory: %s\n", uploadDir)
 		if err := os.MkdirAll(uploadDir, 0755); err != nil {
-			fmt.Printf("Error creating directory: %v\n", err)
+			fmt.Printf(">>> MkdirAll error: %v\n", err)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create upload directory"})
 		}
 	}
@@ -69,10 +82,12 @@ func UploadProjectCover(c *fiber.Ctx) error {
 
 	fmt.Printf("✅ File saved successfully: %s\n", savePath)
 
-	// Update DB
+	// Update DB - only the cover_image_url field to be safe
 	project.CoverImageURL = "/uploads/projects/" + filename
-	// Default position 50 if not set, but we usually want to keep it if it exists
-	database.DB.Save(&project)
+	if err := database.DB.Model(&project).Update("cover_image_url", project.CoverImageURL).Error; err != nil {
+		fmt.Printf("❌ Failed to update database for Project ID %d: %v\n", project.ID, err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update database"})
+	}
 
 	return c.JSON(fiber.Map{
 		"message":         "Cover image uploaded successfully",
@@ -181,14 +196,18 @@ func UpdateProject(c *fiber.Ctx) error {
 	if input.EnvironmentVariables == "" {
 		input.EnvironmentVariables = "{}"
 	}
+	// Use Updates with a map to only update specific fields, avoiding overwriting LogoURL/CoverImageURL
+	updateData := map[string]interface{}{
+		"name":                  input.Name,
+		"description":           input.Description,
+		"environment_variables": input.EnvironmentVariables,
+		"cover_position":        input.CoverPosition,
+		"company_id":            input.CompanyID,
+	}
 
-	project.Name = input.Name
-	project.Description = input.Description
-	project.EnvironmentVariables = input.EnvironmentVariables
-	project.CoverPosition = input.CoverPosition
-	project.CompanyID = input.CompanyID
-
-	database.DB.Save(&project)
+	if err := database.DB.Model(&project).Updates(updateData).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update project"})
+	}
 
 	return c.JSON(project)
 }
@@ -208,14 +227,16 @@ func DeleteProject(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Project not found or unauthorized"})
 	}
 
-	// Delete child API logs first (requires joined delete or subquery, but easier to use a subquery)
-	database.DB.Exec("DELETE FROM monitor_logs WHERE api_id IN (SELECT id FROM apis WHERE project_id = ?)", project.ID)
+	// Soft-delete child API logs
+	database.DB.Where("api_id IN (SELECT id FROM apis WHERE project_id = ?)", project.ID).Delete(&models.MonitorLog{})
 
-	// Delete child Records to satisfy foreign key constraints
-	database.DB.Unscoped().Where("project_id = ?", project.ID).Delete(&models.API{})
-	database.DB.Unscoped().Where("project_id = ?", project.ID).Delete(&models.NotificationConfig{})
+	// Soft-delete child Records
+	database.DB.Where("project_id = ?", project.ID).Delete(&models.API{})
+	// NotificationConfig doesn't have Soft Delete yet, but let's be consistent or add it later. 
+	// For now, keep hard delete for configs if they don't have DeletedAt, or just regular Delete.
+	database.DB.Where("project_id = ?", project.ID).Delete(&models.NotificationConfig{})
 
-	database.DB.Unscoped().Delete(&project)
+	database.DB.Delete(&project)
 
 	return c.JSON(fiber.Map{"message": "Project deleted successfully"})
 }

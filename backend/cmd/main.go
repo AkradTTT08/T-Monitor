@@ -7,6 +7,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/joho/godotenv"
 	"github.com/monitor-api/backend/internal/database"
 	"github.com/monitor-api/backend/internal/handlers"
@@ -26,12 +27,16 @@ func main() {
 	// Start Monitoring Worker
 	workers.StartHealthCheckWorker()
 
-	app := fiber.New()
+	app := fiber.New(fiber.Config{
+		BodyLimit: 50 * 1024 * 1024, // 50 MB limit for file uploads
+	})
 
 	// Middleware
+	app.Use(recover.New())
 	app.Use(logger.New())
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "*", // Adjust for production security
+		AllowOrigins: "*",
+		AllowMethods: "GET,POST,PUT,DELETE,OPTIONS,PATCH",
 		AllowHeaders: "Origin, Content-Type, Accept, Authorization, X-Health-Check",
 	}))
 	app.Use(middleware.TestDryRunMiddleware())

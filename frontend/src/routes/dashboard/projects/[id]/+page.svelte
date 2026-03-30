@@ -8,6 +8,7 @@
   import TextareaWithVariables from "$lib/components/TextareaWithVariables.svelte";
 
   $: projectId = $page.params.id;
+  $: backUrl = $page.url.searchParams.get('back') || '/dashboard';
 
   let project: any = null;
   let apis: any[] = [];
@@ -1018,7 +1019,7 @@
         <div class="min-w-0">
           <div class="flex items-center gap-3 mb-2">
             <a
-              href="/dashboard"
+              href={backUrl}
               class="text-cyan-500/80 hover:text-cyan-400 transition-colors shrink-0"
             >
               <svg

@@ -52,6 +52,7 @@ func ConnectDB() {
 		&models.API{},
 		&models.MonitorLog{},
 		&models.NotificationConfig{},
+		&models.RepairTask{},
 	)
 
 	if err != nil {

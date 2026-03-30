@@ -17,6 +17,7 @@ type Company struct {
 	Members     []CompanyMember `gorm:"foreignKey:CompanyID" json:"members,omitempty"`
 	CreatedAt   time.Time       `json:"created_at"`
 	UpdatedAt   time.Time       `json:"updated_at"`
+	DeletedAt   gorm.DeletedAt  `gorm:"index" json:"deleted_at"` // Soft delete
 }
 
 // CompanyMember links users to companies they have been invited to
@@ -59,8 +60,10 @@ type Project struct {
 	CompanyID            *uint                `json:"company_id"`
 	APIs                 []API                `gorm:"foreignKey:ProjectID" json:"apis,omitempty"`
 	NotificationConfigs  []NotificationConfig `gorm:"foreignKey:ProjectID" json:"notification_configs,omitempty"`
+	RepairTasks          []RepairTask         `gorm:"foreignKey:ProjectID" json:"repair_tasks,omitempty"`
 	CreatedAt            time.Time            `json:"created_at"`
 	UpdatedAt            time.Time            `json:"updated_at"`
+	DeletedAt            gorm.DeletedAt       `gorm:"index" json:"deleted_at"` // Soft delete
 }
 
 // API represents a single API endpoint to be monitored
@@ -97,6 +100,7 @@ type MonitorLog struct {
 	ResponseBody string    `gorm:"type:text" json:"response_body"`
 	CheckedAt    time.Time `json:"checked_at"`
 	API          *API      `gorm:"foreignKey:ApiID" json:"api,omitempty"`
+	DeletedAt    gorm.DeletedAt `gorm:"index" json:"deleted_at"` // Soft delete
 }
 
 // NotificationConfig stores channel preferences for alerting when an API fails
@@ -116,5 +120,25 @@ type NotificationConfig struct {
 	SmtpPass         string    `json:"smtp_pass"`
 	EnableTicketing  bool      `gorm:"default:false" json:"enable_ticketing"`
 	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	UpdatedAt        time.Time      `json:"updated_at"`
+	DeletedAt        gorm.DeletedAt `gorm:"index" json:"deleted_at"` // Soft delete
+}
+
+// RepairTask represents a ticket created when an API monitoring check fails
+type RepairTask struct {
+	ID           uint           `gorm:"primaryKey" json:"id"`
+	ProjectID    uint           `gorm:"index;not null" json:"project_id"`
+	ApiID        uint           `gorm:"not null" json:"api_id"`
+	API          *API           `gorm:"foreignKey:ApiID" json:"api,omitempty"`
+	Status       string         `gorm:"type:varchar(20);default:'open'" json:"status"` // 'open', 'pending', 'closed', 'failed'
+	ErrorMessage string         `gorm:"type:text" json:"error_message"`
+	Description  string         `gorm:"type:text" json:"description"`  // For 'failed' status or general notes
+	Reason       string         `gorm:"type:text" json:"reason"`       // For 'closed' status
+	DocumentURL  string         `gorm:"type:text" json:"document_url"` // For 'closed' status
+	ApprovedBy   *uint          `json:"approved_by"`
+	ApprovedAt   *time.Time     `json:"approved_at"`
+	ClosedAt     *time.Time     `json:"closed_at"`
+	CreatedAt    time.Time      `json:"created_at"`
+	UpdatedAt    time.Time      `json:"updated_at"`
+	DeletedAt    gorm.DeletedAt `gorm:"index" json:"deleted_at"`
 }

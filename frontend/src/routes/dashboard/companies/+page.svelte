@@ -102,12 +102,26 @@
         body: JSON.stringify({ name: editName, description: editDesc }),
       });
       if (res.ok) {
-        if (editLogoFile) await uploadLogo(editingId, editLogoFile);
-        showEditModal = false;
-        Swal.fire({ icon: "success", title: "Updated", toast: true, position: "top-end", showConfirmButton: false, timer: 2000 });
-        await fetchCompanies();
+        let uploadSuccess = true;
+        if (editLogoFile) {
+          uploadSuccess = await uploadLogo(editingId, editLogoFile);
+        }
+
+        if (uploadSuccess) {
+          showEditModal = false;
+          Swal.fire({ icon: "success", title: "Updated", toast: true, position: "top-end", showConfirmButton: false, timer: 2000 });
+          await fetchCompanies();
+        } else {
+          Swal.fire({ icon: "warning", title: "Partial Update", text: "Company details updated, but logo upload failed.", toast: true, position: "top-end", showConfirmButton: false, timer: 4000 });
+        }
+      } else {
+        const data = await res.json();
+        Swal.fire({ icon: "error", title: "Update Failed", text: data.error || "Failed to update company" });
       }
-    } catch (err) { console.error(err); }
+    } catch (err) { 
+      console.error(err); 
+      Swal.fire({ icon: "error", title: "Error", text: "An error occurred while updating the company." });
+    }
   }
 
   function openDelete(company: any) {
@@ -217,7 +231,7 @@
 
           <!-- Card body -->
           <div class="p-5 flex flex-col flex-1">
-            <div class="flex justify-between items-start mb-3 relative z-10">
+            <div class="flex justify-between items-start mb-3 relative z-20">
               <div class="flex-1 min-w-0 pr-2">
                 <h3 class="text-lg font-bold text-cyan-50 font-mono tracking-wide truncate">{company.name}</h3>
                 <p class="text-slate-400 text-xs mt-0.5 line-clamp-1 font-mono">{company.description || "NO DESCRIPTION"}</p>

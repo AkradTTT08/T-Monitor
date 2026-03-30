@@ -251,7 +251,7 @@
             <span class="text-[10px] font-bold bg-slate-900 border border-slate-700 group-hover:border-cyan-500/30 text-slate-400 group-hover:text-cyan-400 px-3 py-1.5 rounded-md tracking-wider font-mono transition-colors">
               {project.apis?.length || 0} APIs
             </span>
-            <a href={`/dashboard/projects/${project.id}`}
+            <a href={`/dashboard/companies/${companyId}/project/${project.id}`}
               class="text-sm font-bold text-cyan-500 hover:text-cyan-300 flex items-center gap-1.5 font-mono tracking-wider transition-colors">
               ACCESS
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="group-hover:translate-x-1 transition-transform">
@@ -301,6 +301,10 @@
     <div>
       <label for="ep_cover" class="block text-sm font-semibold text-cyan-50 mb-1">Update Cover</label>
       <input id="ep_cover" type="file" accept="image/*" on:change={(e) => (editCoverFile = (e.target as HTMLInputElement).files?.[0] || null)} class="w-full px-4 py-2 rounded-xl border border-slate-700/50 bg-slate-900/60 text-cyan-50/70 text-xs" />
+    </div>
+    <div class="space-y-1">
+      <label for="ep_pos" class="block text-sm font-semibold text-cyan-50">Position Adjustment (Vertical: {editProjectCoverPos}%)</label>
+      <input id="ep_pos" type="range" min="0" max="100" bind:value={editProjectCoverPos} class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500" />
     </div>
     <div class="pt-2 flex gap-3">
       <button type="button" on:click={() => (showEditModal = false)} class="flex-1 px-4 py-2.5 rounded-xl font-semibold text-slate-400 bg-slate-800 hover:bg-slate-700 transition-colors text-sm">Cancel</button>
