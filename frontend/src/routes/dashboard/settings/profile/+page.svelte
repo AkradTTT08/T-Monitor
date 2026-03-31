@@ -1,6 +1,7 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import Swal from "sweetalert2";
+    import { systemAlert, systemToast } from "$lib/swal-design";
     import { API_BASE_URL } from "$lib/config";
 
     let user = {
@@ -56,13 +57,13 @@
             const file = target.files[0];
 
             if (file.size > 2 * 1024 * 1024) {
-                Swal.fire("Error", "Image size exceeds 2MB limit", "error");
+                systemAlert.fire("Error", "Image size exceeds 2MB limit", "error");
                 return;
             }
 
             const validTypes = ["image/jpeg", "image/png", "image/jpg"];
             if (!validTypes.includes(file.type)) {
-                Swal.fire(
+                systemAlert.fire(
                     "Error",
                     "Only .jpg, .jpeg, and .png are allowed",
                     "error",
@@ -153,16 +154,14 @@
                     new CustomEvent("user-updated", { detail: storedUser }),
                 );
 
-                Swal.fire({
+                systemToast.fire({
                     icon: "success",
                     title: "Profile Updated",
                     text: "Your profile information has been saved.",
-                    timer: 2000,
-                    showConfirmButton: false,
                 });
             } else {
                 const err = await res.json();
-                Swal.fire(
+                systemAlert.fire(
                     "Error",
                     err.error || "Failed to update profile",
                     "error",
@@ -170,7 +169,7 @@
             }
         } catch (err) {
             console.error(err);
-            Swal.fire("Error", "A network error occurred.", "error");
+            systemAlert.fire("Error", "A network error occurred.", "error");
         } finally {
             isProfileLoading = false;
         }
@@ -178,7 +177,7 @@
 
     async function handleUpdatePassword() {
         if (passwords.new !== passwords.confirm) {
-            Swal.fire("Error", "New passwords do not match.", "error");
+            systemAlert.fire("Error", "New passwords do not match.", "error");
             return;
         }
 
@@ -186,7 +185,7 @@
             .filter((r) => !r.valid)
             .map((r) => r.label);
         if (pwdErrors.length > 0) {
-            Swal.fire(
+            systemAlert.fire(
                 "Password too weak",
                 "Password must contain: " + pwdErrors.join(", "),
                 "error",
@@ -213,17 +212,15 @@
             );
 
             if (res.ok) {
-                Swal.fire({
+                systemToast.fire({
                     icon: "success",
                     title: "Password Updated",
                     text: "Your password has been changed successfully.",
-                    timer: 2000,
-                    showConfirmButton: false,
                 });
                 passwords = { current: "", new: "", confirm: "" };
             } else {
                 const err = await res.json();
-                Swal.fire(
+                systemAlert.fire(
                     "Error",
                     err.error || "Failed to update password",
                     "error",
@@ -231,7 +228,7 @@
             }
         } catch (err) {
             console.error(err);
-            Swal.fire("Error", "A network error occurred.", "error");
+            systemAlert.fire("Error", "A network error occurred.", "error");
         } finally {
             isPasswordLoading = false;
         }

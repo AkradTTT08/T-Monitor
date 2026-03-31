@@ -4,29 +4,76 @@
   import Modal from "$lib/components/Modal.svelte";
   import { API_BASE_URL } from "$lib/config";
   import Swal from "sweetalert2";
+  import { systemAlert, systemToast } from "$lib/swal-design";
 
-  let companies: any[] = [];
-  let isLoading = true;
+  let companies = $state<any[]>([]);
+  let isLoading = $state(true);
 
   // Create modal
-  let showCreateModal = false;
-  let newCompanyName = "";
-  let newCompanyDesc = "";
-  let newLogoFile: File | null = null;
+  let showCreateModal = $state(false);
+  let newCompanyName = $state("");
+  let newCompanyDesc = $state("");
+  let newLogoFile = $state<File | null>(null);
 
   // Edit modal
-  let showEditModal = false;
-  let editingId = 0;
-  let editName = "";
-  let editDesc = "";
-  let editLogoFile: File | null = null;
+  let showEditModal = $state(false);
+  let editingId = $state(0);
+  let editName = $state("");
+  let editDesc = $state("");
+  let editLogoFile = $state<File | null>(null);
 
   // Delete modal
-  let showDeleteModal = false;
-  let deletingId = 0;
-  let deletingName = "";
+  let showDeleteModal = $state(false);
+  let deletingId = $state(0);
+  let deletingName = $state("");
 
-  let activeDropdownId: number | null = null;
+  let activeDropdownId = $state<number | null>(null);
+  let showInviteModal = $state(false);
+  let invitingCompanyId = $state(0);
+  let invitingCompanyName = $state("");
+  let inviteEmail = $state("");
+  let isInviting = $state(false);
+  let userSuggestions = $state<any[]>([]);
+  let showSuggestions = $state(false);
+  let searchTimeout: any;
+
+  // Member list modal
+  let showMembersModal = $state(false);
+  let viewingMembersCompany = $state<any>(null);
+
+  async function handleSearchUsers(e: Event) {
+    const q = (e.target as HTMLInputElement).value;
+    inviteEmail = q;
+    
+    if (searchTimeout) clearTimeout(searchTimeout);
+    
+    if (q.length < 2) {
+      userSuggestions = [];
+      showSuggestions = false;
+      return;
+    }
+
+    searchTimeout = setTimeout(async () => {
+      try {
+        const token = localStorage.getItem("monitor_token");
+        const res = await fetch(`${API_BASE_URL}/api/v1/users/search?q=${encodeURIComponent(q)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          userSuggestions = await res.json();
+          showSuggestions = userSuggestions.length > 0;
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }, 300);
+  }
+
+  function selectUser(user: any) {
+    inviteEmail = user.email;
+    showSuggestions = false;
+    userSuggestions = [];
+  }
 
   function toggleDropdown(id: number, e: Event) {
     e.stopPropagation();
@@ -44,7 +91,9 @@
       const res = await fetch(`${API_BASE_URL}/api/v1/companies`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) companies = await res.json();
+      if (res.ok) {
+        companies = await res.json();
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -83,6 +132,39 @@
     } catch (err) { console.error(err); }
   }
 
+  function openInvite(company: any) {
+    invitingCompanyId = company.id;
+    invitingCompanyName = company.name;
+    inviteEmail = "";
+    showInviteModal = true;
+    activeDropdownId = null;
+  }
+
+  async function handleInvite() {
+    if (!inviteEmail.trim()) return;
+    isInviting = true;
+    try {
+      const token = localStorage.getItem("monitor_token");
+      const res = await fetch(`${API_BASE_URL}/api/v1/companies/${invitingCompanyId}/invite`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ email: inviteEmail }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showInviteModal = false;
+        systemToast.fire({ icon: "success", title: "Invitation Sent", text: `Invitation sent to ${inviteEmail}`, timer: 3000 });
+      } else {
+        systemAlert.fire({ icon: "error", title: "Invite Failed", text: data.error || "Failed to send invitation" });
+      }
+    } catch (err) {
+      console.error(err);
+      systemAlert.fire({ icon: "error", title: "Error", text: "An error occurred while sending the invitation." });
+    } finally {
+      isInviting = false;
+    }
+  }
+
   function openEdit(company: any) {
     editingId = company.id;
     editName = company.name;
@@ -109,20 +191,22 @@
 
         if (uploadSuccess) {
           showEditModal = false;
-          Swal.fire({ icon: "success", title: "Updated", toast: true, position: "top-end", showConfirmButton: false, timer: 2000 });
+          systemToast.fire({ icon: "success", title: "Updated", timer: 2000 });
           await fetchCompanies();
         } else {
-          Swal.fire({ icon: "warning", title: "Partial Update", text: "Company details updated, but logo upload failed.", toast: true, position: "top-end", showConfirmButton: false, timer: 4000 });
+          systemAlert.fire({ icon: "warning", title: "Partial Update", text: "Company details updated, but logo upload failed.", timer: 4000 });
         }
       } else {
         const data = await res.json();
-        Swal.fire({ icon: "error", title: "Update Failed", text: data.error || "Failed to update company" });
+        systemAlert.fire({ icon: "error", title: "Update Failed", text: data.error || "Failed to update company" });
       }
     } catch (err) { 
       console.error(err); 
-      Swal.fire({ icon: "error", title: "Error", text: "An error occurred while updating the company." });
+      systemAlert.fire({ icon: "error", title: "Error", text: "An error occurred while updating the company." });
     }
   }
+
+  let user = $state<any>(null);
 
   function openDelete(company: any) {
     deletingId = company.id;
@@ -140,14 +224,43 @@
       });
       if (res.ok) {
         showDeleteModal = false;
-        Swal.fire({ icon: "success", title: "Deleted", text: `${deletingName} removed.`, toast: true, position: "top-end", showConfirmButton: false, timer: 2500 });
+        systemToast.fire({ icon: "success", title: "Deleted", text: `${deletingName} removed.`, timer: 2500 });
         await fetchCompanies();
       }
     } catch (err) { console.error(err); }
   }
+
+  async function openMembersModal(company: any) {
+    viewingMembersCompany = company;
+    showMembersModal = true;
+    
+    // Attempt re-fetch to ensure relations (Owner, Members.User) are loaded
+    try {
+      const token = localStorage.getItem("monitor_token");
+      const res = await fetch(`${API_BASE_URL}/api/v1/companies/${company.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        // If we found the company in the array, update it too for consistency
+        const idx = companies.findIndex(c => c.id === company.id);
+        if (idx !== -1) {
+          companies[idx] = data;
+        }
+        viewingMembersCompany = data;
+      }
+    } catch (err) {
+      console.error("Failed to re-fetch company members:", err);
+    }
+  }
+
+  onMount(() => {
+    const userData = localStorage.getItem("monitor_user");
+    if (userData) user = JSON.parse(userData);
+  });
 </script>
 
-<svelte:window on:click={() => (activeDropdownId = null)} />
+<svelte:window onclick={() => (activeDropdownId = null)} />
 
 <div class="fade-in">
   <!-- Header -->
@@ -161,7 +274,7 @@
       </p>
     </div>
     <button
-      on:click={() => (showCreateModal = true)}
+      onclick={() => (showCreateModal = true)}
       class="bg-slate-900 border border-cyan-500/50 text-cyan-400 hover:bg-cyan-950/50 hover:border-cyan-400 hover:text-cyan-300 font-bold py-2.5 px-6 rounded-xl shadow-[0_0_15px_rgba(6,182,212,0.3)] hover:shadow-[0_0_25px_rgba(6,182,212,0.5)] transition-all flex items-center gap-2 group transform hover:-translate-y-0.5 font-mono tracking-wider overflow-hidden relative"
     >
       <div class="absolute inset-0 w-full h-full bg-cyan-400/10 -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] skew-x-12"></div>
@@ -196,7 +309,7 @@
         CREATE A COMPANY TO START ORGANIZING YOUR PROJECT WORKSPACES.
       </p>
       <button
-        on:click={() => (showCreateModal = true)}
+        onclick={() => (showCreateModal = true)}
         class="bg-cyan-950/40 border border-cyan-500/50 text-cyan-400 font-bold py-3 px-8 rounded-xl hover:bg-cyan-900/60 hover:text-cyan-300 transition-colors font-mono tracking-widest relative z-10 hover:shadow-[0_0_15px_rgba(6,182,212,0.3)]"
       >
         CREATE_FIRST_COMPANY
@@ -240,7 +353,7 @@
               <!-- Dropdown — z-50 ensures it floats above everything -->
               <div class="relative shrink-0">
                 <button
-                  on:click={(e) => toggleDropdown(company.id, e)}
+                  onclick={(e) => toggleDropdown(company.id, e)}
                   class="text-slate-500 hover:text-cyan-400 p-2 rounded-lg hover:bg-slate-800/80 transition-colors"
                   title="Options"
                 >
@@ -251,62 +364,233 @@
                 {#if activeDropdownId === company.id}
                   <div
                     class="absolute right-0 top-full mt-1 w-40 bg-slate-800 rounded-xl shadow-2xl border border-slate-600 py-1 z-50"
-                    on:click|stopPropagation
+                    onclick={(e) => e.stopPropagation()}
                     role="menu"
                     tabindex="-1"
-                    on:keydown
                   >
-                    <button
-                      on:click={() => openEdit(company)}
-                      class="w-full text-left px-4 py-2.5 text-sm font-semibold text-slate-300 hover:text-cyan-400 hover:bg-slate-700/60 transition-colors font-mono flex items-center gap-2.5"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                      </svg>
-                      EDIT
-                    </button>
-                    <div class="h-px w-full bg-slate-700/60"></div>
-                    <button
-                      on:click={() => openDelete(company)}
-                      class="w-full text-left px-4 py-2.5 text-sm font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors font-mono flex items-center gap-2.5"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
-                        <path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
-                      </svg>
-                      DELETE
-                    </button>
+                    {#if user && (user.id === company.user_id || user.role === 'admin')}
+                      <button
+                        onclick={() => openEdit(company)}
+                        class="w-full text-left px-4 py-2.5 text-sm font-semibold text-slate-300 hover:text-cyan-400 hover:bg-slate-700/60 transition-colors font-mono flex items-center gap-2.5"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                        </svg>
+                        EDIT
+                      </button>
+                      <div class="h-px w-full bg-slate-700/60"></div>
+                      <button
+                        onclick={() => openInvite(company)}
+                        class="w-full text-left px-4 py-2.5 text-sm font-semibold text-slate-300 hover:text-cyan-400 hover:bg-slate-700/60 transition-colors font-mono flex items-center gap-2.5"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="17" y1="11" x2="23" y2="11"/>
+                        </svg>
+                        ADD MEMBER
+                      </button>
+                      <div class="h-px w-full bg-slate-700/60"></div>
+                      <button
+                        onclick={() => openDelete(company)}
+                        class="w-full text-left px-4 py-2.5 text-sm font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors font-mono flex items-center gap-2.5"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
+                          <path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
+                        </svg>
+                        DELETE
+                      </button>
+                    {:else}
+                      <div class="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-tighter text-center italic">
+                        View Only
+                      </div>
+                    {/if}
                   </div>
                 {/if}
               </div>
             </div>
 
-            <!-- Stats + Access button -->
+            <!-- Members + Stats -->
             <div class="mt-auto pt-4 border-t border-slate-700/50 flex justify-between items-center relative z-10">
-              <span class="text-[10px] font-bold bg-slate-900 border border-slate-700 group-hover:border-cyan-500/30 text-slate-400 group-hover:text-cyan-400 px-3 py-1.5 rounded-md tracking-wider font-mono transition-colors">
-                {company.projects?.length || 0} Projects
-              </span>
-              <a
-                href={`/dashboard/companies/${company.id}`}
-                class="text-sm font-bold text-cyan-500 hover:text-cyan-300 flex items-center gap-1.5 font-mono tracking-wider transition-colors"
+              <button 
+                class="flex items-center -space-x-1.5 overflow-hidden hover:opacity-80 transition-opacity p-1 -m-1 rounded-lg"
+                onclick={() => openMembersModal(company)}
+                title="View all members"
               >
-                ENTER
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="group-hover:translate-x-1 transition-transform">
-                  <line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline>
-                </svg>
-              </a>
+                <!-- Owner first -->
+                {#if company.owner && company.owner.id}
+                  <div 
+                    class="w-7 h-7 rounded-full border-2 border-slate-800 bg-slate-900 flex items-center justify-center overflow-hidden shrink-0 ring-2 ring-cyan-500/20"
+                    title={`Owner: ${company.owner.name || company.owner.email}`}
+                  >
+                    {#if company.owner.profile_image_url}
+                      <img src={company.owner.profile_image_url.startsWith('http') ? company.owner.profile_image_url : `${API_BASE_URL}${company.owner.profile_image_url}`} alt="" class="w-full h-full object-cover" />
+                    {:else}
+                      <span class="text-[10px] font-bold text-cyan-400">{(company.owner.name || company.owner.email || 'O').charAt(0).toUpperCase()}</span>
+                    {/if}
+                  </div>
+                {:else if company.user_id}
+                  <!-- Fallback if owner record not preloaded but we have user_id -->
+                  <div class="w-7 h-7 rounded-full border-2 border-slate-800 bg-slate-900 flex items-center justify-center shrink-0">
+                    <span class="text-[10px] font-bold text-slate-500">?</span>
+                  </div>
+                {/if}
+
+                <!-- Members -->
+                {#each (company.members || []).slice(0, 4) as member}
+                  {#if member.user}
+                    <div 
+                      class="w-7 h-7 rounded-full border-2 border-slate-800 bg-slate-900 flex items-center justify-center overflow-hidden shrink-0"
+                      title={member.user.name || member.user.email}
+                    >
+                      {#if member.user.profile_image_url}
+                        <img src={member.user.profile_image_url.startsWith('http') ? member.user.profile_image_url : `${API_BASE_URL}${member.user.profile_image_url}`} alt="" class="w-full h-full object-cover" />
+                      {:else}
+                        <span class="text-[10px] font-bold text-slate-400">{(member.user.name || member.user.email || 'U').charAt(0).toUpperCase()}</span>
+                      {/if}
+                    </div>
+                  {/if}
+                {/each}
+
+                {#if (company.members || []).length > 4}
+                  <div class="w-7 h-7 rounded-full border-2 border-slate-800 bg-slate-800 flex items-center justify-center shrink-0 text-[8px] font-bold text-slate-500">
+                    +{(company.members || []).length - 4}
+                  </div>
+                {/if}
+
+                {#if !company.owner && (!company.members || company.members.length === 0)}
+                   <span class="text-[10px] font-mono text-slate-600 pl-2">NO MEMBERS</span>
+                {/if}
+              </button>
+
+              <div class="flex items-center gap-3">
+                <span class="text-[10px] font-bold bg-slate-900 border border-slate-700 group-hover:border-cyan-500/30 text-slate-400 group-hover:text-cyan-400 px-3 py-1.5 rounded-md tracking-wider font-mono transition-colors">
+                  {company.projects?.length || 0} Projects
+                </span>
+                <a
+                  href={`/dashboard/companies/${company.id}`}
+                  class="text-sm font-bold text-cyan-500 hover:text-cyan-300 flex items-center gap-1.5 font-mono tracking-wider transition-colors"
+                >
+                  ENTER
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="group-hover:translate-x-1 transition-transform">
+                    <line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline>
+                  </svg>
+                </a>
+              </div>
             </div>
           </div>
         </div>
       {/each}
     </div>
   {/if}
+
+  <!-- Member List Modal -->
+  {#if showMembersModal && viewingMembersCompany}
+    <Modal bind:open={showMembersModal} title="COMPANY_MEMBERS" maxWidth="max-w-4xl">
+      <div class="space-y-6">
+        <!-- Owner Section -->
+        <div>
+          <h4 class="text-[10px] font-bold text-cyan-500 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            COMPANY_OWNER
+          </h4>
+          {#if viewingMembersCompany.owner}
+            <div class="flex items-center gap-4 bg-slate-900/50 border border-cyan-500/20 p-4 rounded-2xl">
+              <div class="w-12 h-12 rounded-full border-2 border-cyan-500/30 bg-slate-800 flex items-center justify-center overflow-hidden shrink-0">
+                {#if viewingMembersCompany.owner.profile_image_url}
+                  <img src={viewingMembersCompany.owner.profile_image_url.startsWith('http') ? viewingMembersCompany.owner.profile_image_url : `${API_BASE_URL}${viewingMembersCompany.owner.profile_image_url}`} alt="" class="w-full h-full object-cover" />
+                {:else}
+                  <span class="text-lg font-bold text-cyan-400">{(viewingMembersCompany.owner.name || viewingMembersCompany.owner.email || 'O').charAt(0).toUpperCase()}</span>
+                {/if}
+              </div>
+              <div class="min-w-0">
+                <p class="text-sm font-bold text-slate-100 font-mono truncate">{viewingMembersCompany.owner.name || 'UNNAMED_OWNER'}</p>
+                <p class="text-xs text-slate-400 font-mono truncate">{viewingMembersCompany.owner.email}</p>
+              </div>
+            </div>
+          {:else}
+             <p class="text-xs text-slate-500 italic font-mono p-4">OWNER_DATA_NOT_FOUND</p>
+          {/if}
+        </div>
+
+        <!-- Members Section -->
+        <div>
+          <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            TEAM_MEMBERS ({viewingMembersCompany.members?.length || 0})
+          </h4>
+          <div class="space-y-3 flex-1 overflow-y-auto pr-2 custom-scrollbar">
+            {#each viewingMembersCompany.members || [] as member}
+              <div class="flex items-center gap-4 bg-slate-800/30 border border-slate-700/50 p-3 rounded-xl hover:border-slate-600 transition-colors">
+                <div class="w-10 h-10 rounded-full border border-slate-700 bg-slate-900 flex items-center justify-center overflow-hidden shrink-0">
+                  {#if member.user?.profile_image_url}
+                    <img src={member.user.profile_image_url.startsWith('http') ? member.user.profile_image_url : `${API_BASE_URL}${member.user.profile_image_url}`} alt="" class="w-full h-full object-cover" />
+                  {:else}
+                    <span class="text-sm font-bold text-slate-400">{(member.user?.name || member.user?.email || 'U').charAt(0).toUpperCase()}</span>
+                  {/if}
+                </div>
+                <div class="min-w-0">
+                  <p class="text-sm font-bold text-slate-200 font-mono truncate">{member.user?.name || 'UNNAMED_MEMBER'}</p>
+                  <p class="text-xs text-slate-500 font-mono truncate">{member.user?.email}</p>
+                </div>
+                <div class="ml-auto">
+                  <span class="text-[9px] font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-500 border border-slate-700 uppercase tracking-tighter">
+                    {member.role || 'MEMBER'}
+                  </span>
+                </div>
+              </div>
+            {:else}
+              <div class="text-center py-10 bg-slate-900/20 rounded-2xl border border-dashed border-slate-700">
+                <p class="text-xs text-slate-500 font-mono uppercase tracking-widest">NO_OTHER_MEMBERS_YET</p>
+              </div>
+            {/each}
+          </div>
+        </div>
+
+        <div class="mt-auto pt-6 border-t border-slate-800/50 flex justify-between items-center bg-slate-900/50 -mx-6 -mb-6 px-6 py-4">
+          <details class="group flex-1">
+            <summary class="text-[9px] text-slate-600 cursor-pointer hover:text-slate-400 font-mono flex items-center gap-2 uppercase tracking-tighter">
+              <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="group-open:rotate-90 transition-transform"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              RAW_JSON_INSPEC (ID:{viewingMembersCompany.id})
+            </summary>
+            <div class="mt-2 p-3 bg-black/60 rounded-xl border border-slate-800">
+              <pre class="text-[9px] text-cyan-400/60 overflow-x-auto custom-scrollbar font-mono leading-tight whitespace-pre">
+                {JSON.stringify(viewingMembersCompany, null, 2)}
+              </pre>
+            </div>
+          </details>
+
+          <button 
+            onclick={() => (showMembersModal = false)}
+            class="ml-4 px-8 py-3 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-2xl shadow-lg shadow-cyan-900/20 transition-all active:scale-95 uppercase tracking-widest font-mono"
+          >
+            CLOSE_MODAL
+          </button>
+        </div>
+      </div>
+    </Modal>
+  {/if}
 </div>
 
+<style>
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #334155;
+    border-radius: 10px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #475569;
+  }
+</style>
+
 <!-- Create Company Modal -->
-<Modal bind:open={showCreateModal} title="Create Company">
-  <form on:submit|preventDefault={handleCreate} class="space-y-4">
+<Modal bind:open={showCreateModal} title="Create Company" maxWidth="max-w-lg">
+  <form onsubmit={(e) => { e.preventDefault(); handleCreate(); }} class="space-y-4">
     <div>
       <label for="co_name" class="block text-sm font-semibold text-cyan-50 mb-1">Company Name</label>
       <input id="co_name" type="text" bind:value={newCompanyName} required
@@ -322,11 +606,11 @@
     <div>
       <label for="co_logo" class="block text-sm font-semibold text-cyan-50 mb-1">Company Logo (optional)</label>
       <input id="co_logo" type="file" accept="image/*"
-        on:change={(e) => (newLogoFile = (e.target as HTMLInputElement).files?.[0] || null)}
+        onchange={(e) => (newLogoFile = (e.target as HTMLInputElement).files?.[0] || null)}
         class="w-full px-4 py-2 rounded-xl border border-slate-700/50 bg-slate-900/60 text-cyan-50/70 text-xs" />
     </div>
     <div class="pt-2 flex gap-3">
-      <button type="button" on:click={() => (showCreateModal = false)}
+      <button type="button" onclick={() => (showCreateModal = false)}
         class="flex-1 px-4 py-2.5 rounded-xl font-semibold text-slate-400 bg-slate-800 hover:bg-slate-700 transition-colors text-sm">Cancel</button>
       <button type="submit"
         class="flex-1 px-4 py-2.5 rounded-xl font-semibold text-white bg-cyan-600 hover:bg-cyan-700 transition-colors shadow-sm text-sm">Create Company</button>
@@ -335,8 +619,8 @@
 </Modal>
 
 <!-- Edit Company Modal -->
-<Modal bind:open={showEditModal} title="Edit Company">
-  <form on:submit|preventDefault={handleEdit} class="space-y-4">
+<Modal bind:open={showEditModal} title="Edit Company" maxWidth="max-w-lg">
+  <form onsubmit={(e) => { e.preventDefault(); handleEdit(); }} class="space-y-4">
     <div>
       <label for="ed_name" class="block text-sm font-semibold text-cyan-50 mb-1">Company Name</label>
       <input id="ed_name" type="text" bind:value={editName} required
@@ -350,11 +634,11 @@
     <div>
       <label for="ed_logo" class="block text-sm font-semibold text-cyan-50 mb-1">Update Logo (optional)</label>
       <input id="ed_logo" type="file" accept="image/*"
-        on:change={(e) => (editLogoFile = (e.target as HTMLInputElement).files?.[0] || null)}
+        onchange={(e) => (editLogoFile = (e.target as HTMLInputElement).files?.[0] || null)}
         class="w-full px-4 py-2 rounded-xl border border-slate-700/50 bg-slate-900/60 text-cyan-50/70 text-xs" />
     </div>
     <div class="pt-2 flex gap-3">
-      <button type="button" on:click={() => (showEditModal = false)}
+      <button type="button" onclick={() => (showEditModal = false)}
         class="flex-1 px-4 py-2.5 rounded-xl font-semibold text-slate-400 bg-slate-800 hover:bg-slate-700 transition-colors text-sm">Cancel</button>
       <button type="submit"
         class="flex-1 px-4 py-2.5 rounded-xl font-semibold text-white bg-cyan-600 hover:bg-cyan-700 transition-colors shadow-sm text-sm">Save Changes</button>
@@ -372,10 +656,60 @@
       </p>
     </div>
     <div class="flex gap-3 pt-1">
-      <button type="button" on:click={() => (showDeleteModal = false)}
+      <button type="button" onclick={() => (showDeleteModal = false)}
         class="flex-1 px-4 py-2.5 rounded-xl font-semibold text-slate-400 bg-slate-800 hover:bg-slate-700 transition-colors text-sm">Cancel</button>
-      <button type="button" on:click={handleDelete}
+      <button type="button" onclick={handleDelete}
         class="flex-1 px-4 py-2.5 rounded-xl font-semibold text-white bg-red-600 hover:bg-red-700 transition-colors text-sm">Delete Company</button>
     </div>
   </div>
+</Modal>
+
+<!-- Invite Member Modal -->
+<Modal bind:open={showInviteModal} title="Invite Member" maxWidth="max-w-2xl" overflowVisible={true}>
+  <form onsubmit={(e) => { e.preventDefault(); handleInvite(); }} class="space-y-4">
+    <div class="bg-cyan-950/20 border border-cyan-500/20 rounded-xl p-4 mb-2">
+      <p class="text-sm text-cyan-400 font-mono">
+        Inviting to join <span class="font-bold text-white uppercase">{invitingCompanyName}</span>
+      </p>
+    </div>
+    <div class="relative">
+      <label for="inv_email" class="block text-sm font-semibold text-cyan-50 mb-1">User Email Address</label>
+      <input 
+        id="inv_email" 
+        type="email" 
+        bind:value={inviteEmail} 
+        oninput={handleSearchUsers}
+        onfocus={() => { if (userSuggestions.length > 0) showSuggestions = true; }}
+        required
+        class="w-full px-4 py-2.5 rounded-xl border border-slate-700/50 bg-slate-900/60 text-cyan-50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-sm"
+        placeholder="Type name or email..." 
+        autocomplete="off"
+      />
+      
+      {#if showSuggestions}
+        <div class="absolute z-[60] w-full mt-1 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl max-h-48 overflow-y-auto overflow-x-hidden custom-scrollbar">
+          {#each userSuggestions as user}
+            <button
+              type="button"
+              onclick={() => selectUser(user)}
+              class="w-full text-left px-4 py-2.5 hover:bg-cyan-900/40 transition-colors border-b border-slate-800/50 last:border-0 group"
+            >
+              <div class="flex flex-col">
+                <span class="text-sm font-bold text-cyan-400 group-hover:text-cyan-300">{user.name || 'No Name'}</span>
+                <span class="text-xs text-slate-400 font-mono">{user.email}</span>
+              </div>
+            </button>
+          {/each}
+        </div>
+      {/if}
+    </div>
+    <div class="pt-2 flex gap-3">
+      <button type="button" onclick={() => (showInviteModal = false)}
+        class="flex-1 px-4 py-2.5 rounded-xl font-semibold text-slate-400 bg-slate-800 hover:bg-slate-700 transition-colors text-sm">Cancel</button>
+      <button type="submit" disabled={isInviting}
+        class="flex-1 px-4 py-2.5 rounded-xl font-semibold text-white bg-cyan-600 hover:bg-cyan-700 transition-colors shadow-sm text-sm disabled:opacity-50">
+        {isInviting ? "Sending..." : "Send Invitation"}
+      </button>
+    </div>
+  </form>
 </Modal>

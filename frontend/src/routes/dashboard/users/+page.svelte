@@ -2,12 +2,11 @@
   import { onMount } from "svelte";
   import Modal from "$lib/components/Modal.svelte";
   import { API_BASE_URL } from "$lib/config";
+  import { systemAlert, systemToast } from "$lib/swal-design";
 
   let users: any[] = [];
   let isLoading = true;
   let currentUser: any = null;
-  let errorMsg = "";
-  let successMsg = "";
 
   // Detail Modal State
   let showDetailModal = false;
@@ -28,7 +27,6 @@
 
   async function fetchUsers() {
     isLoading = true;
-    errorMsg = "";
 
     try {
       const token = localStorage.getItem("monitor_token");
@@ -39,10 +37,10 @@
       if (res.ok) {
         users = await res.json();
       } else {
-        errorMsg = "Failed to load users. Ensure you have admin permissions.";
+        systemAlert.fire({ icon: "error", title: "Load Failed", text: "Failed to load users. Ensure you have admin permissions." });
       }
     } catch (err) {
-      errorMsg = "Network error fetching users.";
+      systemAlert.fire({ icon: "error", title: "Network Error", text: "Network error fetching users." });
     } finally {
       isLoading = false;
     }
@@ -84,12 +82,10 @@
         },
       );
       if (res.ok) {
-        successMsg = "User approved successfully.";
-        setTimeout(() => (successMsg = ""), 3000);
+        systemToast.fire({ icon: "success", title: "User approved successfully." });
         await fetchUsers();
       } else {
-        errorMsg = "Failed to approve user.";
-        setTimeout(() => (errorMsg = ""), 3000);
+        systemAlert.fire({ icon: "error", title: "Approval Failed", text: "Failed to approve user." });
       }
     } catch (err) {
       console.error(err);
@@ -97,8 +93,16 @@
   }
 
   async function disapproveUser(userId: number) {
-    if (!confirm("Are you sure you want to disapprove and remove this user?"))
-      return;
+    const result = await systemAlert.fire({
+      title: "Are you sure?",
+      text: "You want to disapprove and remove this user?",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "YES, REMOVE",
+    });
+
+    if (!result.isConfirmed) return;
+
     try {
       const token = localStorage.getItem("monitor_token");
       const res = await fetch(
@@ -109,12 +113,10 @@
         },
       );
       if (res.ok) {
-        successMsg = "User disapproved and removed.";
-        setTimeout(() => (successMsg = ""), 3000);
+        systemToast.fire({ icon: "success", title: "User removed." });
         await fetchUsers();
       } else {
-        errorMsg = "Failed to disapprove user.";
-        setTimeout(() => (errorMsg = ""), 3000);
+        systemAlert.fire({ icon: "error", title: "Failed", text: "Failed to disapprove user." });
       }
     } catch (err) {
       console.error(err);
@@ -122,12 +124,16 @@
   }
 
   async function resetPassword(userId: number) {
-    if (
-      !confirm(
-        "Are you sure you want to reset this user password to the default?",
-      )
-    )
-      return;
+    const result = await systemAlert.fire({
+      title: "Reset Password?",
+      text: "Reset this user's password to the default (T@monitor123)?",
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "YES, RESET",
+    });
+
+    if (!result.isConfirmed) return;
+
     try {
       const token = localStorage.getItem("monitor_token");
       const res = await fetch(
@@ -138,11 +144,14 @@
         },
       );
       if (res.ok) {
-        successMsg = "Password reset to default (T@monitor123) successfully.";
-        setTimeout(() => (successMsg = ""), 5000);
+        systemAlert.fire({
+          icon: "success",
+          title: "Password Reset",
+          text: "Reset to default: T@monitor123",
+          timer: 10000,
+        });
       } else {
-        errorMsg = "Failed to reset password.";
-        setTimeout(() => (errorMsg = ""), 3000);
+        systemAlert.fire({ icon: "error", title: "Failed", text: "Failed to reset password." });
       }
     } catch (err) {
       console.error(err);
@@ -160,13 +169,11 @@
         },
       );
       if (res.ok) {
-        successMsg = "User block status updated.";
-        setTimeout(() => (successMsg = ""), 3000);
+        systemToast.fire({ icon: "success", title: "Block status updated." });
         await fetchUsers();
       } else {
         const errorData = await res.json();
-        errorMsg = errorData.error || "Failed to update block status.";
-        setTimeout(() => (errorMsg = ""), 3000);
+        systemAlert.fire({ icon: "error", title: "Action Failed", text: errorData.error || "Failed to update block status." });
       }
     } catch (err) {
       console.error(err);
@@ -191,21 +198,6 @@
     </p>
   </div>
 
-  {#if errorMsg}
-    <div
-      class="bg-red-50 text-red-600 p-4 rounded-xl border border-red-100 mb-6 max-w-full overflow-hidden text-ellipsis"
-    >
-      {errorMsg}
-    </div>
-  {/if}
-
-  {#if successMsg}
-    <div
-      class="bg-green-50 text-green-700 p-4 rounded-xl border border-green-100 mb-6"
-    >
-      {successMsg}
-    </div>
-  {/if}
 
   <div
     class="bg-slate-900/60 backdrop-blur-md rounded-3xl border border-slate-700/50 shadow-[0_8px_30px_rgb(0,0,0,0.5)] overflow-x-auto w-full relative z-0"
@@ -336,7 +328,7 @@
                       stroke-linejoin="round"
                       ><circle cx="12" cy="12" r="10"></circle><polyline
                         points="12 6 12 12 16 14"
-                      ></polyline></svg
+                       ></polyline></svg
                     >
                     PENDING
                   </span>
@@ -465,129 +457,129 @@
       </table>
     {/if}
   </div>
+</div>
 
-  <!-- User Detail Modal -->
-  <Modal bind:open={showDetailModal} title="User Detail">
-    {#if selectedUser}
-      <div class="space-y-6">
-        <!-- Profile Header -->
+<!-- User Detail Modal -->
+<Modal bind:open={showDetailModal} title="User Detail" maxWidth="max-w-lg">
+  {#if selectedUser}
+    <div class="space-y-6">
+      <!-- Profile Header -->
+      <div
+        class="flex flex-col items-center gap-4 py-4 border-b border-slate-700/50"
+      >
         <div
-          class="flex flex-col items-center gap-4 py-4 border-b border-slate-700/50"
+          class="w-24 h-24 rounded-full bg-slate-900 border-2 border-cyan-500/30 flex items-center justify-center text-3xl font-bold text-cyan-400 uppercase shadow-[0_0_20px_rgba(6,182,212,0.2)] overflow-hidden"
         >
-          <div
-            class="w-24 h-24 rounded-full bg-slate-900 border-2 border-cyan-500/30 flex items-center justify-center text-3xl font-bold text-cyan-400 uppercase shadow-[0_0_20px_rgba(6,182,212,0.2)] overflow-hidden"
-          >
-            {#if selectedUser.profile_image_url}
-              <img
-                src={selectedUser.profile_image_url}
-                alt={selectedUser.name}
-                class="w-full h-full object-cover"
-              />
-            {:else}
-              {selectedUser.name?.charAt(0) || selectedUser.email.charAt(0)}
-            {/if}
-          </div>
-          <div class="text-center">
-            <h2 class="text-xl font-bold text-cyan-50 font-mono tracking-wide">
-              {selectedUser.name || "UNNAMED_USER"}
-            </h2>
-            <p class="text-slate-400 text-sm font-mono">{selectedUser.email}</p>
-          </div>
+          {#if selectedUser.profile_image_url}
+            <img
+              src={selectedUser.profile_image_url}
+              alt={selectedUser.name}
+              class="w-full h-full object-cover"
+            />
+          {:else}
+            {selectedUser.name?.charAt(0) || selectedUser.email.charAt(0)}
+          {/if}
         </div>
-
-        <!-- Info Grid -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div class="space-y-4">
-            <div>
-              <p
-                class="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono mb-1"
-              >
-                DEPARTMENT
-              </p>
-              <p class="text-sm text-cyan-50 font-mono">
-                {selectedUser.department || "N/A"}
-              </p>
-            </div>
-            <div>
-              <p
-                class="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono mb-1"
-              >
-                POSITION
-              </p>
-              <p class="text-sm text-cyan-50 font-mono">
-                {selectedUser.position || "N/A"}
-              </p>
-            </div>
-            <div>
-              <p
-                class="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono mb-1"
-              >
-                PHONE
-              </p>
-              <p class="text-sm text-cyan-50 font-mono">
-                {selectedUser.phone || "N/A"}
-              </p>
-            </div>
-          </div>
-
-          <div class="space-y-4">
-            <div>
-              <p
-                class="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono mb-1"
-              >
-                ROLE
-              </p>
-              <span
-                class="px-2 py-0.5 rounded border text-[10px] font-bold uppercase tracking-widest
-                {selectedUser.role === 'admin'
-                  ? 'bg-fuchsia-950/50 text-fuchsia-400 border-fuchsia-500/30 shadow-[0_0_8px_rgba(217,70,239,0.3)]'
-                  : 'bg-slate-800 text-slate-400 border-slate-700'}"
-              >
-                {selectedUser.role}
-              </span>
-            </div>
-            <div>
-              <p
-                class="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono mb-1"
-              >
-                STATUS
-              </p>
-              {#if selectedUser.is_approved}
-                <span class="text-emerald-400 text-xs font-bold font-mono"
-                  >ACTIVE</span
-                >
-              {:else if selectedUser.is_blocked}
-                <span class="text-red-400 text-xs font-bold font-mono"
-                  >BLOCKED</span
-                >
-              {:else}
-                <span class="text-amber-400 text-xs font-bold font-mono"
-                  >PENDING</span
-                >
-              {/if}
-            </div>
-            <div>
-              <p
-                class="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono mb-1"
-              >
-                JOINED DATE
-              </p>
-              <p class="text-sm text-cyan-50 font-mono">
-                {new Date(selectedUser.created_at).toLocaleString()}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div class="pt-6 border-t border-slate-700/50 flex justify-end">
-          <button
-            on:click={() => (showDetailModal = false)}
-            class="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold font-mono transition-colors border border-slate-700 hover:border-slate-500"
-          >
-            CLOSE_PROFILE
-          </button>
+        <div class="text-center">
+          <h2 class="text-xl font-bold text-cyan-50 font-mono tracking-wide">
+            {selectedUser.name || "UNNAMED_USER"}
+          </h2>
+          <p class="text-slate-400 text-sm font-mono">{selectedUser.email}</p>
         </div>
       </div>
-    {/if}
-  </Modal>
-</div>
+
+      <!-- Info Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="space-y-4">
+          <div>
+            <p
+              class="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono mb-1"
+            >
+              DEPARTMENT
+            </p>
+            <p class="text-sm text-cyan-50 font-mono">
+              {selectedUser.department || "N/A"}
+            </p>
+          </div>
+          <div>
+            <p
+              class="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono mb-1"
+            >
+              POSITION
+            </p>
+            <p class="text-sm text-cyan-50 font-mono">
+              {selectedUser.position || "N/A"}
+            </p>
+          </div>
+          <div>
+            <p
+              class="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono mb-1"
+            >
+              PHONE
+            </p>
+            <p class="text-sm text-cyan-50 font-mono">
+              {selectedUser.phone || "N/A"}
+            </p>
+          </div>
+        </div>
+
+        <div class="space-y-4">
+          <div>
+            <p
+              class="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono mb-1"
+            >
+              ROLE
+            </p>
+            <span
+              class="px-2 py-0.5 rounded border text-[10px] font-bold uppercase tracking-widest
+              {selectedUser.role === 'admin'
+                ? 'bg-fuchsia-950/50 text-fuchsia-400 border-fuchsia-500/30 shadow-[0_0_8px_rgba(217,70,239,0.3)]'
+                : 'bg-slate-800 text-slate-400 border-slate-700'}"
+            >
+              {selectedUser.role}
+            </span>
+          </div>
+          <div>
+            <p
+              class="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono mb-1"
+            >
+              STATUS
+            </p>
+            {#if selectedUser.is_approved}
+              <span class="text-emerald-400 text-xs font-bold font-mono"
+                >ACTIVE</span
+              >
+            {:else if selectedUser.is_blocked}
+              <span class="text-red-400 text-xs font-bold font-mono"
+                >BLOCKED</span
+              >
+            {:else}
+              <span class="text-amber-400 text-xs font-bold font-mono"
+                >PENDING</span
+              >
+            {/if}
+          </div>
+          <div>
+            <p
+              class="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono mb-1"
+            >
+              JOINED DATE
+            </p>
+            <p class="text-sm text-cyan-50 font-mono">
+              {new Date(selectedUser.created_at).toLocaleString()}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="pt-6 border-t border-slate-700/50 flex justify-end">
+        <button
+          on:click={() => (showDetailModal = false)}
+          class="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold font-mono transition-colors border border-slate-700 hover:border-slate-500"
+        >
+          CLOSE_PROFILE
+        </button>
+      </div>
+    </div>
+  {/if}
+</Modal>

@@ -7,17 +7,12 @@ import (
 )
 
 func GetNotifications(c *fiber.Ctx) error {
-	role := c.Locals("role").(string)
+	userID := c.Locals("user_id").(uint)
 
 	var notifications []models.DashboardNotification
 	
-	query := database.DB.Where("is_read = ?", false)
-	
-	// For now, let's keep it simple: admins see everything, users see system-wide (userID=0)
-	// We can refine this later if project-specific user targeting is needed
-	if role != "admin" {
-		query = query.Where("user_id = 0")
-	}
+	// Filter by current user_id OR system-wide notifications (user_id = 0)
+	query := database.DB.Where("is_read = ? AND (user_id = ? OR user_id = 0)", false, userID)
 	
 	query.Order("created_at DESC").Limit(20).Find(&notifications)
 
@@ -26,8 +21,11 @@ func GetNotifications(c *fiber.Ctx) error {
 
 func MarkNotificationRead(c *fiber.Ctx) error {
 	notificationID := c.Params("id")
+	userID := c.Locals("user_id").(uint)
 	
-	if err := database.DB.Model(&models.DashboardNotification{}).Where("id = ?", notificationID).Update("is_read", true).Error; err != nil {
+	if err := database.DB.Model(&models.DashboardNotification{}).
+		Where("id = ? AND (user_id = ? OR user_id = 0)", notificationID, userID).
+		Update("is_read", true).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to mark notification as read"})
 	}
 

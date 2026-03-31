@@ -5,6 +5,7 @@
   import Modal from "$lib/components/Modal.svelte";
   import { API_BASE_URL } from "$lib/config";
   import Swal from "sweetalert2";
+  import { systemAlert, systemToast } from "$lib/swal-design";
 
   let projects: any[] = [];
   let selectedProjectId = "";
@@ -124,20 +125,11 @@
         const newOnes = data.filter((n: any) => !unreadNotifications.find((un: any) => un.id === n.id));
         
         for (const note of newOnes) {
-          Swal.fire({
-            toast: true,
-            position: 'top-end',
+          systemToast.fire({
             icon: note.type === 'api_fail' ? 'error' : 'info',
             title: note.title,
             text: note.message,
-            showConfirmButton: false,
             timer: 8000,
-            timerProgressBar: true,
-            background: '#1e293b',
-            color: '#f8fafc',
-            customClass: {
-              popup: 'border border-slate-700 shadow-2xl rounded-2xl'
-            }
           });
         }
         
@@ -151,8 +143,6 @@
   async function markAllNotificationsRead() {
     try {
       const token = localStorage.getItem("monitor_token");
-      // For simplicity, we can iterate or have a bulk endpoint. 
-      // Let's use the individual one for each in unreadNotifications for now or just clear frontend state if backend is updated later
       for (const note of unreadNotifications) {
         await fetch(`${API_BASE_URL}/api/v1/notifications/${note.id}/read`, {
           method: 'PUT',
@@ -161,6 +151,49 @@
       }
       unreadNotifications = [];
       showNotificationCenter = false;
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function handleAcceptInvitation(invitationId: number) {
+    try {
+      const token = localStorage.getItem("monitor_token");
+      const res = await fetch(`${API_BASE_URL}/api/v1/companies/invitations/${invitationId}/accept`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        systemToast.fire({ icon: "success", title: "Accepted", text: "You have joined the company successfully." });
+        // Refresh data
+        const pRes = await fetch(`${API_BASE_URL}/api/v1/projects`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (pRes.ok) projects = await pRes.json();
+        
+        unreadNotifications = unreadNotifications.filter(n => n.invitation_id !== invitationId);
+        if (unreadNotifications.length === 0) showNotificationCenter = false;
+      } else {
+        const data = await res.json();
+        systemAlert.fire({ icon: "error", title: "Error", text: data.error || "Failed to accept invitation" });
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function handleDeclineInvitation(invitationId: number) {
+    try {
+      const token = localStorage.getItem("monitor_token");
+      const res = await fetch(`${API_BASE_URL}/api/v1/companies/invitations/${invitationId}/decline`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        systemToast.fire({ icon: "info", title: "Declined", text: "Invitation declined." });
+        unreadNotifications = unreadNotifications.filter(n => n.invitation_id !== invitationId);
+        if (unreadNotifications.length === 0) showNotificationCenter = false;
+      }
     } catch (err) {
       console.error(err);
     }
@@ -198,11 +231,10 @@
   function handleRequireCompany(e: Event) {
     if (!hasCompany) {
       e.preventDefault();
-      Swal.fire({
+      systemAlert.fire({
         icon: 'info',
         title: 'Select a Company First',
         text: 'Please select a company from Company Monitor before accessing Project APIs.',
-        background: '#0f172a', color: '#94a3b8', confirmButtonColor: '#0891b2',
       });
     }
   }
@@ -210,11 +242,10 @@
   function handleRequireProject(e: Event) {
     if (!hasProject) {
       e.preventDefault();
-      Swal.fire({
+      systemAlert.fire({
         icon: 'info',
         title: 'Select a Project First',
         text: 'Please open a project from Project APIs before accessing this section.',
-        background: '#0f172a', color: '#94a3b8', confirmButtonColor: '#0891b2',
       });
     }
   }
@@ -225,7 +256,7 @@
     const userData = localStorage.getItem("monitor_user");
 
     if (!token || !userData) {
-      window.location.href = "/";
+      window.location.href = "/login";
       return;
     }
 
@@ -325,19 +356,16 @@
   function handleLogout() {
     localStorage.removeItem("monitor_token");
     localStorage.removeItem("monitor_user");
-    window.location.href = "/";
+    window.location.href = "/login";
   }
 
   function handleAlertsClick(e: Event) {
     if (!selectedProjectId || selectedProjectId === "undefined") {
       e.preventDefault();
-      Swal.fire({
+      systemAlert.fire({
         icon: "info",
         title: "Please Create a Project First",
         text: "Notification channels are configured on a per-project basis. Please create a project and select it from the sidebar to manage alerts.",
-        background: "#0f172a",
-        color: "#94a3b8",
-        confirmButtonColor: "#0891b2",
       });
     }
   }
@@ -1367,8 +1395,20 @@
 </Modal>
 
 <!-- Notification Center Modal -->
-<Modal bind:open={showNotificationCenter} title="NOTIFICATION CENTER">
+<Modal bind:open={showNotificationCenter} title="NOTIFICATION CENTER" maxWidth="max-w-lg">
   <div class="space-y-6">
+    <!-- Account Indicator to prevent session confusion -->
+    <div class="px-4 py-3 bg-slate-950/50 border border-slate-800 rounded-2xl flex items-center justify-between gap-3 shadow-inner">
+        <div class="flex items-center gap-2">
+            <div class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+            <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none">Session Identity</p>
+        </div>
+        <div class="flex flex-col items-end">
+            <p class="text-[11px] font-bold text-cyan-400 truncate max-w-[200px]">{user?.email}</p>
+            <p class="text-[9px] text-slate-600 font-bold uppercase tracking-tighter">Current active account</p>
+        </div>
+    </div>
+
     {#if unreadNotifications.length === 0}
       <div class="py-12 text-center space-y-4">
         <div class="w-16 h-16 bg-slate-800/50 rounded-full flex items-center justify-center mx-auto text-slate-600">
@@ -1387,9 +1427,25 @@
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
                 {/if}
              </div>
-             <div class="space-y-1">
+             <div class="space-y-1 flex-1">
                 <h4 class="text-sm font-bold text-slate-100">{note.title}</h4>
                 <p class="text-xs text-slate-400 leading-relaxed">{note.message}</p>
+                {#if note.type === 'company_invite' && note.invitation_id}
+                  <div class="flex gap-2 pt-3">
+                    <button 
+                      on:click={() => handleAcceptInvitation(note.invitation_id)}
+                      class="px-4 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-[10px] font-bold rounded-lg transition-all"
+                    >
+                      ACCEPT
+                    </button>
+                    <button 
+                      on:click={() => handleDeclineInvitation(note.invitation_id)}
+                      class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 text-[10px] font-bold rounded-lg transition-all border border-slate-700"
+                    >
+                      DECLINE
+                    </button>
+                  </div>
+                {/if}
                 <p class="text-[10px] text-slate-600 font-bold uppercase tracking-tighter pt-1">{new Date(note.created_at).toLocaleString()}</p>
              </div>
           </div>

@@ -239,7 +239,11 @@ func handleResult(api models.API, statusCode int, duration int64, isSuccess bool
 			database.DB.Create(&newTask)
 
 			// Create Dashboard Notification
+			var project models.Project
+			database.DB.First(&project, api.ProjectID)
+
 			notification := models.DashboardNotification{
+				UserID:    project.UserID,
 				ProjectID: api.ProjectID,
 				Type:      "api_fail",
 				Title:     "API Failure Detected",

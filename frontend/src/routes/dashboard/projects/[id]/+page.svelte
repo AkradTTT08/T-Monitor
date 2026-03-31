@@ -2,6 +2,7 @@
   import { page } from "$app/stores";
   import { onMount, tick } from "svelte";
   import Swal from "sweetalert2";
+  import { systemAlert, systemToast } from "$lib/swal-design";
   import { API_BASE_URL } from "$lib/config";
   import Modal from "$lib/components/Modal.svelte";
   import InputWithVariables from "$lib/components/InputWithVariables.svelte";
@@ -213,14 +214,10 @@
         parseAndApplyCurl(pastedText);
       } catch (err) {
         console.error("Failed to parse cURL:", err);
-        Swal.fire({
+        systemAlert.fire({
           icon: "error",
           title: "Import Failed",
           text: "Could not parse the pasted cURL command.",
-          toast: true,
-          position: "top-end",
-          showConfirmButton: false,
-          timer: 3000,
         });
       }
     }
@@ -293,14 +290,10 @@
         bodyKV = parseToKVArray(apiForm.body);
       }
 
-      Swal.fire({
+      systemToast.fire({
         icon: "success",
         title: "cURL Imported",
         text: "Successfully parsed cURL command.",
-        toast: true,
-        position: "top-end",
-        showConfirmButton: false,
-        timer: 3000,
       });
     }
   }
@@ -737,28 +730,20 @@
 
       if (res.ok) {
         await fetchProjectDetails();
-        Swal.fire({
+        systemToast.fire({
           icon: "success",
           title: "Saved",
           text: "API endpoint updated successfully!",
-          toast: true,
-          position: "top-end",
-          showConfirmButton: false,
-          timer: 3000,
         });
       } else {
         throw new Error("Failed to update API");
       }
     } catch (err) {
       console.error(err);
-      Swal.fire({
+      systemAlert.fire({
         icon: "error",
         title: "Error",
         text: "Failed to save changes.",
-        toast: true,
-        position: "top-end",
-        showConfirmButton: false,
-        timer: 3000,
       });
     }
   }
@@ -822,14 +807,10 @@
 
       if (res.ok) {
         await fetchProjectDetails();
-        Swal.fire({
+        systemToast.fire({
           icon: "success",
           title: pause_hours !== 0 ? "Monitor Paused" : "Monitor Resumed",
           text: label,
-          toast: true,
-          position: "top-end",
-          showConfirmButton: false,
-          timer: 3000,
         });
       }
     } catch (err) {

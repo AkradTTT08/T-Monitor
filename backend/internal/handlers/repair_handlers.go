@@ -45,11 +45,15 @@ func ApproveRepairTask(c *fiber.Ctx) error {
 	database.DB.Save(&task)
 
 	// Create Dashboard Notification
+	var project models.Project
+	database.DB.First(&project, task.ProjectID)
+
 	notification := models.DashboardNotification{
+		UserID:    project.UserID,
 		ProjectID: task.ProjectID,
 		Type:      "task_approve",
 		Title:     "Repair Task Approved",
-		Message:   "A repair task for project ID " + string(rune(task.ProjectID)) + " has been approved.",
+		Message:   "A repair task for project '" + project.Name + "' has been approved.",
 	}
 	database.DB.Create(&notification)
 
@@ -89,11 +93,15 @@ func CloseRepairTask(c *fiber.Ctx) error {
 	database.DB.Save(&task)
 
 	// Create Dashboard Notification
+	var project models.Project
+	database.DB.First(&project, task.ProjectID)
+
 	notification := models.DashboardNotification{
+		UserID:    project.UserID,
 		ProjectID: task.ProjectID,
 		Type:      "task_close",
 		Title:     "Repair Task Closed",
-		Message:   "A repair task has been successfully closed. Reason: " + input.Reason,
+		Message:   "A repair task for project '" + project.Name + "' has been closed. Reason: " + input.Reason,
 	}
 	database.DB.Create(&notification)
 
@@ -122,11 +130,15 @@ func FailRepairTask(c *fiber.Ctx) error {
 	database.DB.Save(&task)
 
 	// Create Dashboard Notification
+	var project models.Project
+	database.DB.First(&project, task.ProjectID)
+
 	notification := models.DashboardNotification{
+		UserID:    project.UserID,
 		ProjectID: task.ProjectID,
 		Type:      "task_fail",
 		Title:     "Repair Task Failed",
-		Message:   "A repair task has been marked as failed: " + input.Description,
+		Message:   "A repair task for project '" + project.Name + "' has been marked as failed: " + input.Description,
 	}
 	database.DB.Create(&notification)
 

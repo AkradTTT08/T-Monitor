@@ -94,10 +94,17 @@ func setupRoutes(app *fiber.App) {
 	// Company Routes
 	companies := protected.Group("/companies")
 	companies.Get("/", handlers.GetCompanies)
+	companies.Get("/:id", handlers.GetCompany)
 	companies.Post("/", handlers.CreateCompany)
 	companies.Put("/:id", handlers.UpdateCompany)
 	companies.Delete("/:id", handlers.DeleteCompany)
 	companies.Post("/:id/logo", handlers.UploadCompanyLogo)
+	companies.Post("/:id/invite", handlers.InviteMemberByEmail)
+	companies.Post("/invitations/:id/accept", handlers.AcceptCompanyInvitation)
+	companies.Post("/invitations/:id/decline", handlers.DeclineCompanyInvitation)
+
+	// Debug Routes
+	api.Get("/debug-companies", handlers.DebugCompany)
 
 	// API Management Routes
 	apis := protected.Group("/apis")
@@ -136,4 +143,7 @@ func setupRoutes(app *fiber.App) {
 	users.Delete("/:id/disapprove", handlers.DisapproveUser)
 	users.Put("/:id/block", handlers.ToggleBlockUser)
 	users.Put("/:id/reset-password", handlers.ResetPassword)
+
+	// Generic User Routes
+	protected.Get("/users/search", handlers.SearchUsers)
 }

@@ -147,7 +147,9 @@ func GetProjects(c *fiber.Ctx) error {
 	if role == "admin" {
 		database.DB.Preload("APIs").Find(&projects)
 	} else {
-		database.DB.Where("user_id = ?", userID).Preload("APIs").Find(&projects)
+		database.DB.Preload("APIs").
+			Where("user_id = ? OR company_id IN (SELECT company_id FROM company_members WHERE user_id = ?)", userID, userID).
+			Find(&projects)
 	}
 
 	return c.JSON(projects)
@@ -162,7 +164,7 @@ func GetProject(c *fiber.Ctx) error {
 
 	query := database.DB.Preload("APIs")
 	if role != "admin" {
-		query = query.Where("user_id = ?", userID)
+		query = query.Where("user_id = ? OR company_id IN (SELECT company_id FROM company_members WHERE user_id = ?)", userID, userID)
 	}
 
 	if err := query.First(&project, id).Error; err != nil {

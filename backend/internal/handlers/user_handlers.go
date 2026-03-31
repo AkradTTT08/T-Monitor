@@ -201,3 +201,16 @@ func ToggleBlockUser(c *fiber.Ctx) error {
 		"is_blocked": user.IsBlocked,
 	})
 }
+
+func SearchUsers(c *fiber.Ctx) error {
+	query := c.Query("q")
+	if len(query) < 2 {
+		return c.JSON([]models.User{})
+	}
+	var users []models.User
+	database.DB.Select("id", "email", "name").
+		Where("email LIKE ? OR name LIKE ?", "%"+query+"%", "%"+query+"%").
+		Limit(10).
+		Find(&users)
+	return c.JSON(users)
+}

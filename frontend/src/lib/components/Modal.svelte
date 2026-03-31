@@ -1,9 +1,12 @@
 <script lang="ts">
   import { createEventDispatcher } from "svelte";
 
-  export let open: boolean = false;
-  export let title: string = "";
-  export let maxWidth: string = "max-w-md";
+  let { 
+    open = $bindable(false), 
+    title = "", 
+    maxWidth = "max-w-md", 
+    overflowVisible = false 
+  } = $props();
 
   const dispatch = createEventDispatcher();
 
@@ -19,27 +22,37 @@
   }
 </script>
 
-<svelte:window on:keydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} />
 
 {#if open}
+  <!-- Final Centering Strategy: Relative modal in a flex container with overflow-y-auto backdrop -->
   <div
-    class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4 fade-in"
-    on:click={close}
+    class="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8 overflow-y-auto modal-backdrop-fade pointer-events-none"
   >
-    <!-- svelte-ignore a11y-click-events-have-key-events -->
+    <div 
+      class="fixed inset-0 bg-slate-950/80 backdrop-blur-md pointer-events-auto"
+      onclick={close}
+      aria-hidden="true"
+    ></div>
+
     <div
-      class="bg-slate-900/95 backdrop-blur-xl border border-cyan-500/30 rounded-2xl shadow-[0_0_30px_rgba(0,0,0,0.8),_0_0_15px_rgba(6,182,212,0.1)] w-full {maxWidth} overflow-hidden"
-      on:click|stopPropagation
+      class="relative bg-slate-900 border border-slate-700 w-full {maxWidth === 'max-w-md' ? 'max-w-4xl' : maxWidth} rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col h-[90vh] max-h-[95vh] pointer-events-auto overflow-hidden transition-all duration-300"
+      onclick={(e) => e.stopPropagation()}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-title"
+      tabindex="-1"
     >
       <div
-        class="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-950/50"
+        class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/50"
       >
-        <h3 class="text-xl font-bold text-cyan-50 font-mono tracking-wide">
+        <h3 id="modal-title" class="text-lg font-bold text-cyan-50 font-mono tracking-tight uppercase">
           {title}
         </h3>
         <button
-          on:click={close}
-          class="text-slate-500 hover:text-cyan-400 transition-colors bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-cyan-500/50 rounded-lg p-1"
+          onclick={close}
+          class="text-slate-500 hover:text-cyan-400 p-2 rounded-xl hover:bg-slate-800 transition-all font-bold"
+          aria-label="Close modal"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -61,7 +74,7 @@
         </button>
       </div>
 
-      <div class="p-6 max-h-[80vh] overflow-y-auto custom-scrollbar">
+      <div class="p-6 flex-1 {overflowVisible ? '' : 'overflow-y-auto custom-scrollbar'}">
         <slot></slot>
       </div>
     </div>
@@ -69,10 +82,10 @@
 {/if}
 
 <style>
-  .fade-in {
-    animation: fadeIn 0.2s ease-out;
+  .modal-backdrop-fade {
+    animation: modalFadeIn 0.2s ease-out forwards;
   }
-  @keyframes fadeIn {
+  @keyframes modalFadeIn {
     from {
       opacity: 0;
     }

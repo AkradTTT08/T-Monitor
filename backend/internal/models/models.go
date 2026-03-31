@@ -13,8 +13,9 @@ type Company struct {
 	Description string          `json:"description"`
 	LogoURL     string          `gorm:"type:text" json:"logo_url"`
 	UserID      uint            `gorm:"not null" json:"user_id"`
-	Projects    []Project       `gorm:"foreignKey:CompanyID" json:"projects,omitempty"`
-	Members     []CompanyMember `gorm:"foreignKey:CompanyID" json:"members,omitempty"`
+	Owner       *User           `gorm:"foreignKey:UserID" json:"owner"`
+	Projects    []Project       `gorm:"foreignKey:CompanyID" json:"projects"`
+	Members     []CompanyMember `gorm:"foreignKey:CompanyID" json:"members"`
 	CreatedAt   time.Time       `json:"created_at"`
 	UpdatedAt   time.Time       `json:"updated_at"`
 	DeletedAt   gorm.DeletedAt  `gorm:"index" json:"deleted_at"` // Soft delete
@@ -146,13 +147,31 @@ type RepairTask struct {
 
 // DashboardNotification represents a popup alert for the UI
 type DashboardNotification struct {
+	ID           uint           `gorm:"primaryKey" json:"id"`
+	UserID       uint           `gorm:"index" json:"user_id"` // 0 for system-wide/all admins
+	ProjectID    uint           `gorm:"index" json:"project_id"`
+	InvitationID *uint          `json:"invitation_id"` // Link to company invitation if type is 'company_invite'
+	Type         string         `json:"type"`          // 'api_fail', 'task_approve', 'task_close', 'task_fail', 'company_invite'
+	Title        string         `json:"title"`
+	Message      string         `json:"message"`
+	IsRead       bool           `gorm:"default:false" json:"is_read"`
+	CreatedAt    time.Time      `json:"created_at"`
+	DeletedAt    gorm.DeletedAt `gorm:"index" json:"deleted_at"`
+}
+
+// CompanyInvitation tracks the state of an invitation to join a company
+type CompanyInvitation struct {
 	ID        uint           `gorm:"primaryKey" json:"id"`
-	UserID    uint           `gorm:"index" json:"user_id"` // 0 for system-wide/all admins
-	ProjectID uint           `gorm:"index" json:"project_id"`
-	Type      string         `json:"type"` // 'api_fail', 'task_approve', 'task_close', 'task_fail'
-	Title     string         `json:"title"`
-	Message   string         `json:"message"`
-	IsRead    bool           `gorm:"default:false" json:"is_read"`
+	CompanyID uint           `gorm:"not null;index" json:"company_id"`
+	InviterID uint           `gorm:"not null" json:"inviter_id"`
+	InviteeID uint           `gorm:"not null;index" json:"invitee_id"`
+	Status    string         `gorm:"type:varchar(20);default:'pending'" json:"status"` // 'pending', 'accepted', 'declined'
 	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"deleted_at"`
+
+	// Preloads
+	Company *Company `gorm:"foreignKey:CompanyID" json:"company,omitempty"`
+	Inviter *User    `gorm:"foreignKey:InviterID" json:"inviter,omitempty"`
+	Invitee *User    `gorm:"foreignKey:InviteeID" json:"invitee,omitempty"`
 }

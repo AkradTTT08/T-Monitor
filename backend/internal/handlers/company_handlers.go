@@ -21,15 +21,48 @@ func GetCompanies(c *fiber.Ctx) error {
 	role := c.Locals("role").(string)
 
 	var companies []models.Company
-	query := database.DB.Preload("Projects")
+	db := database.DB.Preload("Projects").Preload("Owner").Preload("Members.User")
 
 	if role == "admin" {
-		query.Find(&companies)
+		if err := db.Find(&companies).Error; err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch companies"})
+		}
 	} else {
-		query.Where("user_id = ?", userID).Find(&companies)
+		if err := db.Where("user_id = ? OR id IN (SELECT company_id FROM company_members WHERE user_id = ?)", userID, userID).Find(&companies).Error; err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch companies"})
+		}
+	}
+
+	// TRACE LOGGING
+	f, _ := os.OpenFile("companies_access.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if f != nil {
+		defer f.Close()
+		for _, comp := range companies {
+			fmt.Fprintf(f, "[%s] User:%d Role:%s CompID:%d OwnerID:%d OwnerPreloaded:%v Members:%d\n", 
+				time.Now().Format("15:04:05"), userID, role, comp.ID, comp.UserID, comp.Owner != nil, len(comp.Members))
+		}
 	}
 
 	return c.JSON(companies)
+}
+
+func GetCompany(c *fiber.Ctx) error {
+	id := c.Params("id")
+	userID := c.Locals("user_id").(uint)
+	role := c.Locals("role").(string)
+
+	var company models.Company
+	db := database.DB.Preload("Projects").Preload("Owner").Preload("Members.User")
+	
+	if role != "admin" {
+		db = db.Where("user_id = ? OR id IN (SELECT company_id FROM company_members WHERE user_id = ?)", userID, userID)
+	}
+
+	if err := db.First(&company, id).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Company not found or unauthorized"})
+	}
+
+	return c.JSON(company)
 }
 
 func CreateCompany(c *fiber.Ctx) error {
@@ -166,4 +199,13 @@ func UploadCompanyLogo(c *fiber.Ctx) error {
 		"message":  "Logo uploaded successfully",
 		"logo_url": company.LogoURL,
 	})
+}
+
+func DebugCompany(c *fiber.Ctx) error {
+	var companies []models.Company
+	err := database.DB.Preload("Projects").Preload("Owner").Preload("Members.User").Find(&companies).Error
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.JSON(companies)
 }

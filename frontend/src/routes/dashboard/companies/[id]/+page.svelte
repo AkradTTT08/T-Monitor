@@ -87,7 +87,7 @@
       const res = await fetch(`${API_BASE_URL}/api/v1/projects`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newProjectName, description: newProjectDesc, company_id: parseInt(companyId), environment_variables: "{}" }),
+        body: JSON.stringify({ name: newProjectName, description: newProjectDesc, company_id: parseInt(companyId || '0'), environment_variables: "{}" }),
       });
       if (res.ok) {
         const project = await res.json();
@@ -117,7 +117,7 @@
       const res = await fetch(`${API_BASE_URL}/api/v1/projects/${editingProjectId}`, {
         method: "PUT",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ name: editProjectName, description: editProjectDesc, environment_variables: editProjectEnvVars, cover_position: editProjectCoverPos, company_id: parseInt(companyId) }),
+        body: JSON.stringify({ name: editProjectName, description: editProjectDesc, environment_variables: editProjectEnvVars, cover_position: editProjectCoverPos, company_id: parseInt(companyId || '0') }),
       });
       if (res.ok) {
         if (editCoverFile) await uploadCover(editingProjectId, editCoverFile);
@@ -146,6 +146,13 @@
       }
     } catch (err) { console.error(err); }
   }
+
+  let user: any = null;
+  onMount(async () => {
+    const userData = localStorage.getItem("monitor_user");
+    if (userData) user = JSON.parse(userData);
+    await fetchData();
+  });
 </script>
 
 <svelte:window on:click={() => (activeDropdownId = null)} />
@@ -168,16 +175,18 @@
         MANAGE PROJECT WORKSPACES FOR THIS COMPANY.
       </p>
     </div>
-    <button
-      on:click={() => (showCreateModal = true)}
-      class="bg-slate-900 border border-cyan-500/50 text-cyan-400 hover:bg-cyan-950/50 hover:border-cyan-400 hover:text-cyan-300 font-bold py-2.5 px-6 rounded-xl shadow-[0_0_15px_rgba(6,182,212,0.3)] hover:shadow-[0_0_25px_rgba(6,182,212,0.5)] transition-all flex items-center gap-2 group transform hover:-translate-y-0.5 font-mono tracking-wider overflow-hidden relative"
-    >
-      <div class="absolute inset-0 w-full h-full bg-cyan-400/10 -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] skew-x-12"></div>
-      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="relative z-10 group-hover:rotate-90 transition-transform duration-300">
-        <line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line>
-      </svg>
-      <span class="relative z-10">+ NEW_PROJECT</span>
-    </button>
+    {#if user && (user.id === company?.user_id || user.role === 'admin')}
+      <button
+        on:click={() => (showCreateModal = true)}
+        class="bg-slate-900 border border-cyan-500/50 text-cyan-400 hover:bg-cyan-950/50 hover:border-cyan-400 hover:text-cyan-300 font-bold py-2.5 px-6 rounded-xl shadow-[0_0_15px_rgba(6,182,212,0.3)] hover:shadow-[0_0_25px_rgba(6,182,212,0.5)] transition-all flex items-center gap-2 group transform hover:-translate-y-0.5 font-mono tracking-wider overflow-hidden relative"
+      >
+        <div class="absolute inset-0 w-full h-full bg-cyan-400/10 -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] skew-x-12"></div>
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="relative z-10 group-hover:rotate-90 transition-transform duration-300">
+          <line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+        <span class="relative z-10">+ NEW_PROJECT</span>
+      </button>
+    {/if}
   </div>
 
   {#if isLoading}
@@ -236,9 +245,15 @@
               </button>
               {#if activeDropdownId === project.id}
                 <div class="absolute right-0 top-10 mt-1 w-36 bg-slate-800 rounded-xl shadow-xl border border-slate-700 py-1 z-20 animate-in slide-in-from-top-2" on:click|stopPropagation>
-                  <button on:click={() => openEdit(project)} class="w-full text-left px-4 py-2 text-sm font-medium text-slate-300 hover:text-cyan-400 hover:bg-slate-700/50 transition-colors font-mono">EDIT</button>
-                  <div class="h-px w-full bg-slate-700/50 my-1"></div>
-                  <button on:click={() => openDelete(project)} class="w-full text-left px-4 py-2 text-sm font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors font-mono">TERMINATE</button>
+                  {#if user && (user.id === (company?.user_id || project.user_id) || user.role === 'admin')}
+                    <button on:click={() => openEdit(project)} class="w-full text-left px-4 py-2 text-sm font-medium text-slate-300 hover:text-cyan-400 hover:bg-slate-700/50 transition-colors font-mono">EDIT</button>
+                    <div class="h-px w-full bg-slate-700/50 my-1"></div>
+                    <button on:click={() => openDelete(project)} class="w-full text-left px-4 py-2 text-sm font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors font-mono">TERMINATE</button>
+                  {:else}
+                    <div class="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-tighter text-center italic">
+                      View Only
+                    </div>
+                  {/if}
                 </div>
               {/if}
             </div>
@@ -266,7 +281,7 @@
 </div>
 
 <!-- Create Project Modal -->
-<Modal bind:open={showCreateModal} title="New Project">
+<Modal bind:open={showCreateModal} title="New Project" maxWidth="max-w-lg">
   <form on:submit|preventDefault={handleCreate} class="space-y-4">
     <div>
       <label for="p_name" class="block text-sm font-semibold text-cyan-50 mb-1">Project Name</label>
@@ -288,7 +303,7 @@
 </Modal>
 
 <!-- Edit Project Modal -->
-<Modal bind:open={showEditModal} title="Edit Project">
+<Modal bind:open={showEditModal} title="Edit Project" maxWidth="max-w-lg">
   <form on:submit|preventDefault={handleEdit} class="space-y-4">
     <div>
       <label for="ep_name" class="block text-sm font-semibold text-cyan-50 mb-1">Project Name</label>

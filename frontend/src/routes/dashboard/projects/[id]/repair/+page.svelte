@@ -2,6 +2,7 @@
   import { page } from "$app/stores";
   import { onMount } from "svelte";
   import Swal from "sweetalert2";
+  import { systemAlert, systemToast } from "$lib/swal-design";
   import { API_BASE_URL } from "$lib/config";
 
   $: projectId = $page.params.id;
@@ -64,12 +65,12 @@
 
   async function openApprove(task: any) {
     selectedTask = task;
-    const result = await Swal.fire({
+    const result = await systemAlert.fire({
       title: 'APPROVE TASK?',
       html: `
         <div class="text-left space-y-3">
           <p class="text-sm text-slate-400">Are you sure you want to approve this task? This will set the status to <span class="text-blue-400 font-bold uppercase">Pending</span> and assign it to you for resolution.</p>
-          <div class="p-3 bg-slate-900/50 border border-slate-800 rounded-xl">
+          <div class="p-3 bg-slate-950 border border-slate-800 rounded-xl">
             <p class="text-[10px] font-black text-slate-500 uppercase">API TARGET</p>
             <p class="text-xs text-slate-200 font-mono truncate">${task.api?.name || 'Unknown'}</p>
           </div>
@@ -79,17 +80,7 @@
       showCancelButton: true,
       confirmButtonText: 'CONFIRM APPROVAL',
       cancelButtonText: 'CANCEL',
-      background: '#0f172a',
-      color: '#f1f5f9',
-      confirmButtonColor: '#2563eb',
-      cancelButtonColor: '#1e293b',
-      customClass: {
-        popup: 'rounded-3xl border border-slate-800 shadow-2xl backdrop-blur-xl',
-        title: 'text-2xl font-black tracking-tight text-white pt-6',
-        htmlContainer: 'px-6',
-        confirmButton: 'rounded-xl px-6 py-3 font-bold text-sm tracking-tight m-2',
-        cancelButton: 'rounded-xl px-6 py-3 font-bold text-sm tracking-tight m-2'
-      }
+      confirmButtonColor: '#0891b2',
     });
 
     if (result.isConfirmed) {
@@ -108,15 +99,9 @@
 
       if (res.ok) {
         await fetchData();
-        Swal.fire({ 
+        systemToast.fire({ 
           icon: 'success', 
           title: 'Task Approved', 
-          toast: true, 
-          position: 'top-end', 
-          showConfirmButton: false, 
-          timer: 3000,
-          background: '#0f172a',
-          color: '#f1f5f9'
         });
       }
     } catch (err) {
@@ -126,10 +111,8 @@
 
   async function openClose(task: any) {
     selectedTask = task;
-    const { value: formValues } = await Swal.fire({
+    const { value: formValues } = await systemAlert.fire({
       title: 'CLOSE REPAIR TASK',
-      background: '#0f172a',
-      color: '#f1f5f9',
       html: `
         <div class="text-left space-y-4">
           <div class="space-y-2">
@@ -156,7 +139,6 @@
       confirmButtonText: 'FINISH & CLOSE',
       cancelButtonText: 'CANCEL',
       confirmButtonColor: '#059669',
-      cancelButtonColor: '#1e293b',
       preConfirm: async () => {
         const reason = (document.getElementById('swal-reason') as HTMLTextAreaElement).value;
         const document_url = (document.getElementById('swal-url') as HTMLInputElement).value;
@@ -198,20 +180,14 @@
         return { reason, document_url, documents };
       },
       didRender: () => {
-        const fileInput = Swal.getPopup()?.querySelector('#swal-files') as HTMLInputElement;
-        const fileCount = Swal.getPopup()?.querySelector('#file-count') as HTMLElement;
+        const fileInput = systemAlert.getPopup()?.querySelector('#swal-files') as HTMLInputElement;
+        const fileCount = systemAlert.getPopup()?.querySelector('#file-count') as HTMLElement;
         if (fileInput && fileCount) {
           fileInput.onchange = () => {
-            fileCount.textContent = (fileInput.files?.length || 0) + ' files selected';
+            const count = fileInput.files?.length || 0;
+            fileCount.innerText = count > 0 ? `${count} file(s) selected` : 'Select files to upload...';
           };
         }
-      },
-      customClass: {
-        popup: 'rounded-3xl border border-slate-800 shadow-2xl backdrop-blur-xl',
-        title: 'text-2xl font-black tracking-tight text-white pt-6',
-        htmlContainer: 'px-6',
-        confirmButton: 'rounded-xl px-6 py-3 font-bold text-sm tracking-tight m-2',
-        cancelButton: 'rounded-xl px-6 py-3 font-bold text-sm tracking-tight m-2'
       }
     });
 
@@ -233,15 +209,9 @@
 
       if (res.ok) {
         await fetchData();
-        Swal.fire({ 
+        systemToast.fire({ 
           icon: 'success', 
           title: 'Task Closed', 
-          toast: true, 
-          position: 'top-end', 
-          showConfirmButton: false, 
-          timer: 3000,
-          background: '#0f172a',
-          color: '#f1f5f9'
         });
       }
     } catch (err) {
@@ -251,10 +221,8 @@
 
   async function openFail(task: any) {
     selectedTask = task;
-    const { value: formValues } = await Swal.fire({
+    const { value: formValues } = await systemAlert.fire({
       title: 'MARK AS FAILED',
-      background: '#0f172a',
-      color: '#f1f5f9',
       html: `
         <div class="text-left space-y-4">
           <div class="space-y-2">
@@ -267,22 +235,14 @@
       confirmButtonText: 'CONFIRM FAILURE',
       cancelButtonText: 'CANCEL',
       confirmButtonColor: '#e11d48',
-      cancelButtonColor: '#1e293b',
       preConfirm: () => {
         const description = (document.getElementById('swal-desc') as HTMLTextAreaElement).value;
         if (!description) {
-          Swal.showValidationMessage('Please enter a failure description');
+          systemAlert.showValidationMessage('Please enter a failure description');
           return false;
         }
         return { description };
       },
-      customClass: {
-        popup: 'rounded-3xl border border-slate-800 shadow-2xl backdrop-blur-xl',
-        title: 'text-2xl font-black tracking-tight text-white pt-6',
-        htmlContainer: 'px-6',
-        confirmButton: 'rounded-xl px-6 py-3 font-bold text-sm tracking-tight m-2',
-        cancelButton: 'rounded-xl px-6 py-3 font-bold text-sm tracking-tight m-2'
-      }
     });
 
     if (formValues) {
@@ -303,15 +263,9 @@
 
       if (res.ok) {
         await fetchData();
-        Swal.fire({ 
+        systemToast.fire({ 
           icon: 'error', 
           title: 'Task Marked Failed', 
-          toast: true, 
-          position: 'top-end', 
-          showConfirmButton: false, 
-          timer: 3000,
-          background: '#0f172a',
-          color: '#f1f5f9'
         });
       }
     } catch (err) {
@@ -378,20 +332,11 @@
       `;
     }
 
-    await Swal.fire({
+    await systemAlert.fire({
       title: task.status === 'closed' ? 'TASK RESOLUTION DETAIL' : 'TASK FAILURE DETAIL',
-      background: '#0f172a',
-      color: '#f1f5f9',
       html,
       showConfirmButton: true,
       confirmButtonText: 'CLOSE VIEW',
-      confirmButtonColor: '#1e293b',
-      customClass: {
-        popup: 'rounded-3xl border border-slate-800 shadow-2xl backdrop-blur-xl',
-        title: 'text-xl font-black tracking-tight text-white pt-6',
-        htmlContainer: 'px-6 pb-6',
-        confirmButton: 'rounded-xl px-8 py-3 font-bold text-xs tracking-widest'
-      }
     });
   }
 
