@@ -80,6 +80,7 @@ func setupRoutes(app *fiber.App) {
 	profile := protected.Group("/profile")
 	profile.Get("/", handlers.GetProfile)
 	profile.Put("/", handlers.UpdateProfile)
+	profile.Post("/upload", handlers.UploadProfileImage)
 	profile.Put("/password", handlers.UpdatePassword)
 
 	// Project Routes
@@ -90,6 +91,10 @@ func setupRoutes(app *fiber.App) {
 	project.Put("/:id", handlers.UpdateProject)
 	project.Delete("/:id", handlers.DeleteProject)
 	project.Post("/:id/cover", handlers.UploadProjectCover)
+	// Project Members management
+	project.Get("/:id/members", handlers.GetProjectMembers)
+	project.Post("/:id/members", handlers.AddProjectMember)
+	project.Delete("/:id/members/:userId", handlers.RemoveProjectMember)
 
 	// Company Routes
 	companies := protected.Group("/companies")
@@ -102,6 +107,7 @@ func setupRoutes(app *fiber.App) {
 	companies.Post("/:id/invite", handlers.InviteMemberByEmail)
 	companies.Post("/invitations/:id/accept", handlers.AcceptCompanyInvitation)
 	companies.Post("/invitations/:id/decline", handlers.DeclineCompanyInvitation)
+	companies.Delete("/:id/members/:memberId", handlers.RemoveCompanyMember)
 
 	// Debug Routes
 	api.Get("/debug-companies", handlers.DebugCompany)

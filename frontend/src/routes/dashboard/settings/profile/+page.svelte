@@ -51,13 +51,17 @@
     $: passwordAllValid =
         passwords.new.length > 0 && passwordRules.every((r) => r.valid);
 
-    function handleImageUpload(e: Event) {
+    async function handleImageUpload(e: Event) {
         const target = e.target as HTMLInputElement;
         if (target.files && target.files.length > 0) {
             const file = target.files[0];
 
             if (file.size > 2 * 1024 * 1024) {
-                systemAlert.fire("Error", "Image size exceeds 2MB limit", "error");
+                systemAlert.fire(
+                    "Error",
+                    "Image size exceeds 2MB limit",
+                    "error",
+                );
                 return;
             }
 
@@ -71,11 +75,26 @@
                 return;
             }
 
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                if (e.target?.result) {
-                    user.profile_image_url = e.target.result.toString();
-                    // Also update localStorage and notify the sidebar immediately
+            try {
+                const formData = new FormData();
+                formData.append("profile_image", file);
+                const token = localStorage.getItem("monitor_token");
+                const res = await fetch(
+                    `${API_BASE_URL}/api/v1/profile/upload`,
+                    {
+                        method: "POST",
+                        headers: {
+                            Authorization: `Bearer ${token}`,
+                        },
+                        body: formData,
+                    },
+                );
+
+                if (res.ok) {
+                    const data = await res.json();
+                    user.profile_image_url = data.profile_image_url;
+
+                    // Update local storage user data for the layout
                     const storedUser = JSON.parse(
                         localStorage.getItem("monitor_user") || "{}",
                     );
@@ -84,12 +103,29 @@
                         "monitor_user",
                         JSON.stringify(storedUser),
                     );
+
                     window.dispatchEvent(
                         new CustomEvent("user-updated", { detail: storedUser }),
                     );
+
+                    systemToast.fire({
+                        icon: "success",
+                        title: "Photo Uploaded",
+                        text: "Your profile picture has been updated.",
+                        timer: 2000,
+                    });
+                } else {
+                    const err = await res.json();
+                    systemAlert.fire(
+                        "Upload Failed",
+                        err.error || "Failed to upload image",
+                        "error",
+                    );
                 }
-            };
-            reader.readAsDataURL(file);
+            } catch (err) {
+                console.error(err);
+                systemAlert.fire("Error", "A network error occurred.", "error");
+            }
         }
     }
 
@@ -306,7 +342,12 @@
                         >
                             {#if user.profile_image_url}
                                 <img
-                                    src={user.profile_image_url}
+                                    src={user.profile_image_url.startsWith(
+                                        "http",
+                                    ) ||
+                                    user.profile_image_url.startsWith("data:")
+                                        ? user.profile_image_url
+                                        : `${API_BASE_URL}${user.profile_image_url}`}
                                     alt="Profile"
                                     class="w-full h-full object-cover"
                                 />

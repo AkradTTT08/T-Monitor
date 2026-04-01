@@ -5,7 +5,8 @@
     open = $bindable(false), 
     title = "", 
     maxWidth = "max-w-md", 
-    overflowVisible = false 
+    overflowVisible = false,
+    children
   } = $props();
 
   const dispatch = createEventDispatcher();
@@ -29,14 +30,18 @@
   <div
     class="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8 overflow-y-auto modal-backdrop-fade pointer-events-none"
   >
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div 
       class="fixed inset-0 bg-slate-950/80 backdrop-blur-md pointer-events-auto"
       onclick={close}
       aria-hidden="true"
     ></div>
 
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
-      class="relative bg-slate-900 border border-slate-700 w-full {maxWidth === 'max-w-md' ? 'max-w-4xl' : maxWidth} rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col h-[90vh] max-h-[95vh] pointer-events-auto overflow-hidden transition-all duration-300"
+      class="relative bg-slate-900 border border-slate-700 w-full {maxWidth === 'max-w-md' ? 'max-w-4xl' : maxWidth} rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col h-auto max-h-[80vh] pointer-events-auto overflow-hidden transition-all duration-300"
       onclick={(e) => e.stopPropagation()}
       role="dialog"
       aria-modal="true"
@@ -75,7 +80,9 @@
       </div>
 
       <div class="p-6 flex-1 {overflowVisible ? '' : 'overflow-y-auto custom-scrollbar'}">
-        <slot></slot>
+      {#if children}
+        {@render children()}
+      {/if}
       </div>
     </div>
   </div>

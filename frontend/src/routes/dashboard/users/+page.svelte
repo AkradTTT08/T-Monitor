@@ -241,7 +241,7 @@
           {#each users as u}
             <tr
               class="hover:bg-slate-800/50 transition-colors group cursor-pointer active:bg-slate-800"
-              on:click={() => openDetailModal(u)}
+              onclick={() => openDetailModal(u)}
             >
               <td class="p-4 pl-6">
                 <div class="flex items-center gap-3">
@@ -345,14 +345,14 @@
                 >
                   {#if !u.is_approved && (!currentUser || currentUser.id !== u.id)}
                     <button
-                      on:click|stopPropagation={() => approveUser(u.id)}
+                    onclick={(e) => { e.stopPropagation(); approveUser(u.id); }}
                       class="text-emerald-400 hover:text-emerald-300 transition-colors bg-emerald-950/30 hover:bg-emerald-900/50 px-3 py-1.5 rounded-lg border border-emerald-500/30 hover:border-emerald-400/50 shadow-[0_0_10px_rgba(52,211,153,0.1)] hover:shadow-[0_0_15px_rgba(52,211,153,0.3)] text-[10px] font-bold font-mono tracking-widest uppercase flex items-center gap-1"
                       title="Approve this user"
                     >
                       APPROVE
                     </button>
                     <button
-                      on:click|stopPropagation={() => disapproveUser(u.id)}
+                    onclick={(e) => { e.stopPropagation(); disapproveUser(u.id); }}
                       class="text-red-400 hover:text-red-300 transition-colors bg-red-950/30 hover:bg-red-900/50 px-3 py-1.5 rounded-lg border border-red-500/30 hover:border-red-400/50 shadow-[0_0_10px_rgba(239,68,68,0.1)] hover:shadow-[0_0_15px_rgba(239,68,68,0.3)] text-[10px] font-bold font-mono tracking-widest uppercase flex items-center gap-1"
                       title="Disapprove (Reject) this user"
                     >
@@ -361,7 +361,7 @@
                   {/if}
 
                   <button
-                    on:click|stopPropagation={() => resetPassword(u.id)}
+                    onclick={(e) => { e.stopPropagation(); resetPassword(u.id); }}
                     class="text-slate-500 hover:text-cyan-400 transition-colors flex items-center gap-1 font-mono tracking-widest uppercase text-[10px] font-bold disabled:opacity-50 disabled:hover:text-slate-500"
                     title="Reset Password"
                     disabled={currentUser && currentUser.id === u.id}
@@ -385,7 +385,7 @@
                   </button>
 
                   <button
-                    on:click|stopPropagation={() => toggleRole(u.id, u.role)}
+                    onclick={(e) => { e.stopPropagation(); toggleRole(u.id, u.role); }}
                     disabled={currentUser && currentUser.id === u.id}
                     class="transition-colors whitespace-nowrap ml-2 font-mono tracking-widest uppercase text-[10px] font-bold px-3 py-1.5 rounded-lg border
                       {currentUser && currentUser.id === u.id
@@ -398,7 +398,7 @@
                   </button>
 
                   <button
-                    on:click|stopPropagation={() => toggleBlock(u.id)}
+                    onclick={(e) => { e.stopPropagation(); toggleBlock(u.id); }}
                     disabled={currentUser &&
                       (currentUser.id === u.id || u.role === "admin")}
                     class="transition-all whitespace-nowrap ml-2 font-mono tracking-widest uppercase text-[10px] font-bold px-3 py-1.5 rounded-lg border flex items-center gap-2
@@ -482,7 +482,7 @@
         </div>
         <div class="text-center">
           <h2 class="text-xl font-bold text-cyan-50 font-mono tracking-wide">
-            {selectedUser.name || "UNNAMED_USER"}
+            {selectedUser.name || selectedUser.email || "UNNAMED_USER"}
           </h2>
           <p class="text-slate-400 text-sm font-mono">{selectedUser.email}</p>
         </div>
@@ -574,7 +574,7 @@
 
       <div class="pt-6 border-t border-slate-700/50 flex justify-end">
         <button
-          on:click={() => (showDetailModal = false)}
+          onclick={() => (showDetailModal = false)}
           class="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold font-mono transition-colors border border-slate-700 hover:border-slate-500"
         >
           CLOSE_PROFILE

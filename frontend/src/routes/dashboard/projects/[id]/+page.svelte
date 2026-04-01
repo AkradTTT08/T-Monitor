@@ -40,6 +40,13 @@
   let pauseDurationHours: number = 1;
   let pauseMinutes: number = 60;
   let pauseType: 'duration' | 'indefinite' | 'resume' = 'duration';
+  
+  // Project Members State
+  let projectMembers: any[] = [];
+  let companyMembers: any[] = [];
+  let showMembersModal = false;
+  let isAddingMember = false;
+  let selectedMemberId: number | null = null;
 
   // API Reference for Edit/Delete
   let selectedApi: any = null;
@@ -448,7 +455,9 @@
 
   // Re-fetch whenever projectId changes
   $: if (projectId) {
+    console.log("Project ID changed to:", projectId);
     fetchProjectDetails(projectId);
+    fetchMembersData();
   }
 
   async function fetchProjectDetails(id?: string) {
@@ -482,6 +491,106 @@
     } finally {
       isLoading = false;
     }
+  }
+
+  async function fetchMembersData() {
+    if (!projectId) return;
+    try {
+      const token = localStorage.getItem("monitor_token");
+      
+      // Fetch project members
+      const pmRes = await fetch(`${API_BASE_URL}/api/v1/projects/${projectId}/members`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (pmRes.ok) {
+        projectMembers = await pmRes.json();
+        console.log("Project Members fetched:", projectMembers);
+      }
+
+      // Fetch company members (candidates)
+      if (project && project.company_id) {
+        const cmRes = await fetch(`${API_BASE_URL}/api/v1/companies/${project.company_id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (cmRes.ok) {
+          const companyData = await cmRes.json();
+          companyMembers = companyData.members || [];
+          console.log("Company Members fetched:", companyMembers);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch members data:", err);
+    }
+  }
+
+  async function addProjectMember() {
+    console.log("addProjectMember called. selectedMemberId:", selectedMemberId);
+    if (!selectedMemberId) {
+      systemAlert.fire("Error", "Please select a member first", "error");
+      return;
+    }
+    isAddingMember = true;
+    try {
+      const token = localStorage.getItem("monitor_token");
+      const res = await fetch(`${API_BASE_URL}/api/v1/projects/${projectId}/members`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          user_id: Number(selectedMemberId),
+          role: "member"
+        })
+      });
+
+      if (res.ok) {
+        systemToast.fire({ icon: 'success', title: 'Member added' });
+        await fetchMembersData();
+        selectedMemberId = null;
+      } else {
+        const error = await res.json();
+        console.error("Add member error response:", error);
+        systemAlert.fire('Error', error.error || 'Failed to add member', 'error');
+      }
+    } catch (err) {
+      console.error("Network/System error adding member:", err);
+      systemAlert.fire('Error', 'A system error occurred', 'error');
+    } finally {
+      isAddingMember = false;
+    }
+  }
+
+  async function removeProjectMember(userId: number) {
+    const confirm = await systemAlert.fire({
+      title: 'Are you sure?',
+      text: "This user will lose access to this project.",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, remove'
+    });
+
+    if (!confirm.isConfirmed) return;
+
+    try {
+      const token = localStorage.getItem("monitor_token");
+      const res = await fetch(`${API_BASE_URL}/api/v1/projects/${projectId}/members/${userId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (res.ok) {
+        systemToast.fire({ icon: 'success', title: 'Member removed' });
+        await fetchMembersData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  function openMembersModal() {
+    fetchMembersData();
+    showMembersModal = true;
   }
 
   // --- Bulk Selection Logic --- //
@@ -1033,7 +1142,31 @@
 
         <div class="flex items-center gap-3 shrink-0 flex-wrap lg:flex-nowrap">
           <button
-            on:click={openEnvVarsModal}
+            onclick={openMembersModal}
+            class="bg-blue-950/30 border border-blue-500/40 text-blue-400 hover:bg-blue-900/50 hover:border-blue-400 font-bold py-2 px-4 rounded-lg shadow-[0_0_10px_rgba(59,130,246,0.15)] transition-all flex items-center gap-2 text-sm w-full md:w-auto justify-center font-mono tracking-wide"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              ><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle
+                cx="9"
+                cy="7"
+                r="4"
+              ></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path
+                d="M16 3.13a4 4 0 0 1 0 7.75"
+              ></path></svg
+            >
+            MEMBERS
+          </button>
+          <button
+            onclick={openEnvVarsModal}
             class="bg-emerald-950/30 border border-emerald-500/40 text-emerald-400 hover:bg-emerald-900/50 hover:border-emerald-400 font-bold py-2 px-4 rounded-lg shadow-[0_0_10px_rgba(16,185,129,0.15)] transition-all flex items-center gap-2 text-sm w-full md:w-auto justify-center font-mono tracking-wide"
           >
             <svg
@@ -1074,7 +1207,7 @@
             CHANNELS
           </a>
           <button
-            on:click={() => (showFolderModal = true)}
+            onclick={() => (showFolderModal = true)}
             class="bg-indigo-950/30 border border-indigo-500/40 text-indigo-400 hover:bg-indigo-900/50 hover:border-indigo-400 font-bold py-2 px-4 rounded-lg shadow-[0_0_10px_rgba(99,102,241,0.15)] transition-all flex items-center gap-2 text-sm w-full md:w-auto justify-center font-mono tracking-wide"
           >
             <svg
@@ -1099,7 +1232,7 @@
             +FOLDER
           </button>
           <button
-            on:click={openAddApiModal}
+            onclick={openAddApiModal}
             class="bg-cyan-950 border border-cyan-500/50 text-cyan-400 hover:bg-cyan-900 hover:border-cyan-400 hover:text-cyan-300 font-bold py-2 px-4 rounded-lg shadow-[0_0_15px_rgba(6,182,212,0.3)] transition-all flex items-center gap-2 text-sm w-full md:w-auto justify-center font-mono tracking-wide relative overflow-hidden group"
           >
             <div
@@ -1174,7 +1307,7 @@
               type="file"
               accept=".json"
               class="hidden"
-              on:change={handleFileSelect}
+              onchange={handleFileSelect}
               disabled={isUploading}
             />
           </label>
@@ -1207,7 +1340,7 @@
             >{selectedApiIds.length} SELECTED</span
           >
           <button
-            on:click={() => (showBulkDeleteModal = true)}
+            onclick={() => (showBulkDeleteModal = true)}
             class="bg-red-500/10 text-red-500 hover:bg-red-500/20 hover:text-red-400 border border-red-500/30 font-bold py-1.5 px-4 rounded-lg shadow-[0_0_10px_rgba(239,68,68,0.1)] transition-colors text-sm flex items-center gap-2 font-mono tracking-wide"
           >
             <svg
@@ -1257,7 +1390,7 @@
                   type="checkbox"
                   checked={allSelected}
                   {indeterminate}
-                  on:change={toggleAllSelection}
+                  onchange={toggleAllSelection}
                   class="w-4 h-4 text-cyan-500 bg-slate-900 border border-slate-600 rounded focus:ring-cyan-500/50 focus:ring-offset-slate-900 cursor-pointer appearance-none checked:bg-cyan-500 checked:border-cyan-500 transition-colors shadow-[0_0_10px_rgba(6,182,212,0.2)]"
                 />
               </th>
@@ -1276,9 +1409,9 @@
                   folderName && dragOverItem?.index === -1
                   ? '!bg-cyan-900/30'
                   : ''}"
-                on:dragover={(e) => handleDragOver(e, folderName, -1)}
-                on:dragleave={handleDragLeave}
-                on:drop={(e) => handleDrop(e, folderName, -1)}
+                ondragover={(e) => handleDragOver(e, folderName, -1)}
+                ondragleave={handleDragLeave}
+                ondrop={(e) => handleDrop(e, folderName, -1)}
               >
                 <td colspan="6" class="px-4 py-2">
                   <div class="flex items-center justify-between">
@@ -1311,7 +1444,7 @@
                         class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
                       >
                         <button
-                          on:click={() => openEditFolder(folderName)}
+                          onclick={() => openEditFolder(folderName)}
                           class="text-cyan-500/80 hover:text-cyan-400 transition-colors p-1 rounded hover:bg-slate-900 border border-transparent hover:border-cyan-500/30 hover:shadow-[0_0_10px_rgba(6,182,212,0.2)]"
                           title="Rename Folder"
                         >
@@ -1331,7 +1464,7 @@
                           >
                         </button>
                         <button
-                          on:click={() => openDeleteFolder(folderName)}
+                          onclick={() => openDeleteFolder(folderName)}
                           class="text-cyan-500/80 hover:text-red-400 transition-colors p-1 rounded hover:bg-slate-900 border border-transparent hover:border-red-500/30 hover:shadow-[0_0_10px_rgba(2ef,68,68,0.2)]"
                           title="Delete Folder"
                         >
@@ -1362,10 +1495,10 @@
               {#each folderApis as api, i}
                 <tr
                   draggable="true"
-                  on:dragstart={(e) => handleDragStart(e, api.id)}
-                  on:dragover={(e) => handleDragOver(e, folderName, i)}
-                  on:dragleave={handleDragLeave}
-                  on:drop={(e) => handleDrop(e, folderName, i)}
+                  ondragstart={(e) => handleDragStart(e, api.id)}
+                  ondragover={(e) => handleDragOver(e, folderName, i)}
+                  ondragleave={handleDragLeave}
+                  ondrop={(e) => handleDrop(e, folderName, i)}
                   class="hover:bg-slate-800/40 border-b border-slate-800 transition-colors cursor-grab active:cursor-grabbing group/apirow relative"
                   class:border-t-2={dragOverItem?.folder === folderName &&
                     dragOverItem?.index === i}
@@ -1376,7 +1509,7 @@
                     <input
                       type="checkbox"
                       checked={selectedApiIds.includes(api.id)}
-                      on:change={() => toggleSelection(api.id)}
+                      onchange={() => toggleSelection(api.id)}
                       class="w-4 h-4 text-cyan-500 bg-slate-900 border border-slate-600 rounded focus:ring-cyan-500/50 focus:ring-offset-slate-900 cursor-pointer appearance-none checked:bg-cyan-500 checked:border-cyan-500 transition-colors shadow-[0_0_10px_rgba(6,182,212,0.2)]"
                     />
                   </td>
@@ -1420,7 +1553,7 @@
                     class="p-3 md:p-4 text-right flex items-center justify-end gap-1 sm:gap-2"
                   >
                     <button
-                      on:click={() => openEditApiModal(api)}
+                      onclick={() => openEditApiModal(api)}
                       class="text-cyan-500/80 hover:text-cyan-400 transition-colors p-1.5 rounded-lg hover:bg-slate-900 border border-transparent hover:border-cyan-500/30 hover:shadow-[0_0_10px_rgba(6,182,212,0.2)]"
                       title="Edit Endpoint"
                     >
@@ -1440,7 +1573,7 @@
                       >
                     </button>
                     <button
-                      on:click={() => openScheduleModal(api)}
+                      onclick={() => openScheduleModal(api)}
                       class="text-cyan-500/80 hover:text-indigo-400 transition-colors p-1.5 rounded-lg hover:bg-slate-900 border border-transparent hover:border-indigo-500/30 hover:shadow-[0_0_10px_rgba(99,102,241,0.2)]"
                       title="Schedule Settings"
                     >
@@ -1460,7 +1593,7 @@
                       >
                     </button>
                     <button
-                      on:click={() => openPauseApiModal(api)}
+                      onclick={() => openPauseApiModal(api)}
                       class="text-cyan-500/80 hover:text-amber-400 transition-colors p-1.5 rounded-lg hover:bg-slate-900 border border-transparent hover:border-amber-500/30 hover:shadow-[0_0_10px_rgba(245,158,11,0.2)]"
                       title="Pause/Resume Monitor"
                     >
@@ -1480,7 +1613,7 @@
                       </svg>
                     </button>
                     <button
-                      on:click={() => openDeleteApiModal(api)}
+                      onclick={() => openDeleteApiModal(api)}
                       class="text-cyan-500/80 hover:text-red-400 transition-colors p-1.5 rounded-lg hover:bg-slate-900 border border-transparent hover:border-red-500/30 hover:shadow-[0_0_10px_rgba(239,68,68,0.2)]"
                       title="Delete Endpoint"
                     >
@@ -1511,10 +1644,10 @@
                   class="h-2 transition-all"
                   class:bg-blue-100={dragOverItem?.folder === folderName &&
                     dragOverItem?.index === folderApis.length}
-                  on:dragover={(e) =>
+                  ondragover={(e) =>
                     handleDragOver(e, folderName, folderApis.length)}
-                  on:dragleave={handleDragLeave}
-                  on:drop={(e) => handleDrop(e, folderName, folderApis.length)}
+                  ondragleave={handleDragLeave}
+                  ondrop={(e) => handleDrop(e, folderName, folderApis.length)}
                 >
                   <td colspan="6" class="p-0"></td>
                 </tr>
@@ -1538,7 +1671,7 @@
     </p>
     <div class="grid grid-cols-2 gap-3">
       <button
-        on:click={() => executePostmanUpload("append")}
+        onclick={() => executePostmanUpload("append")}
         class="border border-cyan-500/30 bg-cyan-950/30 text-cyan-400 hover:bg-cyan-900/50 rounded-xl p-4 flex flex-col items-center justify-center text-center transition-colors"
       >
         <svg
@@ -1566,7 +1699,7 @@
       </button>
 
       <button
-        on:click={() => executePostmanUpload("replace")}
+        onclick={() => executePostmanUpload("replace")}
         class="border border-red-500/30 bg-red-950/30 text-red-400 hover:bg-red-900/50 rounded-xl p-4 flex flex-col items-center justify-center text-center transition-colors"
       >
         <svg
@@ -1606,7 +1739,7 @@
     </p>
     <div class="grid grid-cols-2 gap-3">
       <button
-        on:click={() => executeAddApi("append")}
+        onclick={() => executeAddApi("append")}
         class="border border-cyan-500/30 bg-cyan-950/30 text-cyan-400 hover:bg-cyan-900/50 rounded-xl p-4 flex flex-col items-center justify-center text-center transition-colors"
       >
         <svg
@@ -1634,7 +1767,7 @@
       </button>
 
       <button
-        on:click={() => executeAddApi("replace")}
+        onclick={() => executeAddApi("replace")}
         class="border border-red-500/30 bg-red-950/30 text-red-400 hover:bg-red-900/50 rounded-xl p-4 flex flex-col items-center justify-center text-center transition-colors"
       >
         <svg
@@ -1671,7 +1804,7 @@
   title="Create API Endpoint"
   maxWidth="max-w-2xl"
 >
-  <form on:submit|preventDefault={handleAddApiSubmit} class="space-y-4">
+  <form onsubmit={(e) => { e.preventDefault(); handleAddApiSubmit(); }} class="space-y-4">
     <div
       class="grid grid-cols-1 md:grid-cols-2 gap-4 border-b border-slate-800 pb-4"
     >
@@ -1807,7 +1940,7 @@
                   </div>
                   <button
                     type="button"
-                    on:click={() =>
+                    onclick={() =>
                       (paramsKV = paramsKV.filter((_, idx) => idx !== i))}
                     class="p-2 text-slate-500 hover:text-red-500 bg-slate-900/50 hover:bg-red-950/30 border border-slate-700/50 rounded-lg transition-colors"
                   >
@@ -1831,7 +1964,7 @@
               {/each}
               <button
                 type="button"
-                on:click={() =>
+                onclick={() =>
                   (paramsKV = [...paramsKV, { key: "", value: "" }])}
                 class="text-xs font-medium text-cyan-400 hover:text-cyan-400 flex items-center gap-1 mt-1"
               >
@@ -1911,7 +2044,7 @@
                 </div>
                 <button
                   type="button"
-                  on:click={() =>
+                  onclick={() =>
                     (headersKV = headersKV.filter((_, idx) => idx !== i))}
                   class="p-2 text-slate-500 hover:text-red-500 bg-slate-900/50 hover:bg-red-950/30 border border-slate-700/50 rounded-lg transition-colors"
                 >
@@ -1935,7 +2068,7 @@
             {/each}
             <button
               type="button"
-              on:click={() =>
+              onclick={() =>
                 (headersKV = [...headersKV, { key: "", value: "" }])}
               class="text-xs font-medium text-cyan-400 hover:text-cyan-400 flex items-center gap-1 mt-1"
             >
@@ -2035,7 +2168,7 @@
                 <button
                   type="button"
                   disabled={apiForm.method === "GET"}
-                  on:click={() =>
+                  onclick={() =>
                     (bodyKV = bodyKV.filter((_, idx) => idx !== i))}
                   class="p-2 text-slate-500 hover:text-red-500 bg-slate-900/50 hover:bg-red-950/30 border border-slate-700/50 rounded-lg transition-colors disabled:cursor-not-allowed disabled:hover:bg-slate-900/50 disabled:hover:text-slate-500"
                 >
@@ -2060,7 +2193,7 @@
             <button
               type="button"
               disabled={apiForm.method === "GET"}
-              on:click={() => (bodyKV = [...bodyKV, { key: "", value: "" }])}
+              onclick={() => (bodyKV = [...bodyKV, { key: "", value: "" }])}
               class="text-xs font-medium text-cyan-400 hover:text-cyan-400 flex items-center gap-1 mt-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-cyan-400"
             >
               <svg
@@ -2866,12 +2999,12 @@
     </div>
     <div class="flex justify-end gap-3 pt-2">
       <button
-        on:click={() => (showDeleteFolderModal = false)}
+        onclick={() => (showDeleteFolderModal = false)}
         class="px-4 py-2 text-xs rounded-xl font-semibold text-slate-500 bg-slate-800 hover:bg-slate-700 transition-colors"
         >Cancel</button
       >
       <button
-        on:click={handleDeleteFolderSubmit}
+        onclick={handleDeleteFolderSubmit}
         class="px-4 py-2 text-xs rounded-xl font-semibold text-white bg-red-600 hover:bg-red-700 transition-colors shadow-sm shadow-red-500/20"
         >Yes, Delete</button
       >
@@ -2908,7 +3041,7 @@
             class="flex-1 bg-slate-900/50 border border-slate-700/50 text-cyan-50 text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block p-2 outline-none font-mono"
           />
           <button
-            on:click={() => removeEnvVarRow(i)}
+            onclick={() => removeEnvVarRow(i)}
             class="p-2 text-cyan-500/80 hover:text-red-400 hover:bg-slate-800 rounded-lg transition-colors border border-transparent hover:border-red-500/30"
           >
             <svg
@@ -2933,7 +3066,7 @@
       {/each}
 
       <button
-        on:click={addEnvVarRow}
+        onclick={addEnvVarRow}
         class="text-cyan-500 hover:text-cyan-400 text-sm font-semibold flex items-center gap-1.5 mt-2"
       >
         <svg
@@ -2961,12 +3094,12 @@
       class="flex justify-end gap-3 pt-3 border-t border-slate-800 absolute bottom-0 left-0 w-full bg-slate-900/95 px-6 pb-4 mt-2"
     >
       <button
-        on:click={() => (showEnvVarsModal = false)}
+        onclick={() => (showEnvVarsModal = false)}
         class="px-4 py-2 text-slate-500 bg-slate-800 border border-slate-700 rounded-xl hover:bg-slate-700 font-medium transition-colors text-xs"
         >Cancel</button
       >
       <button
-        on:click={saveEnvVars}
+        onclick={saveEnvVars}
         disabled={isSavingEnvVars}
         class="px-4 py-2 bg-cyan-600 text-cyan-50 rounded-xl hover:bg-cyan-700 font-medium transition-colors shadow-[0_0_15px_rgba(6,182,212,0.3)] text-xs disabled:opacity-50 flex items-center gap-2"
       >
@@ -3020,12 +3153,12 @@
 
     <div class="flex justify-end gap-3 pt-3 border-t border-slate-800">
       <button
-        on:click={() => (showFolderModal = false)}
+        onclick={() => (showFolderModal = false)}
         class="px-4 py-2 text-slate-500 bg-slate-800 border border-slate-700 rounded-xl hover:bg-slate-700 font-medium transition-colors text-xs"
         >Cancel</button
       >
       <button
-        on:click={handleAddFolder}
+        onclick={handleAddFolder}
         disabled={!newFolderName.trim()}
         class="px-4 py-2 bg-cyan-600 text-cyan-50 rounded-xl hover:bg-cyan-700 font-medium transition-colors shadow-[0_0_15px_rgba(6,182,212,0.3)] text-xs disabled:opacity-50 disabled:cursor-not-allowed"
       >
@@ -3043,17 +3176,17 @@
     <div class="flex gap-2 bg-slate-900/60 border border-slate-700/50 rounded-xl p-1">
       <button
         type="button"
-        on:click={() => (pauseType = 'duration')}
+        onclick={() => (pauseType = 'duration')}
         class="flex-1 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all {pauseType === 'duration' ? 'bg-amber-600 text-white shadow' : 'text-slate-400 hover:text-cyan-50'}"
       >Pause for duration</button>
       <button
         type="button"
-        on:click={() => (pauseType = 'indefinite')}
+        onclick={() => (pauseType = 'indefinite')}
         class="flex-1 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all {pauseType === 'indefinite' ? 'bg-amber-600 text-white shadow' : 'text-slate-400 hover:text-cyan-50'}"
       >Indefinite</button>
       <button
         type="button"
-        on:click={() => (pauseType = 'resume')}
+        onclick={() => (pauseType = 'resume')}
         class="flex-1 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all {pauseType === 'resume' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-cyan-50'}"
       >Resume Now</button>
     </div>
@@ -3066,7 +3199,7 @@
           {#each [15, 30, 60, 180, 360, 720, 1440] as min}
             <button
               type="button"
-              on:click={() => (pauseMinutes = min)}
+              onclick={() => (pauseMinutes = min)}
               class="px-3 py-1 text-xs rounded-lg border transition-all {pauseMinutes === min ? 'bg-amber-600 border-amber-500 text-white' : 'border-slate-700 bg-slate-900/50 text-slate-300 hover:border-amber-500/50 hover:text-amber-300'}"
             >
               {min < 60 ? `${min}m` : min === 60 ? '1h' : min < 1440 ? `${min/60}h` : '24h'}
@@ -3113,14 +3246,14 @@
     <div class="flex justify-end gap-3 pt-3 border-t border-slate-800">
       <button
         type="button"
-        on:click={() => (showPauseApiModal = false)}
+        onclick={() => (showPauseApiModal = false)}
         class="px-4 py-2 text-xs text-cyan-50 bg-slate-900/40 border border-slate-600 rounded-xl hover:bg-slate-900/50 font-medium transition-colors"
       >
         Cancel
       </button>
       <button
         type="button"
-        on:click={handlePauseApiSubmit}
+        onclick={handlePauseApiSubmit}
         class="px-4 py-2 text-xs font-semibold text-white rounded-xl transition-colors shadow-sm {pauseType === 'resume' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-amber-600 hover:bg-amber-700'}"
       >
         {pauseType === 'resume' ? 'Resume Monitor' : 'Confirm Pause'}
@@ -3128,3 +3261,136 @@
     </div>
   </div>
 </Modal>
+
+<!-- Manage Project Members Modal -->
+<Modal bind:open={showMembersModal} title="PROJECT_MEMBERS" maxWidth="max-w-xl">
+  <div class="space-y-6 px-1">
+    <!-- Add Member Section -->
+    <div
+      class="p-4 bg-slate-900/50 border border-slate-700/50 rounded-xl space-y-3"
+    >
+      <label
+        class="block text-xs font-mono font-bold text-cyan-500/70 uppercase tracking-widest"
+      >
+        Add Company Member to Project
+      </label>
+      <div class="flex gap-3">
+        <select
+          bind:value={selectedMemberId}
+          class="flex-1 bg-slate-800 border border-slate-700 text-cyan-50 rounded-lg px-3 py-2 focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500 outline-none transition-all font-mono text-sm"
+        >
+          <option value={null}>Select a member...</option>
+          {#each companyMembers as cm}
+            {#if !projectMembers.some((pm) => pm.user_id === cm.user_id)}
+              <option value={cm.user_id}>{cm.user.name} ({cm.user.email})</option>
+            {/if}
+          {/each}
+        </select>
+        <button
+          onclick={addProjectMember}
+          disabled={!selectedMemberId || isAddingMember}
+          class="bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-bold transition-all flex items-center gap-2 whitespace-nowrap"
+        >
+          {#if isAddingMember}
+            <div
+              class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"
+            ></div>
+          {/if}
+          ADD_MEMBER
+        </button>
+      </div>
+    </div>
+
+    <!-- Members List -->
+    <div class="space-y-3">
+      <h4
+        class="text-xs font-mono font-bold text-slate-500 uppercase tracking-widest border-b border-slate-800 pb-2 flex justify-between items-center"
+      >
+        <span>Current Members</span>
+        <span class="text-cyan-500/50">{projectMembers.length} ACTIVE</span>
+      </h4>
+
+      <div class="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+        {#each projectMembers as pm}
+          <div
+            class="flex items-center justify-between p-3 bg-slate-800/30 border border-slate-700/30 rounded-xl hover:bg-slate-800/50 transition-all group"
+          >
+            <div class="flex items-center gap-3">
+              <div
+                class="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center overflow-hidden border border-slate-600 group-hover:border-cyan-500/50 transition-colors"
+              >
+                {#if pm.user?.profile_image_url}
+                  <img
+                    src={pm.user.profile_image_url.startsWith("http") ||
+                    pm.user.profile_image_url.startsWith("data:")
+                      ? pm.user.profile_image_url
+                      : `${API_BASE_URL}${pm.user.profile_image_url}`}
+                    alt={pm.user.name}
+                    class="w-full h-full object-cover"
+                  />
+                {:else}
+                  <span class="text-slate-400 font-bold"
+                    >{pm.user?.name?.charAt(0) || '?'}</span
+                  >
+                {/if}
+              </div>
+              <div class="min-w-0">
+                <p class="text-sm font-bold text-cyan-50 truncate">
+                  {pm.user?.name || pm.user?.email || "Unnamed"}
+                </p>
+                <p class="text-xs text-slate-400 truncate">{pm.user?.email}</p>
+              </div>
+            </div>
+
+            <button
+              onclick={() => removeProjectMember(pm.user_id)}
+              class="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-red-400 bg-red-400/5 border border-red-400/20 rounded-lg hover:bg-red-400/10 transition-all flex items-center justify-center font-mono uppercase tracking-widest shrink-0"
+              title="Remove from project"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="3"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                ><line x1="18" y1="6" x2="6" y2="18" /><line
+                  x1="6"
+                  y1="6"
+                  x2="18"
+                  y2="18"
+                /></svg
+              >
+              REMOVE
+            </button>
+          </div>
+        {:else}
+          <div class="text-center py-8 text-slate-500 font-mono text-sm italic">
+            No additional members in this project.
+          </div>
+        {/each}
+      </div>
+    </div>
+  </div>
+</Modal>
+
+<style>
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: rgba(15, 23, 42, 0.3);
+    border-radius: 10px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(71, 85, 105, 0.5);
+    border-radius: 10px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(100, 116, 139, 0.5);
+  }
+</style>
+

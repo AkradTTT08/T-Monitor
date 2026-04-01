@@ -12,6 +12,26 @@
   let projects: any[] = [];
   let isLoading = true;
 
+  const systemAlert = Swal.mixin({
+    customClass: {
+      confirmButton: 'bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg ml-3',
+      cancelButton: 'bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg'
+    },
+    buttonsStyling: false,
+    background: '#0f172a',
+    color: '#f1f5f9'
+  });
+
+  const systemToast = Swal.mixin({
+    toast: true,
+    position: 'top-end',
+    showConfirmButton: false,
+    timer: 3000,
+    timerProgressBar: true,
+    background: '#1e293b',
+    color: '#f1f5f9'
+  });
+
   // Create project modal
   let showCreateModal = false;
   let newProjectName = "";
@@ -33,6 +53,13 @@
   let deletingProjectName = "";
 
   let activeDropdownId: number | null = null;
+  
+  // Project Members State
+  let showMembersModal = false;
+  let activeProject: any = null;
+  let projectMembers: any[] = [];
+  let isAddingMember = false;
+  let selectedMemberId: number | null = null;
 
   function toggleDropdown(id: number, e: Event) {
     e.stopPropagation();
@@ -133,7 +160,6 @@
     showDeleteModal = true;
     activeDropdownId = null;
   }
-
   async function handleDelete() {
     try {
       const token = localStorage.getItem("monitor_token");
@@ -147,6 +173,88 @@
     } catch (err) { console.error(err); }
   }
 
+  async function openMembers(project: any) {
+    activeProject = project;
+    activeDropdownId = null;
+    await fetchProjectMembers(project.id);
+    showMembersModal = true;
+  }
+
+  async function fetchProjectMembers(projectId: number) {
+    try {
+      const token = localStorage.getItem("monitor_token");
+      const res = await fetch(`${API_BASE_URL}/api/v1/projects/${projectId}/members`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        projectMembers = await res.json();
+      }
+    } catch (err) {
+      console.error("Failed to fetch project members:", err);
+    }
+  }
+
+  async function addProjectMember() {
+    if (!selectedMemberId || !activeProject) return;
+    isAddingMember = true;
+    try {
+      const token = localStorage.getItem("monitor_token");
+      const res = await fetch(`${API_BASE_URL}/api/v1/projects/${activeProject.id}/members`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          user_id: Number(selectedMemberId),
+          role: "member"
+        })
+      });
+
+      if (res.ok) {
+        systemToast.fire({ icon: 'success', title: 'Member added to project' });
+        await fetchProjectMembers(activeProject.id);
+        selectedMemberId = null;
+      } else {
+        const error = await res.json();
+        systemAlert.fire('Error', error.error || 'Failed to add member', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      isAddingMember = false;
+    }
+  }
+
+  async function removeProjectMember(userId: number) {
+    if (!activeProject) return;
+    const confirm = await Swal.fire({
+      title: 'Are you sure?',
+      text: "This user will lose access to this specific project.",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, remove',
+      background: '#0f172a',
+      color: '#f1f5f9'
+    });
+
+    if (!confirm.isConfirmed) return;
+
+    try {
+      const token = localStorage.getItem("monitor_token");
+      const res = await fetch(`${API_BASE_URL}/api/v1/projects/${activeProject.id}/members/${userId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (res.ok) {
+        await fetchProjectMembers(activeProject.id);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
   let user: any = null;
   onMount(async () => {
     const userData = localStorage.getItem("monitor_user");
@@ -155,7 +263,7 @@
   });
 </script>
 
-<svelte:window on:click={() => (activeDropdownId = null)} />
+<svelte:window onclick={() => (activeDropdownId = null)} />
 
 <div class="fade-in">
   <!-- Breadcrumb -->
@@ -177,7 +285,7 @@
     </div>
     {#if user && (user.id === company?.user_id || user.role === 'admin')}
       <button
-        on:click={() => (showCreateModal = true)}
+        onclick={() => (showCreateModal = true)}
         class="bg-slate-900 border border-cyan-500/50 text-cyan-400 hover:bg-cyan-950/50 hover:border-cyan-400 hover:text-cyan-300 font-bold py-2.5 px-6 rounded-xl shadow-[0_0_15px_rgba(6,182,212,0.3)] hover:shadow-[0_0_25px_rgba(6,182,212,0.5)] transition-all flex items-center gap-2 group transform hover:-translate-y-0.5 font-mono tracking-wider overflow-hidden relative"
       >
         <div class="absolute inset-0 w-full h-full bg-cyan-400/10 -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] skew-x-12"></div>
@@ -205,7 +313,7 @@
       </div>
       <h3 class="text-xl font-bold text-cyan-50 mb-2 font-mono">NO_PROJECTS_YET</h3>
       <p class="text-slate-400 text-sm mb-8 font-mono">Add the first project workspace for this company.</p>
-      <button on:click={() => (showCreateModal = true)} class="bg-cyan-950/40 border border-cyan-500/50 text-cyan-400 font-bold py-2.5 px-6 rounded-xl hover:bg-cyan-900/60 transition-colors font-mono">
+      <button onclick={() => (showCreateModal = true)} class="bg-cyan-950/40 border border-cyan-500/50 text-cyan-400 font-bold py-2.5 px-6 rounded-xl hover:bg-cyan-900/60 transition-colors font-mono">
         CREATE_PROJECT
       </button>
     </div>
@@ -238,17 +346,19 @@
               </svg>
             </div>
             <div class="relative">
-              <button on:click={(e) => toggleDropdown(project.id, e)} class="text-slate-500 hover:text-cyan-400 p-2 rounded-lg hover:bg-slate-800 transition-colors">
+              <button onclick={(e) => toggleDropdown(project.id, e)} class="text-slate-500 hover:text-cyan-400 p-2 rounded-lg hover:bg-slate-800 transition-colors">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <circle cx="12" cy="12" r="1.5"></circle><circle cx="19" cy="12" r="1.5"></circle><circle cx="5" cy="12" r="1.5"></circle>
                 </svg>
               </button>
               {#if activeDropdownId === project.id}
-                <div class="absolute right-0 top-10 mt-1 w-36 bg-slate-800 rounded-xl shadow-xl border border-slate-700 py-1 z-20 animate-in slide-in-from-top-2" on:click|stopPropagation>
+                <div class="absolute right-0 top-10 mt-1 w-36 bg-slate-800 rounded-xl shadow-xl border border-slate-700 py-1 z-20 animate-in slide-in-from-top-2" onclick={(e) => e.stopPropagation()}>
                   {#if user && (user.id === (company?.user_id || project.user_id) || user.role === 'admin')}
-                    <button on:click={() => openEdit(project)} class="w-full text-left px-4 py-2 text-sm font-medium text-slate-300 hover:text-cyan-400 hover:bg-slate-700/50 transition-colors font-mono">EDIT</button>
+                    <button onclick={() => openMembers(project)} class="w-full text-left px-4 py-2 text-sm font-medium text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 transition-colors font-mono">MEMBERS</button>
                     <div class="h-px w-full bg-slate-700/50 my-1"></div>
-                    <button on:click={() => openDelete(project)} class="w-full text-left px-4 py-2 text-sm font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors font-mono">TERMINATE</button>
+                    <button onclick={() => openEdit(project)} class="w-full text-left px-4 py-2 text-sm font-medium text-slate-300 hover:text-cyan-400 hover:bg-slate-700/50 transition-colors font-mono">EDIT</button>
+                    <div class="h-px w-full bg-slate-700/50 my-1"></div>
+                    <button onclick={() => openDelete(project)} class="w-full text-left px-4 py-2 text-sm font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors font-mono">TERMINATE</button>
                   {:else}
                     <div class="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-tighter text-center italic">
                       View Only
@@ -282,7 +392,7 @@
 
 <!-- Create Project Modal -->
 <Modal bind:open={showCreateModal} title="New Project" maxWidth="max-w-lg">
-  <form on:submit|preventDefault={handleCreate} class="space-y-4">
+  <form onsubmit={(e) => { e.preventDefault(); handleCreate(); }} class="space-y-4">
     <div>
       <label for="p_name" class="block text-sm font-semibold text-cyan-50 mb-1">Project Name</label>
       <input id="p_name" type="text" bind:value={newProjectName} required class="w-full px-4 py-2.5 rounded-xl border border-slate-700/50 bg-slate-900/60 text-cyan-50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-sm" placeholder="e.g. E-Commerce Core API" />
@@ -293,10 +403,10 @@
     </div>
     <div>
       <label for="p_cover" class="block text-sm font-semibold text-cyan-50 mb-1">Cover Image</label>
-      <input id="p_cover" type="file" accept="image/*" on:change={(e) => (coverFile = (e.target as HTMLInputElement).files?.[0] || null)} class="w-full px-4 py-2 rounded-xl border border-slate-700/50 bg-slate-900/60 text-cyan-50/70 text-xs" />
+      <input id="p_cover" type="file" accept="image/*" onchange={(e) => (coverFile = (e.target as HTMLInputElement).files?.[0] || null)} class="w-full px-4 py-2 rounded-xl border border-slate-700/50 bg-slate-900/60 text-cyan-50/70 text-xs" />
     </div>
     <div class="pt-2 flex gap-3">
-      <button type="button" on:click={() => (showCreateModal = false)} class="flex-1 px-4 py-2.5 rounded-xl font-semibold text-slate-400 bg-slate-800 hover:bg-slate-700 transition-colors text-sm">Cancel</button>
+      <button type="button" onclick={() => (showCreateModal = false)} class="flex-1 px-4 py-2.5 rounded-xl font-semibold text-slate-400 bg-slate-800 hover:bg-slate-700 transition-colors text-sm">Cancel</button>
       <button type="submit" class="flex-1 px-4 py-2.5 rounded-xl font-semibold text-white bg-cyan-600 hover:bg-cyan-700 transition-colors text-sm">Create Project</button>
     </div>
   </form>
@@ -304,7 +414,7 @@
 
 <!-- Edit Project Modal -->
 <Modal bind:open={showEditModal} title="Edit Project" maxWidth="max-w-lg">
-  <form on:submit|preventDefault={handleEdit} class="space-y-4">
+  <form onsubmit={(e) => { e.preventDefault(); handleEdit(); }} class="space-y-4">
     <div>
       <label for="ep_name" class="block text-sm font-semibold text-cyan-50 mb-1">Project Name</label>
       <input id="ep_name" type="text" bind:value={editProjectName} required class="w-full px-4 py-2.5 rounded-xl border border-slate-700/50 bg-slate-900/60 text-cyan-50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-sm" />
@@ -315,14 +425,14 @@
     </div>
     <div>
       <label for="ep_cover" class="block text-sm font-semibold text-cyan-50 mb-1">Update Cover</label>
-      <input id="ep_cover" type="file" accept="image/*" on:change={(e) => (editCoverFile = (e.target as HTMLInputElement).files?.[0] || null)} class="w-full px-4 py-2 rounded-xl border border-slate-700/50 bg-slate-900/60 text-cyan-50/70 text-xs" />
+      <input id="ep_cover" type="file" accept="image/*" onchange={(e) => (editCoverFile = (e.target as HTMLInputElement).files?.[0] || null)} class="w-full px-4 py-2 rounded-xl border border-slate-700/50 bg-slate-900/60 text-cyan-50/70 text-xs" />
     </div>
     <div class="space-y-1">
       <label for="ep_pos" class="block text-sm font-semibold text-cyan-50">Position Adjustment (Vertical: {editProjectCoverPos}%)</label>
       <input id="ep_pos" type="range" min="0" max="100" bind:value={editProjectCoverPos} class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500" />
     </div>
     <div class="pt-2 flex gap-3">
-      <button type="button" on:click={() => (showEditModal = false)} class="flex-1 px-4 py-2.5 rounded-xl font-semibold text-slate-400 bg-slate-800 hover:bg-slate-700 transition-colors text-sm">Cancel</button>
+      <button type="button" onclick={() => (showEditModal = false)} class="flex-1 px-4 py-2.5 rounded-xl font-semibold text-slate-400 bg-slate-800 hover:bg-slate-700 transition-colors text-sm">Cancel</button>
       <button type="submit" class="flex-1 px-4 py-2.5 rounded-xl font-semibold text-white bg-cyan-600 hover:bg-cyan-700 transition-colors text-sm">Save Changes</button>
     </div>
   </form>
@@ -335,8 +445,125 @@
       <p class="text-sm text-amber-300">Are you sure you want to delete <span class="font-bold text-white">{deletingProjectName}</span>? This removes all APIs and monitoring logs.</p>
     </div>
     <div class="flex gap-3">
-      <button type="button" on:click={() => (showDeleteModal = false)} class="flex-1 px-4 py-2.5 rounded-xl font-semibold text-slate-400 bg-slate-800 hover:bg-slate-700 transition-colors text-sm">Cancel</button>
-      <button type="button" on:click={handleDelete} class="flex-1 px-4 py-2.5 rounded-xl font-semibold text-white bg-red-600 hover:bg-red-700 transition-colors text-sm">Delete</button>
+      <button type="button" onclick={() => (showDeleteModal = false)} class="flex-1 px-4 py-2.5 rounded-xl font-semibold text-slate-400 bg-slate-800 hover:bg-slate-700 transition-colors text-sm">Cancel</button>
+      <button type="button" onclick={handleDelete} class="flex-1 px-4 py-2.5 rounded-xl font-semibold text-white bg-red-600 hover:bg-red-700 transition-colors text-sm">Delete</button>
     </div>
   </div>
 </Modal>
+
+<!-- Manage Project Members Modal -->
+<Modal bind:open={showMembersModal} title="PROJECT_MEMBERS" maxWidth="max-w-xl">
+  <div class="space-y-6 px-1">
+    <!-- Add Member Section -->
+    <div
+      class="p-4 bg-slate-900/50 border border-slate-700/50 rounded-xl space-y-3"
+    >
+      <label
+        class="block text-xs font-mono font-bold text-cyan-500/70 uppercase tracking-widest"
+      >
+        Add Company Member to Project
+      </label>
+      <div class="flex gap-3">
+        <select
+          bind:value={selectedMemberId}
+          class="flex-1 bg-slate-800 border border-slate-700 text-cyan-50 rounded-lg px-3 py-2 focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500 outline-none transition-all font-mono text-sm"
+        >
+          <option value={null}>Select a member...</option>
+          {#if company && company.members}
+            {#each company.members as cm}
+              {#if !projectMembers.some((pm) => pm.user_id === cm.user_id)}
+                <option value={cm.user_id}>{cm.user?.name || cm.user?.email || "Unknown"}</option>
+              {/if}
+            {/each}
+          {/if}
+        </select>
+        <button
+          onclick={addProjectMember}
+          disabled={!selectedMemberId || isAddingMember}
+          class="bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-bold transition-all flex items-center gap-2 whitespace-nowrap"
+        >
+          {#if isAddingMember}
+            <div
+              class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"
+            ></div>
+          {/if}
+          ADD_MEMBER
+        </button>
+      </div>
+    </div>
+
+    <!-- Members List -->
+    <div class="space-y-3">
+      <h4
+        class="text-xs font-mono font-bold text-slate-500 uppercase tracking-widest border-b border-slate-800 pb-2 flex justify-between items-center"
+      >
+        <span>Current Members</span>
+        <span class="text-cyan-500/50">{projectMembers.length} ACTIVE</span>
+      </h4>
+
+      <div class="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+        {#each projectMembers as pm}
+          <div
+            class="flex items-center justify-between p-3 bg-slate-800/30 border border-slate-700/30 rounded-xl hover:bg-slate-800/50 transition-all group"
+          >
+            <div class="flex items-center gap-3">
+              <div
+                class="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center overflow-hidden border border-slate-600 group-hover:border-cyan-500/50 transition-colors"
+              >
+                {#if pm.user?.profile_image_url}
+                  <img
+                    src={pm.user.profile_image_url.startsWith("http") ||
+                    pm.user.profile_image_url.startsWith("data:")
+                      ? pm.user.profile_image_url
+                      : `${API_BASE_URL}${pm.user.profile_image_url}`}
+                    alt={pm.user.name}
+                    class="w-full h-full object-cover"
+                  />
+                {:else}
+                  <span class="text-slate-400 font-bold"
+                    >{pm.user?.name?.charAt(0) || '?'}</span
+                  >
+                {/if}
+              </div>
+              <div class="min-w-0">
+                <p class="text-sm font-bold text-cyan-50 truncate">
+                  {pm.user?.name || pm.user?.email || "Unnamed"}
+                </p>
+                <p class="text-xs text-slate-400 truncate">{pm.user?.email || "No Email"}</p>
+              </div>
+            </div>
+
+            <button
+              onclick={() => removeProjectMember(pm.user_id)}
+              class="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-red-400 bg-red-400/5 border border-red-400/20 rounded-lg hover:bg-red-400/10 transition-all font-mono uppercase tracking-widest"
+              title="Remove from project"
+            >
+              REMOVE
+            </button>
+          </div>
+        {:else}
+          <div class="text-center py-8 text-slate-500 font-mono text-sm italic">
+            No additional members in this project.
+          </div>
+        {/each}
+      </div>
+    </div>
+  </div>
+</Modal>
+
+<style>
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: rgba(15, 23, 42, 0.3);
+    border-radius: 10px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(71, 85, 105, 0.5);
+    border-radius: 10px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(100, 116, 139, 0.5);
+  }
+</style>

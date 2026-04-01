@@ -60,11 +60,22 @@ type Project struct {
 	UserID               uint                 `gorm:"not null" json:"user_id"`
 	CompanyID            *uint                `json:"company_id"`
 	APIs                 []API                `gorm:"foreignKey:ProjectID" json:"apis,omitempty"`
+	Members              []ProjectMember      `gorm:"foreignKey:ProjectID" json:"members,omitempty"`
 	NotificationConfigs  []NotificationConfig `gorm:"foreignKey:ProjectID" json:"notification_configs,omitempty"`
 	RepairTasks          []RepairTask         `gorm:"foreignKey:ProjectID" json:"repair_tasks,omitempty"`
 	CreatedAt            time.Time            `json:"created_at"`
 	UpdatedAt            time.Time            `json:"updated_at"`
 	DeletedAt            gorm.DeletedAt       `gorm:"index" json:"deleted_at"` // Soft delete
+}
+
+// ProjectMember links users to projects they have been added to
+type ProjectMember struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	ProjectID uint      `gorm:"not null;index" json:"project_id"`
+	UserID    uint      `gorm:"not null;index" json:"user_id"`
+	Role      string    `gorm:"type:varchar(20);default:'member'" json:"role"` // 'owner' or 'member'
+	User      *User     `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // API represents a single API endpoint to be monitored

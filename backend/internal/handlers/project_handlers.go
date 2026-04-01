@@ -143,12 +143,12 @@ func GetProjects(c *fiber.Ctx) error {
 
 	var projects []models.Project
 
-	// Admins can see all projects; users see only theirs
+	// Admins can see all projects; users see only theirs or those they are members of
 	if role == "admin" {
 		database.DB.Preload("APIs").Find(&projects)
 	} else {
 		database.DB.Preload("APIs").
-			Where("user_id = ? OR company_id IN (SELECT company_id FROM company_members WHERE user_id = ?)", userID, userID).
+			Where("user_id = ? OR id IN (SELECT project_id FROM project_members WHERE user_id = ?)", userID, userID).
 			Find(&projects)
 	}
 
@@ -164,7 +164,7 @@ func GetProject(c *fiber.Ctx) error {
 
 	query := database.DB.Preload("APIs")
 	if role != "admin" {
-		query = query.Where("user_id = ? OR company_id IN (SELECT company_id FROM company_members WHERE user_id = ?)", userID, userID)
+		query = query.Where("user_id = ? OR id IN (SELECT project_id FROM project_members WHERE user_id = ?)", userID, userID)
 	}
 
 	if err := query.First(&project, id).Error; err != nil {
@@ -234,6 +234,8 @@ func DeleteProject(c *fiber.Ctx) error {
 
 	// Soft-delete child Records
 	database.DB.Where("project_id = ?", project.ID).Delete(&models.API{})
+	// Delete project members
+	database.DB.Where("project_id = ?", project.ID).Delete(&models.ProjectMember{})
 	// NotificationConfig doesn't have Soft Delete yet, but let's be consistent or add it later. 
 	// For now, keep hard delete for configs if they don't have DeletedAt, or just regular Delete.
 	database.DB.Where("project_id = ?", project.ID).Delete(&models.NotificationConfig{})
@@ -241,4 +243,72 @@ func DeleteProject(c *fiber.Ctx) error {
 	database.DB.Delete(&project)
 
 	return c.JSON(fiber.Map{"message": "Project deleted successfully"})
+}
+
+func GetProjectMembers(c *fiber.Ctx) error {
+	id := c.Params("id")
+	var members []models.ProjectMember
+	if err := database.DB.Preload("User").Where("project_id = ?", id).Find(&members).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch project members"})
+	}
+	return c.JSON(members)
+}
+
+func AddProjectMember(c *fiber.Ctx) error {
+	id := c.Params("id")
+	userID := c.Locals("user_id").(uint)
+	role := c.Locals("role").(string)
+
+	type MemberInput struct {
+		UserID uint   `json:"user_id"`
+		Role   string `json:"role"`
+	}
+	var input MemberInput
+	if err := c.BodyParser(&input); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid input"})
+	}
+
+	var project models.Project
+	if role != "admin" {
+		if err := database.DB.Where("id = ? AND user_id = ?", id, userID).First(&project).Error; err != nil {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Only project owners or admins can manage members"})
+		}
+	} else {
+		if err := database.DB.First(&project, id).Error; err != nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Project not found"})
+		}
+	}
+
+	// Add member
+	member := models.ProjectMember{
+		ProjectID: project.ID,
+		UserID:    input.UserID,
+		Role:      input.Role,
+	}
+
+	if err := database.DB.Create(&member).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to add project member (Likely already exists)"})
+	}
+
+	return c.JSON(fiber.Map{"message": "Member added successfully", "member": member})
+}
+
+func RemoveProjectMember(c *fiber.Ctx) error {
+	id := c.Params("id")
+	targetUserID := c.Params("userId")
+	userID := c.Locals("user_id").(uint)
+	role := c.Locals("role").(string)
+
+	var project models.Project
+	if role != "admin" {
+		if err := database.DB.Where("id = ? AND user_id = ?", id, userID).First(&project).Error; err != nil {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Only project owners or admins can manage members"})
+		}
+	}
+
+	if err := database.DB.Where("project_id = ? AND user_id = ?", id, targetUserID).Delete(&models.ProjectMember{}).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to remove project member"})
+	}
+
+	return c.JSON(fiber.Map{"message": "Member removed successfully"})
 }

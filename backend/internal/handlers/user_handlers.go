@@ -1,6 +1,11 @@
 package handlers
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"time"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/monitor-api/backend/internal/database"
 	"github.com/monitor-api/backend/internal/models"
@@ -208,9 +213,56 @@ func SearchUsers(c *fiber.Ctx) error {
 		return c.JSON([]models.User{})
 	}
 	var users []models.User
-	database.DB.Select("id", "email", "name").
+	database.DB.Select("id", "email", "name", "profile_image_url").
 		Where("email LIKE ? OR name LIKE ?", "%"+query+"%", "%"+query+"%").
 		Limit(10).
 		Find(&users)
 	return c.JSON(users)
+}
+
+func UploadProfileImage(c *fiber.Ctx) error {
+	userID, ok := c.Locals("user_id").(uint)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+
+	var user models.User
+	if err := database.DB.First(&user, userID).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
+	}
+
+	file, err := c.FormFile("profile_image")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "No file uploaded"})
+	}
+
+	uploadDir, err := filepath.Abs("./uploads/profiles")
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Path resolution failed"})
+	}
+
+	if _, err := os.Stat(uploadDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(uploadDir, 0755); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create upload directory"})
+		}
+	}
+
+	ext := filepath.Ext(file.Filename)
+	filename := fmt.Sprintf("user_%d_%d%s", user.ID, time.Now().Unix(), ext)
+	savePath := filepath.Join(uploadDir, filename)
+
+	if err := c.SaveFile(file, savePath); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to save file"})
+	}
+
+	// Update DB
+	user.ProfileImageURL = "/uploads/profiles/" + filename
+	if err := database.DB.Model(&user).Update("profile_image_url", user.ProfileImageURL).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update database"})
+	}
+
+	return c.JSON(fiber.Map{
+		"message":           "Profile image uploaded successfully",
+		"profile_image_url": user.ProfileImageURL,
+	})
 }

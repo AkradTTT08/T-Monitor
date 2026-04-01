@@ -55,6 +55,7 @@ func ConnectDB() {
 		&models.RepairTask{},
 		&models.DashboardNotification{},
 		&models.CompanyInvitation{},
+		&models.ProjectMember{},
 	)
 
 	if err != nil {
