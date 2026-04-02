@@ -1,27 +1,28 @@
 <script lang="ts">
-  import { createEventDispatcher } from "svelte";
+  import { onMount, tick } from "svelte";
 
-  export let value = "";
-  export let placeholder = "";
-  export let disabled = false;
-  export let required = false;
-  export let rows: number | undefined = undefined;
-  export let variables: Record<string, string> = {}; // Available environment variables
+  let {
+    value = $bindable(""),
+    placeholder = "",
+    disabled = false,
+    required = false,
+    rows = undefined,
+    variables = {},
+    outerClass = "bg-slate-900/50 rounded-lg border border-slate-700/50 focus-within:ring-2 focus-within:ring-cyan-500/50 h-auto",
+    innerClass = "px-4 py-3 resize-y block",
+    textClass = "text-cyan-50",
+    onpaste,
+    onfocus,
+    onblur,
+    onscroll
+  } = $props();
 
-  // Custom styling properties
-  export let outerClass =
-    "bg-slate-900/50 rounded-lg border border-slate-700/50 focus-within:ring-2 focus-within:ring-cyan-500/50 h-auto";
-  export let innerClass = "px-4 py-3 resize-y block";
-  export let textClass = "text-cyan-50";
-
-  const dispatch = createEventDispatcher();
-
-  let textareaEl: HTMLTextAreaElement;
-  let scrollY = 0;
-  let scrollX = 0;
+  let textareaEl: HTMLTextAreaElement | undefined = $state();
+  let scrollY = $state(0);
+  let scrollX = $state(0);
 
   // Split string into text and variable segments
-  $: segments = parseSegments(value);
+  let segments = $derived(parseSegments(value));
 
   function parseSegments(str: string) {
     if (!str) return [];
@@ -107,7 +108,10 @@
     {required}
     {rows}
     {placeholder}
-    on:scroll={handleScroll}
+    onscroll={(e) => { handleScroll(e); onscroll?.(e); }}
+    onfocus={onfocus}
+    onblur={onblur}
+    onpaste={onpaste}
     class={`relative flex-1 w-full bg-transparent focus:outline-none caret-cyan-500 z-20 ${disabled ? "cursor-not-allowed opacity-50" : ""} ${innerClass}`}
     style="color: transparent;"
     spellcheck="false"

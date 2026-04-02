@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -23,7 +24,7 @@ func GetRepairTasks(c *fiber.Ctx) error {
 	}
 
 	var tasks []models.RepairTask
-	database.DB.Preload("API").Where("project_id = ?", projectID).Order("created_at DESC").Find(&tasks)
+	database.DB.Preload("API").Preload("Approver").Where("project_id = ?", projectID).Order("created_at DESC").Find(&tasks)
 
 	return c.JSON(tasks)
 }
@@ -43,19 +44,17 @@ func ApproveRepairTask(c *fiber.Ctx) error {
 	task.ApprovedAt = &now
 
 	database.DB.Save(&task)
+	database.DB.Preload("Approver").First(&task, task.ID)
 
 	// Create Dashboard Notification
 	var project models.Project
 	database.DB.First(&project, task.ProjectID)
-
-	notification := models.DashboardNotification{
-		UserID:    project.UserID,
-		ProjectID: task.ProjectID,
-		Type:      "task_approve",
-		Title:     "Repair Task Approved",
-		Message:   "A repair task for project '" + project.Name + "' has been approved.",
-	}
-	database.DB.Create(&notification)
+	CreateProjectNotification(
+		task.ProjectID,
+		"task_approve",
+		"Repair Task Approved",
+		"A repair task for project '" + project.Name + "' has been approved.",
+	)
 
 	return c.JSON(task)
 }
@@ -67,6 +66,7 @@ func CloseRepairTask(c *fiber.Ctx) error {
 		Reason      string   `json:"reason"`
 		DocumentURL string   `json:"document_url"`
 		Documents   []string `json:"documents"`
+		FixerName   string   `json:"fixer_name"`
 	}
 	var input CloseInput
 	if err := c.BodyParser(&input); err != nil {
@@ -81,29 +81,34 @@ func CloseRepairTask(c *fiber.Ctx) error {
 	now := time.Now()
 	task.Status = "closed"
 	task.Reason = input.Reason
+	task.FixerName = input.FixerName
 	task.DocumentURL = input.DocumentURL
 	
-	if len(input.Documents) > 0 {
-		docsJSON, _ := json.Marshal(input.Documents)
-		task.Documents = string(docsJSON)
-	}
-	
 	task.ClosedAt = &now
+	
+	if len(input.Documents) > 0 {
+		docsJSON, err := json.Marshal(input.Documents)
+		if err == nil {
+			task.Documents = string(docsJSON)
+		}
+	} else {
+		task.Documents = "[]"
+	}
 
-	database.DB.Save(&task)
+	if err := database.DB.Save(&task).Error; err != nil {
+		fmt.Printf("❌ Failed to close task: %v\n", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to save task resolution"})
+	}
 
 	// Create Dashboard Notification
 	var project models.Project
 	database.DB.First(&project, task.ProjectID)
-
-	notification := models.DashboardNotification{
-		UserID:    project.UserID,
-		ProjectID: task.ProjectID,
-		Type:      "task_close",
-		Title:     "Repair Task Closed",
-		Message:   "A repair task for project '" + project.Name + "' has been closed. Reason: " + input.Reason,
-	}
-	database.DB.Create(&notification)
+	CreateProjectNotification(
+		task.ProjectID,
+		"task_close",
+		"Repair Task Closed",
+		"A repair task for project '" + project.Name + "' has been closed. Reason: " + input.Reason,
+	)
 
 	return c.JSON(task)
 }
@@ -132,15 +137,12 @@ func FailRepairTask(c *fiber.Ctx) error {
 	// Create Dashboard Notification
 	var project models.Project
 	database.DB.First(&project, task.ProjectID)
-
-	notification := models.DashboardNotification{
-		UserID:    project.UserID,
-		ProjectID: task.ProjectID,
-		Type:      "task_fail",
-		Title:     "Repair Task Failed",
-		Message:   "A repair task for project '" + project.Name + "' has been marked as failed: " + input.Description,
-	}
-	database.DB.Create(&notification)
+	CreateProjectNotification(
+		task.ProjectID,
+		"task_fail",
+		"Repair Task Failed",
+		"A repair task for project '" + project.Name + "' has been marked as failed: " + input.Description,
+	)
 
 	return c.JSON(task)
 }

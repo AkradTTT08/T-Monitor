@@ -62,5 +62,8 @@ func ConnectDB() {
 		log.Fatal("Failed to auto-migrate database. \n", err)
 	}
 
+	// ONE-TIME FIX: Populate empty schedules for historical logs to prevent them from changing when API config changes
+	db.Model(&models.MonitorLog{}).Where("schedule IS NULL OR schedule = ''").Update("schedule", "EVERY 1 MIN")
+
 	DB = db
 }

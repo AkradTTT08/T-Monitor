@@ -59,3 +59,35 @@ func UpsertNotificationConfig(c *fiber.Ctx) error {
 
 	return c.JSON(input)
 }
+
+// CreateProjectNotification sends a dashboard notification to all project members
+func CreateProjectNotification(projectID uint, notifType string, title string, message string) {
+	// 1. Find the project and its owner
+	var project models.Project
+	if err := database.DB.First(&project, projectID).Error; err != nil {
+		return
+	}
+
+	// 2. Find all project members
+	var members []models.ProjectMember
+	database.DB.Where("project_id = ?", projectID).Find(&members)
+
+	// 3. Collect unique user IDs
+	userIDs := make(map[uint]bool)
+	userIDs[project.UserID] = true // Add owner
+	for _, m := range members {
+		userIDs[m.UserID] = true // Add member
+	}
+
+	// 4. Create notification records for each user
+	for userID := range userIDs {
+		notification := models.DashboardNotification{
+			UserID:    userID,
+			ProjectID: projectID,
+			Type:      notifType,
+			Title:     title,
+			Message:   message,
+		}
+		database.DB.Create(&notification)
+	}
+}

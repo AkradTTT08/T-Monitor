@@ -36,6 +36,17 @@ func GetMonitorLogs(c *fiber.Ctx) error {
 			// Already joined: just add the filter
 			query = query.Where("apis.project_id = ?", projectID)
 		}
+		// If project is filtered, we likely want more logs for graphs/status
+		query = query.Limit(1000) 
+	}
+
+	// Date range filters
+	startDate := c.Query("start_date")
+	endDate := c.Query("end_date")
+	if startDate != "" && endDate != "" {
+		query = query.Where("checked_at BETWEEN ? AND ?", startDate+" 00:00:00", endDate+" 23:59:59")
+		// For reports, we want all logs in the range
+		query = query.Limit(5000)
 	}
 
 	if err := query.Find(&logs).Error; err != nil {

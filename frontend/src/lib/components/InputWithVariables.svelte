@@ -1,19 +1,22 @@
 <script lang="ts">
-  import { createEventDispatcher } from "svelte";
+  import { onMount, tick } from "svelte";
 
-  export let value = "";
-  export let placeholder = "";
-  export let disabled = false;
-  export let required = false;
-  export let variables: Record<string, string> = {}; // Available environment variables
+  let {
+    value = $bindable(""),
+    placeholder = "",
+    disabled = false,
+    required = false,
+    variables = {},
+    onpaste,
+    onfocus,
+    onblur
+  } = $props();
 
-  const dispatch = createEventDispatcher();
-
-  let inputEl: HTMLInputElement;
-  let isFocused = false;
+  let inputEl: HTMLInputElement | undefined = $state();
+  let isFocused = $state(false);
 
   // Split string into text and variable segments
-  $: segments = parseSegments(value);
+  let segments = $derived(parseSegments(value));
 
   function parseSegments(str: string) {
     if (!str) return [];
@@ -101,9 +104,9 @@
     {required}
     type="text"
     {placeholder}
-    on:focus={() => (isFocused = true)}
-    on:blur={() => (isFocused = false)}
-    on:paste
+    onfocus={(e) => { isFocused = true; onfocus?.(e); }}
+    onblur={(e) => { isFocused = false; onblur?.(e); }}
+    onpaste={onpaste}
     class="relative z-20 w-full h-full px-4 py-2 bg-transparent focus:outline-none transition-all text-cyan-50 caret-cyan-500 {disabled
       ? 'cursor-not-allowed opacity-50'
       : ''}"

@@ -13,6 +13,14 @@
 
   let project: any = null;
   let apis: any[] = [];
+  let now = new Date();
+
+  onMount(() => {
+    const interval = setInterval(() => {
+      now = new Date();
+    }, 1000);
+    return () => clearInterval(interval);
+  });
 
   // Derive environment variables for highlighting
   $: envVarDict = (() => {
@@ -879,10 +887,53 @@
     }
   }
 
+  function getStatusInfo(api: any, currentTime: Date) {
+    if (!api.paused_until) return { status: 'LIVE', detail: 'Monitoring' };
+    const pausedUntil = new Date(api.paused_until);
+    if (pausedUntil <= currentTime) return { status: 'LIVE', detail: 'Monitoring' };
+
+    if (pausedUntil.getFullYear() > 9000) {
+      return { status: 'PAUSED', detail: 'Indefinite' };
+    }
+
+    const diffMs = pausedUntil.getTime() - currentTime.getTime();
+    const diffSecs = Math.floor(diffMs / 1000);
+    const diffMins = Math.round(diffMs / 60000);
+    
+    if (diffMins < 60) {
+      if (diffSecs < 60) {
+        return { status: 'PAUSED', detail: `${diffSecs}s remaining` };
+      }
+      return { status: 'PAUSED', detail: `${diffMins}m remaining` };
+    }
+    
+    return { 
+      status: 'PAUSED', 
+      detail: `until ${pausedUntil.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` 
+    };
+  }
+
   function openPauseApiModal(api: any) {
     selectedApi = api;
-    pauseMinutes = 60;
-    pauseType = 'duration';
+    
+    if (api.paused_until && new Date(api.paused_until) > new Date()) {
+      const pausedUntil = new Date(api.paused_until);
+      const now = new Date();
+      const diffMs = pausedUntil.getTime() - now.getTime();
+      const diffMins = Math.round(diffMs / 60000);
+      
+      if (pausedUntil.getFullYear() > 9000) {
+        pauseType = 'indefinite';
+        pauseMinutes = 60;
+      } else {
+        pauseType = 'duration';
+        pauseMinutes = diffMins > 0 ? diffMins : 1;
+      }
+    } else {
+      pauseMinutes = 60;
+      pauseType = 'duration';
+    }
+    
     showPauseApiModal = true;
   }
 
@@ -1398,6 +1449,7 @@
               <th class="p-3 md:p-4">Endpoint Name</th>
               <th class="p-3 md:p-4">URL</th>
               <th class="p-3 md:p-4">Expected</th>
+              <th class="p-3 md:p-4">Status</th>
               <th class="p-3 md:p-4 text-right">Actions</th>
             </tr>
           </thead>
@@ -1413,7 +1465,7 @@
                 ondragleave={handleDragLeave}
                 ondrop={(e) => handleDrop(e, folderName, -1)}
               >
-                <td colspan="6" class="px-4 py-2">
+                <td colspan="7" class="px-4 py-2">
                   <div class="flex items-center justify-between">
                     <div
                       class="flex items-center gap-2 text-cyan-100 font-bold text-sm tracking-wide"
@@ -1493,6 +1545,7 @@
 
               <!-- Folder API Items -->
               {#each folderApis as api, i}
+                {@const info = getStatusInfo(api, now)}
                 <tr
                   draggable="true"
                   ondragstart={(e) => handleDragStart(e, api.id)}
@@ -1532,12 +1585,7 @@
                   <td
                     class="p-3 md:p-4 text-cyan-50 truncate max-w-[150px] md:max-w-xs"
                   >
-                    <div class="flex items-center gap-2">
-                      <span class="font-bold">{api.name}</span>
-                      {#if api.paused_until && new Date(api.paused_until) > new Date()}
-                        <span class="px-1.5 py-0.5 bg-amber-950/50 border border-amber-500/40 text-amber-400 text-[9px] font-bold rounded tracking-wider">PAUSED</span>
-                      {/if}
-                    </div>
+                    <span class="font-bold">{api.name}</span>
                   </td>
                   <td
                     class="p-3 md:p-4 text-slate-500 text-sm truncate max-w-[150px] md:max-w-xs"
@@ -1548,6 +1596,23 @@
                       class="px-2 py-1 bg-slate-900 border border-slate-700 rounded text-[10px] font-mono"
                       >{api.expected_status_code}</span
                     >
+                  </td>
+                  <td class="p-3 md:p-4">
+                    <div class="flex flex-col gap-1">
+                      <span
+                        class="px-2 py-0.5 rounded border text-[9px] font-bold w-fit tracking-wider shadow-[0_0_5px_rgba(0,0,0,0.2)]
+                        {info.status === 'LIVE'
+                          ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-400'
+                          : 'bg-amber-950/40 border-amber-500/30 text-amber-400'}"
+                      >
+                        {info.status}
+                      </span>
+                      {#if info.detail}
+                        <span class="text-xs text-slate-400 font-medium italic lowercase">
+                          {info.detail}
+                        </span>
+                      {/if}
+                    </div>
                   </td>
                   <td
                     class="p-3 md:p-4 text-right flex items-center justify-end gap-1 sm:gap-2"
@@ -1649,7 +1714,7 @@
                   ondragleave={handleDragLeave}
                   ondrop={(e) => handleDrop(e, folderName, folderApis.length)}
                 >
-                  <td colspan="6" class="p-0"></td>
+                  <td colspan="7" class="p-0"></td>
                 </tr>
               {/if}
             {/each}
@@ -1876,7 +1941,7 @@
               placeholder="&#123;&#123;base_url&#125;&#125;/api/v1/users"
               required={true}
               variables={envVarDict}
-              on:paste={handleUrlPaste}
+              onpaste={handleUrlPaste}
             />
           </div>
         </div>
@@ -1900,7 +1965,7 @@
                 'json'
                   ? 'bg-slate-900/40 shadow-sm text-cyan-300'
                   : 'text-cyan-500/80 hover:text-cyan-50'}"
-                on:click={() => toggleParamMode("json")}>JSON</button
+                onclick={() => toggleParamMode("json")}>JSON</button
               >
               <button
                 type="button"
@@ -1908,7 +1973,7 @@
                 'kv'
                   ? 'bg-slate-900/40 shadow-sm text-cyan-300'
                   : 'text-cyan-500/80 hover:text-cyan-50'}"
-                on:click={() => toggleParamMode("kv")}>Key-Value</button
+                onclick={() => toggleParamMode("kv")}>Key-Value</button
               >
             </div>
           </div>
@@ -2004,7 +2069,7 @@
               'json'
                 ? 'bg-slate-900/40 shadow-sm text-cyan-300'
                 : 'text-cyan-500/80 hover:text-cyan-50'}"
-              on:click={() => toggleHeaderMode("json")}>JSON</button
+              onclick={() => toggleHeaderMode("json")}>JSON</button
             >
             <button
               type="button"
@@ -2012,7 +2077,7 @@
               'kv'
                 ? 'bg-slate-900/40 shadow-sm text-cyan-300'
                 : 'text-cyan-500/80 hover:text-cyan-50'}"
-              on:click={() => toggleHeaderMode("kv")}>Key-Value</button
+              onclick={() => toggleHeaderMode("kv")}>Key-Value</button
             >
           </div>
         </div>
@@ -2109,7 +2174,7 @@
               'json'
                 ? 'bg-slate-900/40 shadow-sm text-cyan-300'
                 : 'text-cyan-500/80 hover:text-cyan-50'} disabled:cursor-not-allowed"
-              on:click={() => toggleBodyMode("json")}>JSON</button
+              onclick={() => toggleBodyMode("json")}>JSON</button
             >
             <button
               type="button"
@@ -2118,7 +2183,7 @@
               'kv'
                 ? 'bg-slate-900/40 shadow-sm text-cyan-300'
                 : 'text-cyan-500/80 hover:text-cyan-50'} disabled:cursor-not-allowed"
-              on:click={() => toggleBodyMode("kv")}>Key-Value</button
+              onclick={() => toggleBodyMode("kv")}>Key-Value</button
             >
           </div>
         </div>
@@ -2247,7 +2312,7 @@
     >
       <button
         type="button"
-        on:click={() => (showAddApiModal = false)}
+        onclick={() => (showAddApiModal = false)}
         class="px-4 py-2 text-xs rounded-xl font-semibold text-slate-500 bg-slate-800 hover:bg-slate-700 transition-colors"
         >Cancel</button
       >
@@ -2266,7 +2331,7 @@
   title="Edit API Endpoint"
   maxWidth="max-w-2xl"
 >
-  <form on:submit|preventDefault={handleEditApiSubmit} class="space-y-4">
+  <form onsubmit={(e) => { e.preventDefault(); handleEditApiSubmit(); }} class="space-y-4">
     <div
       class="grid grid-cols-1 md:grid-cols-2 gap-4 border-b border-slate-800 pb-4"
     >
@@ -2338,7 +2403,7 @@
               placeholder="&#123;&#123;base_url&#125;&#125;/api/v1/users"
               required={true}
               variables={envVarDict}
-              on:paste={handleUrlPaste}
+              onpaste={handleUrlPaste}
             />
           </div>
         </div>
@@ -2362,7 +2427,7 @@
                 'json'
                   ? 'bg-slate-900/40 shadow-sm text-cyan-300'
                   : 'text-cyan-500/80 hover:text-cyan-50'}"
-                on:click={() => toggleParamMode("json")}>JSON</button
+                onclick={() => toggleParamMode("json")}>JSON</button
               >
               <button
                 type="button"
@@ -2370,7 +2435,7 @@
                 'kv'
                   ? 'bg-slate-900/40 shadow-sm text-cyan-300'
                   : 'text-cyan-500/80 hover:text-cyan-50'}"
-                on:click={() => toggleParamMode("kv")}>Key-Value</button
+                onclick={() => toggleParamMode("kv")}>Key-Value</button
               >
             </div>
           </div>
@@ -2402,7 +2467,7 @@
                   </div>
                   <button
                     type="button"
-                    on:click={() =>
+                    onclick={() =>
                       (paramsKV = paramsKV.filter((_, idx) => idx !== i))}
                     class="p-2 text-slate-500 hover:text-red-500 bg-slate-900/50 hover:bg-red-950/30 border border-slate-700/50 rounded-lg transition-colors"
                   >
@@ -2426,7 +2491,7 @@
               {/each}
               <button
                 type="button"
-                on:click={() =>
+                onclick={() =>
                   (paramsKV = [...paramsKV, { key: "", value: "" }])}
                 class="text-xs font-medium text-cyan-400 hover:text-cyan-400 flex items-center gap-1 mt-1"
               >
@@ -2466,7 +2531,7 @@
               'json'
                 ? 'bg-slate-900/40 shadow-sm text-cyan-300'
                 : 'text-cyan-500/80 hover:text-cyan-50'}"
-              on:click={() => toggleHeaderMode("json")}>JSON</button
+              onclick={() => toggleHeaderMode("json")}>JSON</button
             >
             <button
               type="button"
@@ -2474,7 +2539,7 @@
               'kv'
                 ? 'bg-slate-900/40 shadow-sm text-cyan-300'
                 : 'text-cyan-500/80 hover:text-cyan-50'}"
-              on:click={() => toggleHeaderMode("kv")}>Key-Value</button
+              onclick={() => toggleHeaderMode("kv")}>Key-Value</button
             >
           </div>
         </div>
@@ -2506,7 +2571,7 @@
                 </div>
                 <button
                   type="button"
-                  on:click={() =>
+                  onclick={() =>
                     (headersKV = headersKV.filter((_, idx) => idx !== i))}
                   class="p-2 text-slate-500 hover:text-red-500 bg-slate-900/50 hover:bg-red-950/30 border border-slate-700/50 rounded-lg transition-colors"
                 >
@@ -2530,7 +2595,7 @@
             {/each}
             <button
               type="button"
-              on:click={() =>
+              onclick={() =>
                 (headersKV = [...headersKV, { key: "", value: "" }])}
               class="text-xs font-medium text-cyan-400 hover:text-cyan-400 flex items-center gap-1 mt-1"
             >
@@ -2571,7 +2636,7 @@
               'json'
                 ? 'bg-slate-900/40 shadow-sm text-cyan-300'
                 : 'text-cyan-500/80 hover:text-cyan-50'} disabled:cursor-not-allowed"
-              on:click={() => toggleBodyMode("json")}>JSON</button
+              onclick={() => toggleBodyMode("json")}>JSON</button
             >
             <button
               type="button"
@@ -2580,7 +2645,7 @@
               'kv'
                 ? 'bg-slate-900/40 shadow-sm text-cyan-300'
                 : 'text-cyan-500/80 hover:text-cyan-50'} disabled:cursor-not-allowed"
-              on:click={() => toggleBodyMode("kv")}>Key-Value</button
+              onclick={() => toggleBodyMode("kv")}>Key-Value</button
             >
           </div>
         </div>
@@ -2630,7 +2695,7 @@
                 <button
                   type="button"
                   disabled={apiForm.method === "GET"}
-                  on:click={() =>
+                  onclick={() =>
                     (bodyKV = bodyKV.filter((_, idx) => idx !== i))}
                   class="p-2 text-slate-500 hover:text-red-500 bg-slate-900/50 hover:bg-red-950/30 border border-slate-700/50 rounded-lg transition-colors disabled:cursor-not-allowed disabled:hover:bg-slate-900/50 disabled:hover:text-slate-500"
                 >
@@ -2655,7 +2720,7 @@
             <button
               type="button"
               disabled={apiForm.method === "GET"}
-              on:click={() => (bodyKV = [...bodyKV, { key: "", value: "" }])}
+              onclick={() => (bodyKV = [...bodyKV, { key: "", value: "" }])}
               class="text-xs font-medium text-cyan-400 hover:text-cyan-400 flex items-center gap-1 mt-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-cyan-400"
             >
               <svg
@@ -2709,7 +2774,7 @@
     >
       <button
         type="button"
-        on:click={() => (showEditApiModal = false)}
+        onclick={() => (showEditApiModal = false)}
         class="px-4 py-2 text-xs rounded-xl font-semibold text-slate-500 bg-slate-800 hover:bg-slate-700 transition-colors"
         >Cancel</button
       >
@@ -2761,12 +2826,12 @@
     </div>
     <div class="flex justify-end gap-3 pt-2">
       <button
-        on:click={() => (showDeleteApiModal = false)}
+        onclick={() => (showDeleteApiModal = false)}
         class="px-4 py-2 text-xs rounded-xl font-semibold text-slate-500 bg-slate-800 hover:bg-slate-700 transition-colors"
         >Cancel</button
       >
       <button
-        on:click={handleDeleteApiSubmit}
+        onclick={handleDeleteApiSubmit}
         class="px-4 py-2 text-xs rounded-xl font-semibold text-white bg-red-600 hover:bg-red-700 transition-colors shadow-sm shadow-red-500/20"
         >Yes, Remove</button
       >
@@ -2810,12 +2875,12 @@
     </div>
     <div class="flex justify-end gap-3 pt-2">
       <button
-        on:click={() => (showBulkDeleteModal = false)}
+        onclick={() => (showBulkDeleteModal = false)}
         class="px-4 py-2 text-xs rounded-xl font-semibold text-slate-500 bg-slate-800 hover:bg-slate-700 transition-colors"
         >Cancel</button
       >
       <button
-        on:click={handleBulkDeleteSubmit}
+        onclick={handleBulkDeleteSubmit}
         class="px-4 py-2 text-xs rounded-xl font-semibold text-white bg-red-600 hover:bg-red-700 transition-colors shadow-sm shadow-red-500/20 flex items-center gap-2"
       >
         <svg
@@ -2915,12 +2980,12 @@
 
     <div class="flex gap-3 justify-end pt-5 mt-2 border-t border-slate-800">
       <button
-        on:click={() => (showScheduleModal = false)}
+        onclick={() => (showScheduleModal = false)}
         class="px-4 py-2 text-xs text-cyan-50 bg-slate-900/40 border border-slate-600 rounded-xl hover:bg-slate-900/50 font-medium transition-colors"
         >Cancel</button
       >
       <button
-        on:click={handleScheduleSubmit}
+        onclick={handleScheduleSubmit}
         class="px-4 py-2 text-xs bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-medium transition-colors shadow-sm"
       >
         Save Schedule
@@ -2945,12 +3010,12 @@
 
     <div class="flex justify-end gap-3 pt-3 border-t border-slate-800">
       <button
-        on:click={() => (showEditFolderModal = false)}
+        onclick={() => (showEditFolderModal = false)}
         class="px-4 py-2 text-xs text-cyan-50 bg-slate-900/40 border border-slate-600 rounded-xl hover:bg-slate-900/50 font-medium transition-colors"
         >Cancel</button
       >
       <button
-        on:click={handleEditFolderSubmit}
+        onclick={handleEditFolderSubmit}
         disabled={!editFolderName.trim() ||
           editFolderName.trim() === selectedFolderToEdit}
         class="px-4 py-2 text-xs bg-cyan-600 text-white rounded-xl hover:bg-cyan-700 font-medium transition-colors shadow-sm text-xs disabled:opacity-50 disabled:cursor-not-allowed"
@@ -3169,7 +3234,7 @@
 </Modal>
 
 <!-- Pause API Modal -->
-<Modal bind:open={showPauseApiModal} title="Pause Monitor ({selectedApi?.name})">
+<Modal bind:open={showPauseApiModal} title="Pause Monitor ({selectedApi?.name})" maxWidth="max-w-md">
   <div class="space-y-4">
 
     <!-- Type selector tabs -->

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/monitor-api/backend/internal/database"
+	"github.com/monitor-api/backend/internal/handlers"
 	"github.com/monitor-api/backend/internal/models"
 )
 
@@ -198,6 +199,7 @@ func handleResult(api models.API, statusCode int, duration int64, isSuccess bool
 		IsSuccess:    isSuccess,
 		ErrorMessage: errorMsg,
 		ResponseBody: responseBody,
+		Schedule:     formatScheduleString(api),
 		CheckedAt:    time.Now(),
 	}
 
@@ -225,31 +227,98 @@ func handleResult(api models.API, statusCode int, duration int64, isSuccess bool
 			go sendEmailNotification(api, logEntry, &config)
 		}
 
-		// Create RepairTask if not exists (open or pending)
-		var existingTask models.RepairTask
-		err = database.DB.Where("api_id = ? AND status IN ?", api.ID, []string{"open", "pending"}).First(&existingTask).Error
-		if err != nil {
-			// No existing task, create a new one
+		// INTELLIGENT REPAIR TASK CREATION (Rule 1, 2, 3)
+		// Rule 3: Check if the previous check was a success (A new incident after recovery)
+		var lastLog models.MonitorLog
+		err = database.DB.Where("api_id = ?", api.ID).Order("checked_at desc").Offset(1).First(&lastLog).Error
+
+		shouldCreateNew := false
+		if err == nil && lastLog.IsSuccess {
+			// Previous check was success, so this is a new incident
+			shouldCreateNew = true
+		} else if err != nil {
+			// No previous logs, first failure
+			shouldCreateNew = true
+		}
+
+		if !shouldCreateNew {
+			// Rule 1 & 2: Check for identical existing tasks in the current failure streak
+			var existingTask models.RepairTask
+			err = database.DB.Where("api_id = ? AND status IN ? AND error_message = ? AND schedule = ?",
+				api.ID, []string{"open", "pending"}, errorMsg, logEntry.Schedule).First(&existingTask).Error
+
+			if err != nil {
+				// No matching task found for this error type/schedule in the current streak
+				shouldCreateNew = true
+			}
+		}
+
+		if shouldCreateNew {
+			// Create a new RepairTask
 			newTask := models.RepairTask{
 				ProjectID:    api.ProjectID,
 				ApiID:        api.ID,
 				Status:       "open",
 				ErrorMessage: errorMsg,
+				Schedule:     logEntry.Schedule,
 			}
 			database.DB.Create(&newTask)
 
 			// Create Dashboard Notification
-			var project models.Project
-			database.DB.First(&project, api.ProjectID)
+			handlers.CreateProjectNotification(
+				api.ProjectID,
+				"api_fail",
+				"API Failure Detected",
+				"API '" + api.Name + "' has failed: " + errorMsg,
+			)
+		}
+	}
+}
 
-			notification := models.DashboardNotification{
-				UserID:    project.UserID,
-				ProjectID: api.ProjectID,
-				Type:      "api_fail",
-				Title:     "API Failure Detected",
-				Message:   "API '" + api.Name + "' has failed: " + errorMsg,
-			}
-			database.DB.Create(&notification)
+func formatScheduleString(api models.API) string {
+	if api.ScheduleConfig == "" || api.ScheduleConfig == "{}" || api.ScheduleConfig == "{\n}" {
+		// Fallback to interval based
+		if api.Interval < 60 {
+			return fmt.Sprintf("EVERY %d SEC", api.Interval)
+		} else if api.Interval < 3600 {
+			return fmt.Sprintf("EVERY %d MIN", api.Interval/60)
+		} else {
+			return fmt.Sprintf("EVERY %d HR", api.Interval/3600)
+		}
+	}
+
+	var config struct {
+		Mode  string `json:"mode"`
+		Value int    `json:"value"`
+		Day   string `json:"day"`
+		Time  string `json:"time"`
+	}
+
+	if err := json.Unmarshal([]byte(api.ScheduleConfig), &config); err != nil {
+		if api.Interval < 60 {
+			return fmt.Sprintf("EVERY %d SEC", api.Interval)
+		} else if api.Interval < 3600 {
+			return fmt.Sprintf("EVERY %d MIN", api.Interval/60)
+		} else {
+			return fmt.Sprintf("EVERY %d HR", api.Interval/3600)
+		}
+	}
+
+	switch config.Mode {
+	case "Minute timer":
+		return fmt.Sprintf("EVERY %d MIN", config.Value)
+	case "Hour timer":
+		return fmt.Sprintf("EVERY %d HR", config.Value)
+	case "Week timer":
+		day := strings.ToUpper(config.Day)
+		return fmt.Sprintf("%s AT %s", day, config.Time)
+	default:
+		if api.Interval < 60 {
+			return fmt.Sprintf("EVERY %d SEC", api.Interval)
+		} else if api.Interval < 3600 {
+			return fmt.Sprintf("EVERY %d MIN", api.Interval/60)
+		} else {
+			return fmt.Sprintf("EVERY %d HR", api.Interval/3600)
 		}
 	}
 }

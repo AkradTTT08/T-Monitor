@@ -47,6 +47,7 @@ type User struct {
 	Projects        []Project `gorm:"foreignKey:UserID" json:"projects,omitempty"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
+	DeletedAt       gorm.DeletedAt `gorm:"index" json:"deleted_at"` // Added for soft delete
 }
 
 // Project represents a workspace containing configured APIs
@@ -110,6 +111,7 @@ type MonitorLog struct {
 	IsSuccess    bool      `json:"is_success"`
 	ErrorMessage string    `gorm:"type:text" json:"error_message"`
 	ResponseBody string    `gorm:"type:text" json:"response_body"`
+	Schedule     string    `gorm:"type:text" json:"schedule"` // Added for historical schedule tracking
 	CheckedAt    time.Time `json:"checked_at"`
 	API          *API      `gorm:"foreignKey:ApiID" json:"api,omitempty"`
 	DeletedAt    gorm.DeletedAt `gorm:"index" json:"deleted_at"` // Soft delete
@@ -148,7 +150,10 @@ type RepairTask struct {
 	Reason       string         `gorm:"type:text" json:"reason"`       // For 'closed' status
 	DocumentURL  string         `gorm:"type:text" json:"document_url"` // Legacy for 'closed' status
 	Documents    string         `gorm:"type:text" json:"documents"`    // JSON array of document URLs
+	FixerName    string         `gorm:"type:text" json:"fixer_name"`    // Name of the person who fixed the API
 	ApprovedBy   *uint          `json:"approved_by"`
+	Approver     *User          `gorm:"foreignKey:ApprovedBy" json:"approver,omitempty"`
+	Schedule     string         `gorm:"type:text" json:"schedule"` // Added for deduplication by schedule
 	ApprovedAt   *time.Time     `json:"approved_at"`
 	ClosedAt     *time.Time     `json:"closed_at"`
 	CreatedAt    time.Time      `json:"created_at"`

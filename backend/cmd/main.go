@@ -132,6 +132,7 @@ func setupRoutes(app *fiber.App) {
 
 	// Repair Task Routes
 	protected.Post("/upload", handlers.UploadMultipleFiles)
+	protected.Get("/download", handlers.DownloadFile)
 	protected.Get("/projects/:id/repair-tasks", handlers.GetRepairTasks)
 	protected.Post("/repair-tasks/:id/approve", handlers.ApproveRepairTask)
 	protected.Post("/repair-tasks/:id/close", handlers.CloseRepairTask)
@@ -147,6 +148,7 @@ func setupRoutes(app *fiber.App) {
 	users.Put("/:id/role", handlers.UpdateUserRole)
 	users.Put("/:id/approve", handlers.ApproveUser)
 	users.Delete("/:id/disapprove", handlers.DisapproveUser)
+	users.Delete("/:id", handlers.DeleteUser)
 	users.Put("/:id/block", handlers.ToggleBlockUser)
 	users.Put("/:id/reset-password", handlers.ResetPassword)
 

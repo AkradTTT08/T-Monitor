@@ -266,3 +266,32 @@ func UploadProfileImage(c *fiber.Ctx) error {
 		"profile_image_url": user.ProfileImageURL,
 	})
 }
+
+func DeleteUser(c *fiber.Ctx) error {
+	id := c.Params("id")
+	userID, ok := c.Locals("user_id").(uint)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+
+	var user models.User
+	if err := database.DB.First(&user, id).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
+	}
+
+	// Prevent self-deletion
+	if user.ID == userID {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "You cannot delete your own account"})
+	}
+
+	// Prevent deleting administrators
+	if user.Role == "admin" {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot delete an administrator account"})
+	}
+
+	if err := database.DB.Delete(&user).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete user"})
+	}
+
+	return c.JSON(fiber.Map{"message": "User deleted successfully"})
+}

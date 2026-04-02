@@ -180,6 +180,41 @@
     }
   }
 
+  async function deleteUser(userId: number) {
+    const result = await systemAlert.fire({
+      title: "Confirm Deletion",
+      text: "This will permanently remove the user account. This action cannot be undone. Are you sure?",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "YES, DELETE PERMANENTLY",
+      confirmButtonColor: "#ef4444",
+      cancelButtonColor: "#334155",
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      const token = localStorage.getItem("monitor_token");
+      const res = await fetch(
+        `${API_BASE_URL}/api/v1/users/${userId}`,
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+      if (res.ok) {
+        systemToast.fire({ icon: "success", title: "User deleted successfully." });
+        await fetchUsers();
+      } else {
+        const errorData = await res.json();
+        systemAlert.fire({ icon: "error", title: "Deletion Failed", text: errorData.error || "Failed to delete user." });
+      }
+    } catch (err) {
+      console.error(err);
+      systemAlert.fire({ icon: "error", title: "Error", text: "A network error occurred." });
+    }
+  }
+
   function openDetailModal(user: any) {
     selectedUser = user;
     showDetailModal = true;
@@ -448,6 +483,34 @@
                       >
                       BLOCK
                     {/if}
+                  </button>
+
+                  <button
+                    onclick={(e) => { e.stopPropagation(); deleteUser(u.id); }}
+                    disabled={currentUser &&
+                      (currentUser.id === u.id || u.role === "admin")}
+                    class="transition-all whitespace-nowrap ml-2 font-mono tracking-widest uppercase text-[10px] font-bold px-3 py-1.5 rounded-lg border flex items-center gap-2
+                      {currentUser &&
+                    (currentUser.id === u.id || u.role === 'admin')
+                      ? 'text-slate-600 border-slate-700 bg-slate-800 cursor-not-allowed'
+                      : 'text-red-500 border-red-500/30 bg-red-950/20 hover:bg-red-900/40 hover:border-red-400/50 shadow-[0_0_10px_rgba(239,68,68,0.1)]'}"
+                    title="Delete user permanently"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      ><path d="M3 6h18" /><path
+                        d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"
+                      /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /></svg
+                    >
+                    DELETE
                   </button>
                 </div>
               </td>
