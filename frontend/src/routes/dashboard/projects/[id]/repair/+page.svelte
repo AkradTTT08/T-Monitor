@@ -57,6 +57,8 @@
 
   // Selected Task
   let selectedTask: RepairTask | null = null;
+  let closeForm: any = {};
+  let failForm: any = {};
 
   $: filteredTasks = tasks.filter(task => {
     const searchLow = searchQuery.toLowerCase();
@@ -143,82 +145,6 @@
     }
   }
 
-  function getStatusStyle(status: string) {
-    if (status === 'open') return 'border-blue-500/30 text-blue-400';
-    if (status === 'pending') return 'border-amber-500/30 text-amber-400';
-    if (status === 'closed') return 'border-emerald-500/30 text-emerald-400';
-    return 'border-rose-500/30 text-rose-400';
-  }
-
-  function viewDetails(task: RepairTask) {
-    if (task.status === 'open' || task.status === 'pending') return;
-    
-    selectedTask = task;
-    systemAlert.fire({
-      title: 'REPAIR_DETAILS',
-      html: `
-        <div class="text-left space-y-4">
-          <div class="p-4 bg-slate-950 border border-slate-800 rounded-2xl">
-            <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Technician_Summary</p>
-            <p class="text-sm text-slate-300 leading-relaxed">${task.description || 'No description provided.'}</p>
-          </div>
-          <div class="grid grid-cols-2 gap-3">
-             <div class="p-3 bg-slate-800/50 rounded-xl border border-slate-700/30">
-               <p class="text-[9px] font-bold text-slate-500 uppercase">Fixed_By</p>
-               <p class="text-xs text-emerald-400 font-bold">${task.fixer_name || 'N/A'}</p>
-             </div>
-             <div class="p-3 bg-slate-800/50 rounded-xl border border-slate-700/30">
-               <p class="text-[9px] font-bold text-slate-500 uppercase">Status</p>
-               <p class="text-xs text-rose-400 font-bold">${task.status.toUpperCase()}</p>
-             </div>
-          </div>
-        </div>
-      `,
-      confirmButtonText: 'CLOSE_PREVIEW'
-    });
-  }
-
-  function prevPage() { if (currentPage > 1) currentPage--; }
-  function nextPage() { if (currentPage < totalPages) currentPage++; }
-  function setPage(p: number) { currentPage = p; }
-
-  async function openFail(task: RepairTask) {
-    const { value: reason } = await systemAlert.fire({
-      title: 'FAIL_REPAIR_TASK',
-      input: 'textarea',
-      inputLabel: 'Reason for Failure',
-      inputPlaceholder: 'Why did the repair fail?',
-      inputAttributes: { 'aria-label': 'Why did the repair fail?' },
-      showCancelButton: true,
-      confirmButtonText: 'MARK_AS_FAILED',
-      confirmButtonColor: '#e11d48'
-    });
-
-    if (reason) {
-      handleFail(task.id, reason);
-    }
-  }
-
-  async function handleFail(taskId: string, reason: string) {
-    try {
-      const token = localStorage.getItem("monitor_token");
-      const res = await fetch(`${API_BASE_URL}/api/v1/repair-tasks/${taskId}/fail`, {
-        method: "POST",
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ description: reason })
-      });
-
-      if (res.ok) {
-        await fetchData();
-        systemToast.fire({ icon: 'success', title: 'Task Marked Failed' });
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  }
 
   async function openClose(task: any) {
     selectedTask = task;

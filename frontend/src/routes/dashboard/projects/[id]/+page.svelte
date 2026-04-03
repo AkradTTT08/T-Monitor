@@ -71,6 +71,36 @@
     expected_status_code: 200,
     interval: 60,
   };
+  
+  // API Search and Pagination State
+  let apiSearchQuery = "";
+  let apiPage = 1;
+  const apiLimit = 15;
+
+  // Reactively filter APIs based on search query
+  $: filteredApisForDisplay = apis.filter(api => {
+    if (!apiSearchQuery.trim()) return true;
+    const q = apiSearchQuery.toLowerCase();
+    return (
+      (api.name || "").toLowerCase().includes(q) ||
+      (api.url || "").toLowerCase().includes(q) ||
+      (api.folder || "").toLowerCase().includes(q)
+    );
+  });
+
+  // Calculate total pages for APIs
+  $: totalApiPages = Math.ceil(filteredApisForDisplay.length / apiLimit);
+
+  // Paginate filtered APIs
+  $: paginatedApisForDisplay = filteredApisForDisplay.slice(
+    (apiPage - 1) * apiLimit,
+    apiPage * apiLimit
+  );
+
+  // Reset to first page when search changes
+  $: if (apiSearchQuery !== undefined) {
+    apiPage = 1;
+  }
 
   // KV Arrays for Form Toggles
   let headerMode: "json" | "kv" = "json";
@@ -201,7 +231,8 @@
     // Initialize custom folders empty
     customFolders.forEach((f) => (groups[f] = []));
 
-    apis
+    // Use paginated list instead of full apis list
+    paginatedApisForDisplay
       .sort((a, b) => a.order_index - b.order_index)
       .forEach((api) => {
         const folder = api.folder || "Uncategorized";
@@ -210,7 +241,7 @@
       });
 
     // Make sure 'Uncategorized' defaults first or last
-    if (!groups["Uncategorized"] && Object.keys(groups).length === 0) {
+    if (!groups["Uncategorized"] && Object.keys(groups).length === 0 && paginatedApisForDisplay.length > 0) {
       groups["Uncategorized"] = [];
     }
 
@@ -1366,20 +1397,31 @@
       </div>
     </div>
 
-    <!-- API List -->
-    <div
-      class="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 mt-6"
-    >
-      <div class="flex items-center gap-4">
+    <!-- API List Header -->
+    <div class="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 mt-8">
+      <div class="flex flex-col md:flex-row md:items-center gap-4 w-full md:w-auto">
         <h2
-          class="text-xl md:text-2xl font-bold text-cyan-50 font-mono tracking-wide"
+          class="text-xl md:text-2xl font-bold text-cyan-50 font-mono tracking-wide whitespace-nowrap"
         >
           MONITORED_ENDPOINTS
         </h2>
-        <span
-          class="bg-cyan-900 border border-cyan-500/50 text-cyan-300 text-xs font-bold px-3 py-1 rounded-md shadow-[0_0_10px_rgba(6,182,212,0.2)] font-mono tracking-wider w-fit"
-          >TOTAL: {apis.length}</span
-        >
+        <div class="flex items-center gap-3">
+          <span
+            class="bg-cyan-900 border border-cyan-500/50 text-cyan-300 text-xs font-bold px-3 py-1 rounded-md shadow-[0_0_10px_rgba(6,182,212,0.2)] font-mono tracking-wider w-fit"
+            >TOTAL: {filteredApisForDisplay.length}</span
+          >
+          <div class="relative group/search flex-1 md:w-72">
+            <input 
+              type="text" 
+              bind:value={apiSearchQuery}
+              placeholder="ค้นหา API..." 
+              class="w-full bg-slate-900/50 border border-slate-700/50 hover:border-cyan-500/50 focus:border-cyan-500 rounded-xl px-10 py-2 text-xs text-cyan-400 font-mono outline-none transition-all placeholder:text-slate-600 shadow-inner"
+            />
+            <div class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600 group-hover/search:text-cyan-500 transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            </div>
+          </div>
+        </div>
       </div>
 
       {#if selectedApiIds.length > 0}
@@ -1721,6 +1763,32 @@
           </tbody>
         </table>
       </div>
+
+      {#if totalApiPages > 1}
+        <div class="mt-8 flex justify-center items-center gap-4 animate-fade-in mb-12">
+          <button 
+            onclick={() => { apiPage = Math.max(1, apiPage - 1); window.scrollTo({ top: 400, behavior: 'smooth' }); }}
+            disabled={apiPage === 1}
+            class="px-4 py-2 bg-slate-900/50 border border-slate-700 text-slate-400 hover:text-cyan-400 hover:border-cyan-500/30 rounded-xl font-mono text-xs disabled:opacity-50 transition-all flex items-center gap-2"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            ก่อนหน้า
+          </button>
+          
+          <div class="flex items-center gap-2 text-white">
+            <span class="text-xs font-mono text-slate-500 uppercase tracking-widest">หน้า <span class="text-cyan-400">{apiPage}</span> จาก {totalApiPages}</span>
+          </div>
+
+          <button 
+            onclick={() => { apiPage = Math.min(totalApiPages, apiPage + 1); window.scrollTo({ top: 400, behavior: 'smooth' }); }}
+            disabled={apiPage === totalApiPages}
+            class="px-4 py-2 bg-slate-900/50 border border-slate-700 text-slate-400 hover:text-cyan-400 hover:border-cyan-500/30 rounded-xl font-mono text-xs disabled:opacity-50 transition-all flex items-center gap-2"
+          >
+            ถัดไป
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </button>
+        </div>
+      {/if}
     {/if}
   {/if}
 </div>
