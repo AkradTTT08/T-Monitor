@@ -900,7 +900,9 @@
               >
                 {#if user?.profile_image_url}
                   <img
-                    src={user.profile_image_url}
+                    src={user.profile_image_url.startsWith('http') || user.profile_image_url.startsWith('data:')
+                      ? user.profile_image_url
+                      : `${API_BASE_URL}${user.profile_image_url}`}
                     alt="Profile"
                     class="w-full h-full object-cover"
                   />
