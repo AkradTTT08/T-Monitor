@@ -77,7 +77,7 @@
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          project_id: parseInt(projectId || "0"),
+          project_id: projectId,
           ...notifConfig,
         }),
       });

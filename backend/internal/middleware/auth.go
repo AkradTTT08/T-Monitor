@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/monitor-api/backend/internal/models"
@@ -68,10 +69,15 @@ func Protected() fiber.Handler {
 
 		fmt.Printf(">>> JWT Claims: %v\n", claims)
 
-		userID, ok := claims["user_id"].(float64)
+		userIDStr, ok := claims["user_id"].(string)
 		if !ok {
-			fmt.Printf(">>> ERROR: user_id claim is NOT float64 but %T\n", claims["user_id"])
+			fmt.Printf(">>> ERROR: user_id claim is NOT string but %T\n", claims["user_id"])
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid user_id in token"})
+		}
+		
+		userID, err := uuid.Parse(userIDStr)
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid user_id format in token"})
 		}
 		
 		role, ok := claims["role"].(string)
@@ -82,7 +88,7 @@ func Protected() fiber.Handler {
 
 		fmt.Printf(">>> Auth Success: userID=%v, role=%s\n", userID, role)
 
-		c.Locals("user_id", uint(userID))
+		c.Locals("user_id", userID)
 		c.Locals("role", role)
 
 		return c.Next()

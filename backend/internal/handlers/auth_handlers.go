@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"github.com/google/uuid"
+
 	"log"
 
 	"github.com/gofiber/fiber/v2"
@@ -95,7 +97,7 @@ func Login(c *fiber.Ctx) error {
 
 // RefreshToken generates a new bearer token using the user details from the existing validated token
 func RefreshToken(c *fiber.Ctx) error {
-	userID := c.Locals("user_id").(uint)
+	userID := c.Locals("user_id").(uuid.UUID)
 	role := c.Locals("role").(string)
 
 	user := models.User{

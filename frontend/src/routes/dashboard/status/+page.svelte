@@ -31,6 +31,8 @@
   let startDate = new Date().toISOString().split("T")[0];
   let endDate = new Date().toISOString().split("T")[0];
   let isGeneratingReport = false;
+  let fpStart: any = null;
+  let fpEnd: any = null;
 
   // Derived state for filtered logs
   $: filteredLogs = logs.filter((log) => {
@@ -122,6 +124,7 @@
               borderSkipped: false,
               barPercentage: 0.8,
               categoryPercentage: 0.9,
+              minBarLength: 5,
               customData: tooltipLabels,
             } as any,
           ],
@@ -226,7 +229,7 @@
 
     // Initialize Flatpickr
     if ((window as any).flatpickr) {
-      (window as any).flatpickr("#period-start", {
+      fpStart = (window as any).flatpickr("#period-start", {
         dateFormat: "Y-m-d",
         defaultDate: startDate,
         onChange: (selectedDates: Date[], dateStr: string) => {
@@ -234,7 +237,7 @@
         },
       });
 
-      (window as any).flatpickr("#period-end", {
+      fpEnd = (window as any).flatpickr("#period-end", {
         dateFormat: "Y-m-d",
         defaultDate: endDate,
         onChange: (selectedDates: Date[], dateStr: string) => {
@@ -264,6 +267,8 @@
   onDestroy(() => {
     if (refreshInterval) clearInterval(refreshInterval);
     if (statusChart) statusChart.destroy();
+    if (fpStart) fpStart.destroy();
+    if (fpEnd) fpEnd.destroy();
   });
 
   async function fetchLogs() {
@@ -491,6 +496,7 @@
                   data: dataPoints,
                   backgroundColor: backgroundColors,
                   borderRadius: 4,
+                  minBarLength: 5,
                 },
               ],
             },
@@ -888,6 +894,8 @@
           >
             <th class="p-4">STATUS</th>
             <th class="p-4">ENDPOINT</th>
+            <th class="p-4">SCHEDULE</th>
+            <th class="p-4">ERROR DETAIL</th>
             <th class="p-4">CHECK_TIME</th>
             <th class="p-4">LATENCY</th>
             <th class="p-4">CODE</th>
@@ -910,6 +918,13 @@
               </td>
               <td class="p-4 text-cyan-50 font-mono font-bold"
                 >{log.api?.name || `API-${log.api_id}`}</td
+              >
+              <td class="p-4 font-mono text-xs text-slate-300"
+                >{log.schedule || "N/A"}</td
+              >
+              <td class="p-4 font-mono text-xs text-red-300/80 truncate max-w-xs"
+                title={log.error_message || "-"}
+                >{log.error_message || "-"}</td
               >
               <td class="p-4 font-mono text-xs text-slate-300"
                 >{formatDateTime(log.checked_at)}</td

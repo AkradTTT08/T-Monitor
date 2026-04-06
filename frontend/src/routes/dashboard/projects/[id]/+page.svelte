@@ -35,7 +35,7 @@
   let isUploading = false;
 
   // Bulk Delete State
-  let selectedApiIds: number[] = [];
+  let selectedApiIds: string[] = [];
   let showBulkDeleteModal = false;
 
   // Modals state
@@ -54,7 +54,7 @@
   let companyMembers: any[] = [];
   let showMembersModal = false;
   let isAddingMember = false;
-  let selectedMemberId: number | null = null;
+  let selectedMemberId: string | null = null;
 
   // API Reference for Edit/Delete
   let selectedApi: any = null;
@@ -75,7 +75,7 @@
   // API Search and Pagination State
   let apiSearchQuery = "";
   let apiPage = 1;
-  const apiLimit = 15;
+  const apiLimit = 10;
 
   // Reactively filter APIs based on search query
   $: filteredApisForDisplay = apis.filter(api => {
@@ -221,7 +221,7 @@
   let editFolderName = "";
 
   // Drag & Drop State
-  let draggingApiId: number | null = null;
+  let draggingApiId: string | null = null;
   let dragOverItem: { folder: string; index: number } | null = null;
 
   // Derived state to group APIs by Folder
@@ -410,7 +410,7 @@
   }
 
   // --- Drag & Drop Reordering Logic --- //
-  function handleDragStart(e: DragEvent, apiId: number) {
+  function handleDragStart(e: DragEvent, apiId: string) {
     draggingApiId = apiId;
     if (e.dataTransfer) {
       e.dataTransfer.effectAllowed = "move";
@@ -578,7 +578,7 @@
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          user_id: Number(selectedMemberId),
+          user_id: selectedMemberId,
           role: "member"
         })
       });
@@ -600,7 +600,7 @@
     }
   }
 
-  async function removeProjectMember(userId: number) {
+  async function removeProjectMember(userId: string) {
     const confirm = await systemAlert.fire({
       title: 'Are you sure?',
       text: "This user will lose access to this project.",
@@ -646,7 +646,7 @@
     }
   }
 
-  function toggleSelection(id: number) {
+  function toggleSelection(id: string) {
     if (selectedApiIds.includes(id)) {
       selectedApiIds = selectedApiIds.filter((i) => i !== id);
     } else {
@@ -819,7 +819,7 @@
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            project_id: parseInt(projectId),
+            project_id: projectId,
             folder: selectedApi.folder,
             name: selectedApi.name,
             method: selectedApi.method,
@@ -862,7 +862,7 @@
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            project_id: parseInt(projectId),
+            project_id: projectId,
             folder: apiForm.folder,
             name: apiForm.name,
             method: apiForm.method,
@@ -1051,7 +1051,7 @@
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            project_id: parseInt(projectId),
+            project_id: projectId,
             folder: apiForm.folder,
             name: apiForm.name,
             method: apiForm.method,

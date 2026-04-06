@@ -1,0 +1,2 @@
+# github.com/monitor-api/backend/internal/handlers
+internal\handlers\company_member_handlers.go:71:31: cannot use companyID (variable of type int) as string value in argument to uuid.Parse

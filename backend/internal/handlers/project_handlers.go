@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"github.com/google/uuid"
+
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,7 +19,7 @@ type ProjectInput struct {
 	EnvironmentVariables string `json:"environment_variables"`
 	CoverImageURL        string `json:"cover_image_url"`
 	CoverPosition        int    `json:"cover_position"`
-	CompanyID            *uint  `json:"company_id"`
+	CompanyID            *uuid.UUID  `json:"company_id"`
 }
 
 func UploadProjectCover(c *fiber.Ctx) error {
@@ -27,7 +29,7 @@ func UploadProjectCover(c *fiber.Ctx) error {
 	
 	rawUserID := c.Locals("user_id")
 	fmt.Printf(">>> Raw UserID: %v\n", rawUserID)
-	userID := rawUserID.(uint)
+	userID := rawUserID.(uuid.UUID)
 	
 	rawRole := c.Locals("role")
 	fmt.Printf(">>> Raw Role: %v\n", rawRole)
@@ -39,7 +41,7 @@ func UploadProjectCover(c *fiber.Ctx) error {
 		query = query.Where("user_id = ?", userID)
 	}
 
-	if err := query.First(&project, id).Error; err != nil {
+	if err := query.First(&project, "id = ?", id).Error; err != nil {
 		fmt.Printf(">>> Project not found: %v\n", err)
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Project not found or unauthorized"})
 	}
@@ -101,7 +103,7 @@ func CreateProject(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
 	}
 
-	userID := c.Locals("user_id").(uint)
+	userID := c.Locals("user_id").(uuid.UUID)
 
 	// If not provided, default to empty JSON object
 	if input.EnvironmentVariables == "" {
@@ -138,7 +140,7 @@ func CreateProject(c *fiber.Ctx) error {
 }
 
 func GetProjects(c *fiber.Ctx) error {
-	userID := c.Locals("user_id").(uint)
+	userID := c.Locals("user_id").(uuid.UUID)
 	role := c.Locals("role").(string)
 
 	var projects []models.Project
@@ -157,7 +159,7 @@ func GetProjects(c *fiber.Ctx) error {
 
 func GetProject(c *fiber.Ctx) error {
 	id := c.Params("id")
-	userID := c.Locals("user_id").(uint)
+	userID := c.Locals("user_id").(uuid.UUID)
 	role := c.Locals("role").(string)
 
 	var project models.Project
@@ -167,7 +169,7 @@ func GetProject(c *fiber.Ctx) error {
 		query = query.Where("user_id = ? OR id IN (SELECT project_id FROM project_members WHERE user_id = ?)", userID, userID)
 	}
 
-	if err := query.First(&project, id).Error; err != nil {
+	if err := query.First(&project, "id = ?", id).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Project not found or unauthorized"})
 	}
 
@@ -176,7 +178,7 @@ func GetProject(c *fiber.Ctx) error {
 
 func UpdateProject(c *fiber.Ctx) error {
 	id := c.Params("id")
-	userID := c.Locals("user_id").(uint)
+	userID := c.Locals("user_id").(uuid.UUID)
 	role := c.Locals("role").(string)
 
 	var input ProjectInput
@@ -190,7 +192,7 @@ func UpdateProject(c *fiber.Ctx) error {
 		query = query.Where("user_id = ?", userID)
 	}
 
-	if err := query.First(&project, id).Error; err != nil {
+	if err := query.First(&project, "id = ?", id).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Project not found or unauthorized"})
 	}
 
@@ -216,7 +218,7 @@ func UpdateProject(c *fiber.Ctx) error {
 
 func DeleteProject(c *fiber.Ctx) error {
 	id := c.Params("id")
-	userID := c.Locals("user_id").(uint)
+	userID := c.Locals("user_id").(uuid.UUID)
 	role := c.Locals("role").(string)
 
 	var project models.Project
@@ -225,7 +227,7 @@ func DeleteProject(c *fiber.Ctx) error {
 		query = query.Where("user_id = ?", userID)
 	}
 
-	if err := query.First(&project, id).Error; err != nil {
+	if err := query.First(&project, "id = ?", id).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Project not found or unauthorized"})
 	}
 
@@ -256,11 +258,11 @@ func GetProjectMembers(c *fiber.Ctx) error {
 
 func AddProjectMember(c *fiber.Ctx) error {
 	id := c.Params("id")
-	userID := c.Locals("user_id").(uint)
+	userID := c.Locals("user_id").(uuid.UUID)
 	role := c.Locals("role").(string)
 
 	type MemberInput struct {
-		UserID uint   `json:"user_id"`
+		UserID uuid.UUID   `json:"user_id"`
 		Role   string `json:"role"`
 	}
 	var input MemberInput
@@ -274,7 +276,7 @@ func AddProjectMember(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Only project owners or admins can manage members"})
 		}
 	} else {
-		if err := database.DB.First(&project, id).Error; err != nil {
+		if err := database.DB.First(&project, "id = ?", id).Error; err != nil {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Project not found"})
 		}
 	}
@@ -296,7 +298,7 @@ func AddProjectMember(c *fiber.Ctx) error {
 func RemoveProjectMember(c *fiber.Ctx) error {
 	id := c.Params("id")
 	targetUserID := c.Params("userId")
-	userID := c.Locals("user_id").(uint)
+	userID := c.Locals("user_id").(uuid.UUID)
 	role := c.Locals("role").(string)
 
 	var project models.Project

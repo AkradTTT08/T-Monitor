@@ -1,0 +1,4 @@
+# github.com/monitor-api/backend/internal/workers
+internal\workers\healthcheck.go:47:29: undefined: uuid
+internal\workers\healthcheck.go:56:21: undefined: uuid
+internal\workers\healthcheck.go:396:15: cannot use api.ProjectID (variable of array type uuid.UUID) as uint value in struct literal

@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"github.com/google/uuid"
+
 	"fmt"
 	"github.com/gofiber/fiber/v2"
 	"gorm.io/gorm"
@@ -11,8 +13,8 @@ import (
 
 // GetCompanyMembers returns all members of a company
 func GetCompanyMembers(c *fiber.Ctx) error {
-	companyID, err := c.ParamsInt("id")
-	if err != nil {
+	companyID := c.Params("id")
+	if companyID == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid company id"})
 	}
 
@@ -26,12 +28,12 @@ func GetCompanyMembers(c *fiber.Ctx) error {
 
 // InviteMemberByEmail sends an invitation to join a company
 func InviteMemberByEmail(c *fiber.Ctx) error {
-	companyID, err := c.ParamsInt("id")
-	if err != nil {
+	companyID := c.Params("id")
+	if companyID == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid company id"})
 	}
 
-	inviterID := c.Locals("user_id").(uint)
+	inviterID := c.Locals("user_id").(uuid.UUID)
 
 	type Input struct {
 		Email string `json:"email"`
@@ -64,11 +66,13 @@ func InviteMemberByEmail(c *fiber.Ctx) error {
 	// 3. Check for pending invitation
 	// 4. Get Company info for the notification
 	var company models.Company
-	database.DB.First(&company, companyID)
+	database.DB.First(&company, "id = ?", companyID)
+
+	companyUUID, _ := uuid.Parse(companyID)
 
 	// 5. Create invitation
 	invitation := models.CompanyInvitation{
-		CompanyID: uint(companyID),
+		CompanyID: companyUUID,
 		InviterID: inviterID,
 		InviteeID: invitee.ID,
 		Status:    "pending",
@@ -102,7 +106,7 @@ func InviteMemberByEmail(c *fiber.Ctx) error {
 // AcceptCompanyInvitation adds user to company after they accept the invite
 func AcceptCompanyInvitation(c *fiber.Ctx) error {
 	invitationID := c.Params("id")
-	userID := c.Locals("user_id").(uint)
+	userID := c.Locals("user_id").(uuid.UUID)
 
 	var invitation models.CompanyInvitation
 	if err := database.DB.Preload("Company").Where("id = ? AND invitee_id = ?", invitationID, userID).First(&invitation).Error; err != nil {
@@ -135,7 +139,7 @@ func AcceptCompanyInvitation(c *fiber.Ctx) error {
 
 		// 4. Notify inviter
 		var invitee models.User
-		tx.First(&invitee, userID)
+		tx.First(&invitee, "id = ?", userID)
 		notification := models.DashboardNotification{
 			UserID:  invitation.InviterID,
 			Type:    "info",
@@ -159,7 +163,7 @@ func AcceptCompanyInvitation(c *fiber.Ctx) error {
 // DeclineCompanyInvitation updates status to declined
 func DeclineCompanyInvitation(c *fiber.Ctx) error {
 	invitationID := c.Params("id")
-	userID := c.Locals("user_id").(uint)
+	userID := c.Locals("user_id").(uuid.UUID)
 
 	var invitation models.CompanyInvitation
 	if err := database.DB.Preload("Company").Where("id = ? AND invitee_id = ?", invitationID, userID).First(&invitation).Error; err != nil {
@@ -182,7 +186,7 @@ func DeclineCompanyInvitation(c *fiber.Ctx) error {
 
 		// 3. Notify inviter
 		var invitee models.User
-		tx.First(&invitee, userID)
+		tx.First(&invitee, "id = ?", userID)
 		notification := models.DashboardNotification{
 			UserID:  invitation.InviterID,
 			Type:    "info",
@@ -203,14 +207,13 @@ func DeclineCompanyInvitation(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"message": "Invitation declined"})
 }
 
-// RemoveCompanyMember removes a user from a company
 func RemoveCompanyMember(c *fiber.Ctx) error {
-	companyID, err := c.ParamsInt("id")
-	if err != nil {
+	companyID := c.Params("id")
+	if companyID == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid company id"})
 	}
-	memberID, err := c.ParamsInt("memberId")
-	if err != nil {
+	memberID := c.Params("memberId")
+	if memberID == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid member id"})
 	}
 

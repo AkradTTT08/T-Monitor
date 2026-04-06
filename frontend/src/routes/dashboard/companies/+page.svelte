@@ -24,12 +24,12 @@
 
   // Delete modal
   let showDeleteModal = $state(false);
-  let deletingId = $state(0);
+  let deletingId = $state("");
   let deletingName = $state("");
 
-  let activeDropdownId = $state<number | null>(null);
+  let activeDropdownId = $state<string | null>(null);
   let showInviteModal = $state(false);
-  let invitingCompanyId = $state(0);
+  let invitingCompanyId = $state("");
   let invitingCompanyName = $state("");
   let inviteEmail = $state("");
   let isInviting = $state(false);
@@ -78,7 +78,7 @@
     userSuggestions = [];
   }
 
-  function toggleDropdown(id: number, e: Event) {
+  function toggleDropdown(id: string, e: Event) {
     e.stopPropagation();
     activeDropdownId = activeDropdownId === id ? null : id;
   }
@@ -104,7 +104,7 @@
     }
   }
 
-  async function uploadLogo(companyId: number, file: File) {
+  async function uploadLogo(companyId: string, file: File) {
     const formData = new FormData();
     formData.append("logo", file);
     const token = localStorage.getItem("monitor_token");
@@ -318,7 +318,7 @@
     }
   }
 
-  async function removeCompanyMember(memberId: number) {
+  async function removeCompanyMember(memberId: string) {
     const confirm = await Swal.fire({
       title: "Are you sure?",
       text: "This user will lose access to the company and all its projects.",

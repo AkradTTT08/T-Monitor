@@ -13,7 +13,7 @@ func main() {
 	database.ConnectDB()
 
 	email := "o.akrad.ttt08@gmail.com"
-	password := "T@monitor123"
+	password := "123123Zx!"
 
 	// Hash password
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)

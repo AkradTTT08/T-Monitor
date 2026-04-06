@@ -1,0 +1,7 @@
+﻿
+src\routes\dashboard\companies\[id]\+page.svelte:
+209:          user_id: Number(selectedMemberId),
+src\routes\dashboard\projects\[id]\+page.svelte:5
+81:          user_id: Number(selectedMemberId),
+
+

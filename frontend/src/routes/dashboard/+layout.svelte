@@ -156,7 +156,7 @@
     }
   }
 
-  async function handleAcceptInvitation(invitationId: number) {
+  async function handleAcceptInvitation(invitationId: string) {
     try {
       const token = localStorage.getItem("monitor_token");
       const res = await fetch(`${API_BASE_URL}/api/v1/companies/invitations/${invitationId}/accept`, {
@@ -182,7 +182,7 @@
     }
   }
 
-  async function handleDeclineInvitation(invitationId: number) {
+  async function handleDeclineInvitation(invitationId: string) {
     try {
       const token = localStorage.getItem("monitor_token");
       const res = await fetch(`${API_BASE_URL}/api/v1/companies/invitations/${invitationId}/decline`, {
@@ -199,12 +199,7 @@
     }
   }
 
-  // Separate mount call for project fetching (no cleanup needed)
-  onMount(async () => {
-    // Restore company selection
-    const savedCompany = localStorage.getItem("monitor_selected_company");
-    if (savedCompany) selectedCompanyId = savedCompany;
-
+  async function fetchSidebarProjects() {
     try {
       const token = localStorage.getItem("monitor_token");
       const res = await fetch(`${API_BASE_URL}/api/v1/projects`, {
@@ -222,6 +217,20 @@
     } catch (err) {
       console.error("Failed to load projects for sidebar", err);
     }
+  }
+
+  // Separate mount call for project fetching
+  onMount(() => {
+    // Restore company selection
+    const savedCompany = localStorage.getItem("monitor_selected_company");
+    if (savedCompany) selectedCompanyId = savedCompany;
+
+    fetchSidebarProjects();
+    window.addEventListener("projects-updated", fetchSidebarProjects);
+    
+    return () => {
+      window.removeEventListener("projects-updated", fetchSidebarProjects);
+    };
   });
 
   // Computed access levels

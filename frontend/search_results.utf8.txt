@@ -1,0 +1,28 @@
+d:\T-Monitor\frontend\src\routes\dashboard\+layout.svelte:159 (TYPE:NUMBER): async function handleAcceptInvitation(invitationId: number) {
+d:\T-Monitor\frontend\src\routes\dashboard\+layout.svelte:185 (TYPE:NUMBER): async function handleDeclineInvitation(invitationId: number) {
+d:\T-Monitor\frontend\src\routes\dashboard\apis\[id]\alerts\+page.svelte:12: api_id: parseInt(apiId || "0"),
+d:\T-Monitor\frontend\src\routes\dashboard\companies\+page.svelte:81 (TYPE:NUMBER): function toggleDropdown(id: number, e: Event) {
+d:\T-Monitor\frontend\src\routes\dashboard\companies\+page.svelte:107 (TYPE:NUMBER): async function uploadLogo(companyId: number, file: File) {
+d:\T-Monitor\frontend\src\routes\dashboard\companies\+page.svelte:321 (TYPE:NUMBER): async function removeCompanyMember(memberId: number) {
+d:\T-Monitor\frontend\src\routes\dashboard\companies\[id]\+page.svelte:55 (TYPE:NUMBER): let activeDropdownId: number | null = null;
+d:\T-Monitor\frontend\src\routes\dashboard\companies\[id]\+page.svelte:62 (TYPE:NUMBER): let selectedMemberId: number | null = null;
+d:\T-Monitor\frontend\src\routes\dashboard\companies\[id]\+page.svelte:64 (TYPE:NUMBER): function toggleDropdown(id: number, e: Event) {
+d:\T-Monitor\frontend\src\routes\dashboard\companies\[id]\+page.svelte:100 (TYPE:NUMBER): async function uploadCover(projectId: number, file: File) {
+d:\T-Monitor\frontend\src\routes\dashboard\companies\[id]\+page.svelte:183 (TYPE:NUMBER): async function fetchProjectMembers(projectId: number) {
+d:\T-Monitor\frontend\src\routes\dashboard\companies\[id]\+page.svelte:209: user_id: Number(selectedMemberId),
+d:\T-Monitor\frontend\src\routes\dashboard\companies\[id]\+page.svelte:209 (TYPE:NUMBER): user_id: Number(selectedMemberId),
+d:\T-Monitor\frontend\src\routes\dashboard\companies\[id]\+page.svelte:229 (TYPE:NUMBER): async function removeProjectMember(userId: number) {
+d:\T-Monitor\frontend\src\routes\dashboard\projects\[id]\+page.svelte:57 (TYPE:NUMBER): let selectedMemberId: number | null = null;
+d:\T-Monitor\frontend\src\routes\dashboard\projects\[id]\+page.svelte:224 (TYPE:NUMBER): let draggingApiId: number | null = null;
+d:\T-Monitor\frontend\src\routes\dashboard\projects\[id]\+page.svelte:413 (TYPE:NUMBER): function handleDragStart(e: DragEvent, apiId: number) {
+d:\T-Monitor\frontend\src\routes\dashboard\projects\[id]\+page.svelte:581: user_id: Number(selectedMemberId),
+d:\T-Monitor\frontend\src\routes\dashboard\projects\[id]\+page.svelte:581 (TYPE:NUMBER): user_id: Number(selectedMemberId),
+d:\T-Monitor\frontend\src\routes\dashboard\projects\[id]\+page.svelte:603 (TYPE:NUMBER): async function removeProjectMember(userId: number) {
+d:\T-Monitor\frontend\src\routes\dashboard\projects\[id]\+page.svelte:649 (TYPE:NUMBER): function toggleSelection(id: number) {
+d:\T-Monitor\frontend\src\routes\dashboard\projects\[id]\notifications\+page.svelte:80: project_id: parseInt(projectId || "0"),
+d:\T-Monitor\frontend\src\routes\dashboard\users\+page.svelte:49 (TYPE:NUMBER): async function toggleRole(userId: number, currentRole: string) {
+d:\T-Monitor\frontend\src\routes\dashboard\users\+page.svelte:74 (TYPE:NUMBER): async function approveUser(userId: number) {
+d:\T-Monitor\frontend\src\routes\dashboard\users\+page.svelte:95 (TYPE:NUMBER): async function disapproveUser(userId: number) {
+d:\T-Monitor\frontend\src\routes\dashboard\users\+page.svelte:126 (TYPE:NUMBER): async function resetPassword(userId: number) {
+d:\T-Monitor\frontend\src\routes\dashboard\users\+page.svelte:161 (TYPE:NUMBER): async function toggleBlock(userId: number) {
+d:\T-Monitor\frontend\src\routes\dashboard\users\+page.svelte:183 (TYPE:NUMBER): async function deleteUser(userId: number) {

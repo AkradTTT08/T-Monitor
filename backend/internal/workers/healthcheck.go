@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/monitor-api/backend/internal/database"
 	"github.com/monitor-api/backend/internal/handlers"
 	"github.com/monitor-api/backend/internal/models"
@@ -44,7 +45,7 @@ func replaceEnvVariables(input string, envVars map[string]string) string {
 	})
 }
 
-var lastCheckMap = make(map[uint]time.Time)
+var lastCheckMap = make(map[uuid.UUID]time.Time)
 
 func checkAPIs() {
 	var apis []models.API
@@ -53,7 +54,7 @@ func checkAPIs() {
 	// Fetch all projects to get their environment variables
 	var projects []models.Project
 	database.DB.Find(&projects)
-	envMap := make(map[uint]map[string]string)
+	envMap := make(map[uuid.UUID]map[string]string)
 	for _, p := range projects {
 		var vars map[string]string
 		if p.EnvironmentVariables != "" && p.EnvironmentVariables != "{}" {
@@ -386,7 +387,7 @@ func sendEmailNotification(api models.API, entry models.MonitorLog, config *mode
 		StatusCode int
 		ErrorMsg   string
 		Time       string
-		ProjectId  uint
+		ProjectId  uuid.UUID
 	}{
 		ApiName:    api.Name,
 		Url:        api.URL,

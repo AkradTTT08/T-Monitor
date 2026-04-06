@@ -1,0 +1,8 @@
+# github.com/monitor-api/backend/internal/handlers
+internal\handlers\api_handlers.go:353:18: invalid operation: projectID == 0 (mismatched types string and untyped int)
+internal\handlers\api_handlers.go:412:31: cannot convert projectID (variable of type string) to type uint
+internal\handlers\company_member_handlers.go:73:14: cannot use uint(companyID) (value of type uint) as uuid.UUID value in struct literal
+internal\handlers\notification_handlers.go:41:54: cannot use 0 (untyped int constant) as uuid.UUID value in struct literal
+internal\handlers\notification_handlers.go:79:10: cannot use project.UserID (variable of array type uuid.UUID) as uint value in map index
+internal\handlers\notification_handlers.go:81:11: cannot use m.UserID (variable of array type uuid.UUID) as uint value in map index
+internal\handlers\notification_handlers.go:87:15: cannot use userID (variable of type uint) as uuid.UUID value in struct literal

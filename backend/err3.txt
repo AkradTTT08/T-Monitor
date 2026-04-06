@@ -1,0 +1,2 @@
+# github.com/monitor-api/backend/internal/middleware
+internal\middleware\auth.go:77:18: undefined: uuid

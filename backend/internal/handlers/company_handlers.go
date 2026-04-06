@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"github.com/google/uuid"
+
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,7 +19,7 @@ type CompanyInput struct {
 }
 
 func GetCompanies(c *fiber.Ctx) error {
-	userID := c.Locals("user_id").(uint)
+	userID := c.Locals("user_id").(uuid.UUID)
 	role := c.Locals("role").(string)
 
 	var companies []models.Company
@@ -48,7 +50,7 @@ func GetCompanies(c *fiber.Ctx) error {
 
 func GetCompany(c *fiber.Ctx) error {
 	id := c.Params("id")
-	userID := c.Locals("user_id").(uint)
+	userID := c.Locals("user_id").(uuid.UUID)
 	role := c.Locals("role").(string)
 
 	var company models.Company
@@ -58,7 +60,7 @@ func GetCompany(c *fiber.Ctx) error {
 		db = db.Where("user_id = ? OR id IN (SELECT company_id FROM company_members WHERE user_id = ?)", userID, userID)
 	}
 
-	if err := db.First(&company, id).Error; err != nil {
+	if err := db.First(&company, "id = ?", id).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Company not found or unauthorized"})
 	}
 
@@ -71,7 +73,7 @@ func CreateCompany(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
 	}
 
-	userID := c.Locals("user_id").(uint)
+	userID := c.Locals("user_id").(uuid.UUID)
 
 	company := models.Company{
 		Name:        input.Name,
@@ -88,7 +90,7 @@ func CreateCompany(c *fiber.Ctx) error {
 
 func UpdateCompany(c *fiber.Ctx) error {
 	id := c.Params("id")
-	userID := c.Locals("user_id").(uint)
+	userID := c.Locals("user_id").(uuid.UUID)
 	role := c.Locals("role").(string)
 
 	var input CompanyInput
@@ -102,7 +104,7 @@ func UpdateCompany(c *fiber.Ctx) error {
 		query = query.Where("user_id = ?", userID)
 	}
 
-	if err := query.First(&company, id).Error; err != nil {
+	if err := query.First(&company, "id = ?", id).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Company not found or unauthorized"})
 	}
 
@@ -121,7 +123,7 @@ func UpdateCompany(c *fiber.Ctx) error {
 
 func DeleteCompany(c *fiber.Ctx) error {
 	id := c.Params("id")
-	userID := c.Locals("user_id").(uint)
+	userID := c.Locals("user_id").(uuid.UUID)
 	role := c.Locals("role").(string)
 
 	var company models.Company
@@ -130,7 +132,7 @@ func DeleteCompany(c *fiber.Ctx) error {
 		query = query.Where("user_id = ?", userID)
 	}
 
-	if err := query.First(&company, id).Error; err != nil {
+	if err := query.First(&company, "id = ?", id).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Company not found or unauthorized"})
 	}
 
@@ -149,7 +151,7 @@ func UploadCompanyLogo(c *fiber.Ctx) error {
 
 	rawUserID := c.Locals("user_id")
 	fmt.Printf(">>> Raw UserID: %v\n", rawUserID)
-	userID := rawUserID.(uint)
+	userID := rawUserID.(uuid.UUID)
 
 	rawRole := c.Locals("role")
 	fmt.Printf(">>> Raw Role: %v\n", rawRole)
@@ -161,7 +163,7 @@ func UploadCompanyLogo(c *fiber.Ctx) error {
 		query = query.Where("user_id = ?", userID)
 	}
 
-	if err := query.First(&company, id).Error; err != nil {
+	if err := query.First(&company, "id = ?", id).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Company not found or unauthorized"})
 	}
 

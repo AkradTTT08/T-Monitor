@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"github.com/google/uuid"
+
 	"encoding/json"
 	"fmt"
 	"time"
@@ -12,7 +14,7 @@ import (
 
 func GetRepairTasks(c *fiber.Ctx) error {
 	projectID := c.Params("id")
-	userID := c.Locals("user_id").(uint)
+	userID := c.Locals("user_id").(uuid.UUID)
 	role := c.Locals("role").(string)
 
 	// Verify project ownership
@@ -31,10 +33,10 @@ func GetRepairTasks(c *fiber.Ctx) error {
 
 func ApproveRepairTask(c *fiber.Ctx) error {
 	taskID := c.Params("id")
-	userID := c.Locals("user_id").(uint)
+	userID := c.Locals("user_id").(uuid.UUID)
 
 	var task models.RepairTask
-	if err := database.DB.First(&task, taskID).Error; err != nil {
+	if err := database.DB.First(&task, "id = ?", taskID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Task not found"})
 	}
 
@@ -44,11 +46,11 @@ func ApproveRepairTask(c *fiber.Ctx) error {
 	task.ApprovedAt = &now
 
 	database.DB.Save(&task)
-	database.DB.Preload("Approver").First(&task, task.ID)
+	database.DB.Preload("Approver").First(&task, "id = ?", task.ID)
 
 	// Create Dashboard Notification
 	var project models.Project
-	database.DB.First(&project, task.ProjectID)
+	database.DB.First(&project, "id = ?", task.ProjectID)
 	CreateProjectNotification(
 		task.ProjectID,
 		"task_approve",
@@ -74,7 +76,7 @@ func CloseRepairTask(c *fiber.Ctx) error {
 	}
 
 	var task models.RepairTask
-	if err := database.DB.First(&task, taskID).Error; err != nil {
+	if err := database.DB.First(&task, "id = ?", taskID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Task not found"})
 	}
 
@@ -102,7 +104,7 @@ func CloseRepairTask(c *fiber.Ctx) error {
 
 	// Create Dashboard Notification
 	var project models.Project
-	database.DB.First(&project, task.ProjectID)
+	database.DB.First(&project, "id = ?", task.ProjectID)
 	CreateProjectNotification(
 		task.ProjectID,
 		"task_close",
@@ -125,7 +127,7 @@ func FailRepairTask(c *fiber.Ctx) error {
 	}
 
 	var task models.RepairTask
-	if err := database.DB.First(&task, taskID).Error; err != nil {
+	if err := database.DB.First(&task, "id = ?", taskID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Task not found"})
 	}
 
@@ -136,7 +138,7 @@ func FailRepairTask(c *fiber.Ctx) error {
 
 	// Create Dashboard Notification
 	var project models.Project
-	database.DB.First(&project, task.ProjectID)
+	database.DB.First(&project, "id = ?", task.ProjectID)
 	CreateProjectNotification(
 		task.ProjectID,
 		"task_fail",

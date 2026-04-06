@@ -9,7 +9,7 @@
   let saveSuccess = false;
 
   let config = {
-    api_id: parseInt(apiId || "0"),
+    api_id: apiId,
     enable_telegram: false,
     telegram_chat_id: "",
     enable_line: false,

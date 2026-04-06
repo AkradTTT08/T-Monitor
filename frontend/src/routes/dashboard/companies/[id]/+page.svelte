@@ -40,7 +40,7 @@
 
   // Edit project modal
   let showEditModal = false;
-  let editingProjectId = 0;
+  let editingProjectId = "";
   let editProjectName = "";
   let editProjectDesc = "";
   let editProjectEnvVars = "{}";
@@ -49,19 +49,19 @@
 
   // Delete project modal
   let showDeleteModal = false;
-  let deletingProjectId = 0;
+  let deletingProjectId = "";
   let deletingProjectName = "";
 
-  let activeDropdownId: number | null = null;
+  let activeDropdownId: string | null = null;
   
   // Project Members State
   let showMembersModal = false;
   let activeProject: any = null;
   let projectMembers: any[] = [];
   let isAddingMember = false;
-  let selectedMemberId: number | null = null;
+  let selectedMemberId: string | null = null;
 
-  function toggleDropdown(id: number, e: Event) {
+  function toggleDropdown(id: string, e: Event) {
     e.stopPropagation();
     activeDropdownId = activeDropdownId === id ? null : id;
   }
@@ -97,7 +97,7 @@
     }
   }
 
-  async function uploadCover(projectId: number, file: File) {
+  async function uploadCover(projectId: string, file: File) {
     const formData = new FormData();
     formData.append("cover", file);
     const token = localStorage.getItem("monitor_token");
@@ -114,7 +114,7 @@
       const res = await fetch(`${API_BASE_URL}/api/v1/projects`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newProjectName, description: newProjectDesc, company_id: parseInt(companyId || '0'), environment_variables: "{}" }),
+        body: JSON.stringify({ name: newProjectName, description: newProjectDesc, company_id: companyId, environment_variables: "{}" }),
       });
       if (res.ok) {
         const project = await res.json();
@@ -122,6 +122,7 @@
         showCreateModal = false;
         newProjectName = ""; newProjectDesc = ""; coverFile = null;
         await fetchData();
+        window.dispatchEvent(new CustomEvent("projects-updated"));
       }
     } catch (err) { console.error(err); }
   }
@@ -144,12 +145,13 @@
       const res = await fetch(`${API_BASE_URL}/api/v1/projects/${editingProjectId}`, {
         method: "PUT",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ name: editProjectName, description: editProjectDesc, environment_variables: editProjectEnvVars, cover_position: editProjectCoverPos, company_id: parseInt(companyId || '0') }),
+        body: JSON.stringify({ name: editProjectName, description: editProjectDesc, environment_variables: editProjectEnvVars, cover_position: editProjectCoverPos, company_id: companyId }),
       });
       if (res.ok) {
         if (editCoverFile) await uploadCover(editingProjectId, editCoverFile);
         showEditModal = false;
         await fetchData();
+        window.dispatchEvent(new CustomEvent("projects-updated"));
       }
     } catch (err) { console.error(err); }
   }
@@ -169,6 +171,7 @@
       if (res.ok) {
         showDeleteModal = false;
         await fetchData();
+        window.dispatchEvent(new CustomEvent("projects-updated"));
       }
     } catch (err) { console.error(err); }
   }
@@ -180,7 +183,7 @@
     showMembersModal = true;
   }
 
-  async function fetchProjectMembers(projectId: number) {
+  async function fetchProjectMembers(projectId: string) {
     try {
       const token = localStorage.getItem("monitor_token");
       const res = await fetch(`${API_BASE_URL}/api/v1/projects/${projectId}/members`, {
@@ -206,7 +209,7 @@
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          user_id: Number(selectedMemberId),
+          user_id: selectedMemberId,
           role: "member"
         })
       });
@@ -226,7 +229,7 @@
     }
   }
 
-  async function removeProjectMember(userId: number) {
+  async function removeProjectMember(userId: string) {
     if (!activeProject) return;
     const confirm = await Swal.fire({
       title: 'Are you sure?',

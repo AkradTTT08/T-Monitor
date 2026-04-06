@@ -7,9 +7,9 @@
     disabled = false,
     required = false,
     variables = {},
-    onpaste,
-    onfocus,
-    onblur
+    onpaste = undefined as ((e: ClipboardEvent) => void) | undefined,
+    onfocus = undefined as ((e: FocusEvent) => void) | undefined,
+    onblur = undefined as ((e: FocusEvent) => void) | undefined
   } = $props();
 
   let inputEl: HTMLInputElement | undefined = $state();

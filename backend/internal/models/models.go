@@ -3,16 +3,17 @@ package models
 import (
 	"time"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 // Company represents a business entity that groups multiple projects
 type Company struct {
-	ID          uint            `gorm:"primaryKey" json:"id"`
+	ID          uuid.UUID       `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
 	Name        string          `gorm:"not null" json:"name"`
 	Description string          `json:"description"`
 	LogoURL     string          `gorm:"type:text" json:"logo_url"`
-	UserID      uint            `gorm:"not null" json:"user_id"`
+	UserID      uuid.UUID       `gorm:"type:uuid;not null" json:"user_id"`
 	Owner       *User           `gorm:"foreignKey:UserID" json:"owner"`
 	Projects    []Project       `gorm:"foreignKey:CompanyID" json:"projects"`
 	Members     []CompanyMember `gorm:"foreignKey:CompanyID" json:"members"`
@@ -23,9 +24,9 @@ type Company struct {
 
 // CompanyMember links users to companies they have been invited to
 type CompanyMember struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	CompanyID uint      `gorm:"not null;index" json:"company_id"`
-	UserID    uint      `gorm:"not null;index" json:"user_id"`
+	ID        uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	CompanyID uuid.UUID `gorm:"type:uuid;not null;index" json:"company_id"`
+	UserID    uuid.UUID `gorm:"type:uuid;not null;index" json:"user_id"`
 	Role      string    `gorm:"type:varchar(20);default:'member'" json:"role"` // 'owner' or 'member'
 	User      *User     `gorm:"foreignKey:UserID" json:"user,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
@@ -33,7 +34,7 @@ type CompanyMember struct {
 
 // User represents an administrator or standard user in the system
 type User struct {
-	ID              uint      `gorm:"primaryKey" json:"id"`
+	ID              uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
 	Email           string    `gorm:"uniqueIndex;not null" json:"email"`
 	Password        string    `gorm:"not null" json:"-"`
 	Name            string    `gorm:"type:varchar(255)" json:"name"`
@@ -52,14 +53,14 @@ type User struct {
 
 // Project represents a workspace containing configured APIs
 type Project struct {
-	ID                   uint                 `gorm:"primaryKey" json:"id"`
+	ID                   uuid.UUID            `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
 	Name                 string               `gorm:"not null" json:"name"`
 	Description          string               `json:"description"`
 	EnvironmentVariables string               `gorm:"type:text;default:'{}'" json:"environment_variables"`
 	CoverImageURL        string               `gorm:"type:text" json:"cover_image_url"`
 	CoverPosition        int                  `gorm:"default:50" json:"cover_position"`
-	UserID               uint                 `gorm:"not null" json:"user_id"`
-	CompanyID            *uint                `json:"company_id"`
+	UserID               uuid.UUID            `gorm:"type:uuid;not null" json:"user_id"`
+	CompanyID            *uuid.UUID           `gorm:"type:uuid" json:"company_id"`
 	APIs                 []API                `gorm:"foreignKey:ProjectID" json:"apis,omitempty"`
 	Members              []ProjectMember      `gorm:"foreignKey:ProjectID" json:"members,omitempty"`
 	NotificationConfigs  []NotificationConfig `gorm:"foreignKey:ProjectID" json:"notification_configs,omitempty"`
@@ -71,9 +72,9 @@ type Project struct {
 
 // ProjectMember links users to projects they have been added to
 type ProjectMember struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	ProjectID uint      `gorm:"not null;index" json:"project_id"`
-	UserID    uint      `gorm:"not null;index" json:"user_id"`
+	ID        uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	ProjectID uuid.UUID `gorm:"type:uuid;not null;index" json:"project_id"`
+	UserID    uuid.UUID `gorm:"type:uuid;not null;index" json:"user_id"`
 	Role      string    `gorm:"type:varchar(20);default:'member'" json:"role"` // 'owner' or 'member'
 	User      *User     `gorm:"foreignKey:UserID" json:"user,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
@@ -81,8 +82,8 @@ type ProjectMember struct {
 
 // API represents a single API endpoint to be monitored
 type API struct {
-	ID                 uint           `gorm:"primaryKey" json:"id"`
-	ProjectID          uint           `gorm:"not null" json:"project_id"`
+	ID                 uuid.UUID      `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	ProjectID          uuid.UUID      `gorm:"type:uuid;not null" json:"project_id"`
 	Folder             string         `gorm:"type:varchar(255);default:'Uncategorized'" json:"folder"`
 	Name               string         `gorm:"not null" json:"name"`
 	Method             string         `gorm:"not null" json:"method"`      // GET, POST, PUT, DELETE, etc.
@@ -104,8 +105,8 @@ type API struct {
 
 // MonitorLog represents a health check result for an API
 type MonitorLog struct {
-	ID           uint      `gorm:"primaryKey" json:"id"`
-	ApiID        uint      `gorm:"not null" json:"api_id"`
+	ID           uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	ApiID        uuid.UUID `gorm:"type:uuid;not null" json:"api_id"`
 	StatusCode   int       `json:"status_code"`
 	ResponseTime int64     `json:"response_time"` // in milliseconds
 	IsSuccess    bool      `json:"is_success"`
@@ -119,8 +120,8 @@ type MonitorLog struct {
 
 // NotificationConfig stores channel preferences for alerting when an API fails
 type NotificationConfig struct {
-	ID               uint      `gorm:"primaryKey" json:"id"`
-	ProjectID        uint      `gorm:"index;not null" json:"project_id"`
+	ID               uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	ProjectID        uuid.UUID `gorm:"type:uuid;index;not null" json:"project_id"`
 	EnableTelegram   bool      `gorm:"default:false" json:"enable_telegram"`
 	TelegramBotToken string    `json:"telegram_bot_token"`
 	TelegramChatID   string    `json:"telegram_chat_id"`
@@ -140,9 +141,9 @@ type NotificationConfig struct {
 
 // RepairTask represents a ticket created when an API monitoring check fails
 type RepairTask struct {
-	ID           uint           `gorm:"primaryKey" json:"id"`
-	ProjectID    uint           `gorm:"index;not null" json:"project_id"`
-	ApiID        uint           `gorm:"not null" json:"api_id"`
+	ID           uuid.UUID      `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	ProjectID    uuid.UUID      `gorm:"type:uuid;index;not null" json:"project_id"`
+	ApiID        uuid.UUID      `gorm:"type:uuid;not null" json:"api_id"`
 	API          *API           `gorm:"foreignKey:ApiID" json:"api,omitempty"`
 	Status       string         `gorm:"type:varchar(20);default:'open'" json:"status"` // 'open', 'pending', 'closed', 'failed'
 	ErrorMessage string         `gorm:"type:text" json:"error_message"`
@@ -151,7 +152,7 @@ type RepairTask struct {
 	DocumentURL  string         `gorm:"type:text" json:"document_url"` // Legacy for 'closed' status
 	Documents    string         `gorm:"type:text" json:"documents"`    // JSON array of document URLs
 	FixerName    string         `gorm:"type:text" json:"fixer_name"`    // Name of the person who fixed the API
-	ApprovedBy   *uint          `json:"approved_by"`
+	ApprovedBy   *uuid.UUID     `gorm:"type:uuid" json:"approved_by"`
 	Approver     *User          `gorm:"foreignKey:ApprovedBy" json:"approver,omitempty"`
 	Schedule     string         `gorm:"type:text" json:"schedule"` // Added for deduplication by schedule
 	ApprovedAt   *time.Time     `json:"approved_at"`
@@ -163,10 +164,10 @@ type RepairTask struct {
 
 // DashboardNotification represents a popup alert for the UI
 type DashboardNotification struct {
-	ID           uint           `gorm:"primaryKey" json:"id"`
-	UserID       uint           `gorm:"index" json:"user_id"` // 0 for system-wide/all admins
-	ProjectID    uint           `gorm:"index" json:"project_id"`
-	InvitationID *uint          `json:"invitation_id"` // Link to company invitation if type is 'company_invite'
+	ID           uuid.UUID      `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	UserID       uuid.UUID      `gorm:"type:uuid;index" json:"user_id"` // UserID = null or missing for system-wide? uuid.Nil
+	ProjectID    uuid.UUID      `gorm:"type:uuid;index" json:"project_id"`
+	InvitationID *uuid.UUID     `gorm:"type:uuid" json:"invitation_id"` // Link to company invitation if type is 'company_invite'
 	Type         string         `json:"type"`          // 'api_fail', 'task_approve', 'task_close', 'task_fail', 'company_invite'
 	Title        string         `json:"title"`
 	Message      string         `json:"message"`
@@ -177,10 +178,10 @@ type DashboardNotification struct {
 
 // CompanyInvitation tracks the state of an invitation to join a company
 type CompanyInvitation struct {
-	ID        uint           `gorm:"primaryKey" json:"id"`
-	CompanyID uint           `gorm:"not null;index" json:"company_id"`
-	InviterID uint           `gorm:"not null" json:"inviter_id"`
-	InviteeID uint           `gorm:"not null;index" json:"invitee_id"`
+	ID        uuid.UUID      `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	CompanyID uuid.UUID      `gorm:"type:uuid;not null;index" json:"company_id"`
+	InviterID uuid.UUID      `gorm:"type:uuid;not null" json:"inviter_id"`
+	InviteeID uuid.UUID      `gorm:"type:uuid;not null;index" json:"invitee_id"`
 	Status    string         `gorm:"type:varchar(20);default:'pending'" json:"status"` // 'pending', 'accepted', 'declined'
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`

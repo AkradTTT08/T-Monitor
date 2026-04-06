@@ -11,10 +11,10 @@
     outerClass = "bg-slate-900/50 rounded-lg border border-slate-700/50 focus-within:ring-2 focus-within:ring-cyan-500/50 h-auto",
     innerClass = "px-4 py-3 resize-y block",
     textClass = "text-cyan-50",
-    onpaste,
-    onfocus,
-    onblur,
-    onscroll
+    onpaste = undefined as ((e: ClipboardEvent) => void) | undefined,
+    onfocus = undefined as ((e: FocusEvent) => void) | undefined,
+    onblur = undefined as ((e: FocusEvent) => void) | undefined,
+    onscroll = undefined as ((e: Event) => void) | undefined
   } = $props();
 
   let textareaEl: HTMLTextAreaElement | undefined = $state();

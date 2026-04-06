@@ -46,7 +46,7 @@
     }
   }
 
-  async function toggleRole(userId: number, currentRole: string) {
+  async function toggleRole(userId: string, currentRole: string) {
     const newRole = currentRole === "admin" ? "user" : "admin";
 
     try {
@@ -71,7 +71,7 @@
     }
   }
 
-  async function approveUser(userId: number) {
+  async function approveUser(userId: string) {
     try {
       const token = localStorage.getItem("monitor_token");
       const res = await fetch(
@@ -92,7 +92,7 @@
     }
   }
 
-  async function disapproveUser(userId: number) {
+  async function disapproveUser(userId: string) {
     const result = await systemAlert.fire({
       title: "Are you sure?",
       text: "You want to disapprove and remove this user?",
@@ -123,7 +123,7 @@
     }
   }
 
-  async function resetPassword(userId: number) {
+  async function resetPassword(userId: string) {
     const result = await systemAlert.fire({
       title: "Reset Password?",
       text: "Reset this user's password to the default (T@monitor123)?",
@@ -158,7 +158,7 @@
     }
   }
 
-  async function toggleBlock(userId: number) {
+  async function toggleBlock(userId: string) {
     try {
       const token = localStorage.getItem("monitor_token");
       const res = await fetch(
@@ -180,7 +180,7 @@
     }
   }
 
-  async function deleteUser(userId: number) {
+  async function deleteUser(userId: string) {
     const result = await systemAlert.fire({
       title: "Confirm Deletion",
       text: "This will permanently remove the user account. This action cannot be undone. Are you sure?",
@@ -287,7 +287,7 @@
                   </div>
                   <span
                     class="text-slate-400 font-mono text-xs font-bold tracking-widest max-w-[80px] md:max-w-[none] truncate"
-                    >#{u.id}</span
+                    >{u.name || "UNNAMED"}</span
                   >
                 </div>
               </td>

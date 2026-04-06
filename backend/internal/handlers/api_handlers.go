@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"github.com/google/uuid"
+
 	"bytes"
 	"encoding/json"
 	"io/ioutil"
@@ -14,7 +16,7 @@ import (
 )
 
 type APIInput struct {
-	ProjectID          uint   `json:"project_id"`
+	ProjectID          uuid.UUID   `json:"project_id"`
 	Folder             string `json:"folder"`
 	Name               string `json:"name"`
 	Method             string `json:"method"`
@@ -34,14 +36,14 @@ func CreateAPI(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
 	}
 
-	userID := c.Locals("user_id").(uint)
+	userID := c.Locals("user_id").(uuid.UUID)
 	role := c.Locals("role").(string)
 	mode := c.Query("mode")
 
 	// Verify project ownership
 	var project models.Project
 	if role == "admin" {
-		if err := database.DB.First(&project, input.ProjectID).Error; err != nil {
+		if err := database.DB.First(&project, "id = ?", input.ProjectID).Error; err != nil {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Project not found"})
 		}
 	} else {
@@ -87,13 +89,13 @@ func CreateAPI(c *fiber.Ctx) error {
 
 func ReorderAPIs(c *fiber.Ctx) error {
 	projectID := c.Params("id")
-	userID := c.Locals("user_id").(uint)
+	userID := c.Locals("user_id").(uuid.UUID)
 	role := c.Locals("role").(string)
 
 	// Verify project ownership
 	var project models.Project
 	if role == "admin" {
-		if err := database.DB.First(&project, projectID).Error; err != nil {
+		if err := database.DB.First(&project, "id = ?", projectID).Error; err != nil {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Project not found"})
 		}
 	} else {
@@ -103,7 +105,7 @@ func ReorderAPIs(c *fiber.Ctx) error {
 	}
 
 	type ReorderItem struct {
-		ID         uint   `json:"id"`
+		ID         uuid.UUID   `json:"id"`
 		Folder     string `json:"folder"`
 		OrderIndex int    `json:"order_index"`
 	}
@@ -133,7 +135,7 @@ func ReorderAPIs(c *fiber.Ctx) error {
 
 func GetAPIs(c *fiber.Ctx) error {
 	projectID := c.Query("project_id")
-	userID := c.Locals("user_id").(uint)
+	userID := c.Locals("user_id").(uuid.UUID)
 	role := c.Locals("role").(string)
 
 	var apis []models.API
@@ -156,16 +158,16 @@ func GetAPIs(c *fiber.Ctx) error {
 
 func UpdateAPI(c *fiber.Ctx) error {
 	apiID := c.Params("id")
-	userID := c.Locals("user_id").(uint)
+	userID := c.Locals("user_id").(uuid.UUID)
 	role := c.Locals("role").(string)
 
 	var api models.API
-	if err := database.DB.First(&api, apiID).Error; err != nil {
+	if err := database.DB.First(&api, "id = ?", apiID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "API not found"})
 	}
 
 	var project models.Project
-	if err := database.DB.Select("user_id").First(&project, api.ProjectID).Error; err != nil {
+	if err := database.DB.Select("user_id").First(&project, "id = ?", api.ProjectID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Associated project not found"})
 	}
 
@@ -181,7 +183,7 @@ func UpdateAPI(c *fiber.Ctx) error {
 
 	// Fetch base model out of our join union to update its fields natively
 	var baseAPI models.API
-	database.DB.First(&baseAPI, apiID)
+	database.DB.First(&baseAPI, "id = ?", apiID)
 
 	baseAPI.Folder = input.Folder
 	baseAPI.Name = input.Name
@@ -204,16 +206,16 @@ func UpdateAPI(c *fiber.Ctx) error {
 
 func DeleteAPI(c *fiber.Ctx) error {
 	apiID := c.Params("id")
-	userID := c.Locals("user_id").(uint)
+	userID := c.Locals("user_id").(uuid.UUID)
 	role := c.Locals("role").(string)
 
 	var api models.API
-	if err := database.DB.First(&api, apiID).Error; err != nil {
+	if err := database.DB.First(&api, "id = ?", apiID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "API not found"})
 	}
 
 	var project models.Project
-	if err := database.DB.Select("user_id").First(&project, api.ProjectID).Error; err != nil {
+	if err := database.DB.Select("user_id").First(&project, "id = ?", api.ProjectID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Associated project not found"})
 	}
 
@@ -223,7 +225,7 @@ func DeleteAPI(c *fiber.Ctx) error {
 	}
 
 	var baseAPI models.API
-	database.DB.First(&baseAPI, apiID)
+	database.DB.First(&baseAPI, "id = ?", apiID)
 	
 	if err := database.DB.Delete(&baseAPI).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete API endpoint"})
@@ -347,8 +349,8 @@ func UploadPostmanCollection(c *fiber.Ctx) error {
 		Variable []PostmanVariable `json:"variable"`
 	}
 
-	projectID := c.QueryInt("project_id")
-	if projectID == 0 {
+	projectID := c.Query("project_id")
+	if projectID == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "project_id is required"})
 	}
 	
@@ -406,8 +408,10 @@ func UploadPostmanCollection(c *fiber.Ctx) error {
 					folderAssign = "Uncategorized"
 				}
 
+				projectUUID, _ := uuid.Parse(projectID)
+
 				parsedAPIs = append(parsedAPIs, models.API{
-					ProjectID:          uint(projectID),
+					ProjectID:          projectUUID,
 					Folder:             folderAssign,
 					Name:               item.Name,
 					Method:             method,
@@ -443,7 +447,7 @@ func UploadPostmanCollection(c *fiber.Ctx) error {
 	// Update Project Environment Variables if defined in the collection
 	if len(collection.Variable) > 0 {
 		var project models.Project
-		if err := database.DB.First(&project, projectID).Error; err == nil {
+		if err := database.DB.First(&project, "id = ?", projectID).Error; err == nil {
 			envMap := make(map[string]string)
 			
 			// If appending, preserve existing env variables
@@ -470,16 +474,16 @@ func UploadPostmanCollection(c *fiber.Ctx) error {
 // PauseAPI allows a user to pause monitoring for a specific endpoint temporarily
 func PauseAPI(c *fiber.Ctx) error {
 	apiID := c.Params("id")
-	userID := c.Locals("user_id").(uint)
+	userID := c.Locals("user_id").(uuid.UUID)
 	role := c.Locals("role").(string)
 
 	var api models.API
-	if err := database.DB.First(&api, apiID).Error; err != nil {
+	if err := database.DB.First(&api, "id = ?", apiID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "API not found"})
 	}
 
 	var project models.Project
-	if err := database.DB.Select("user_id").First(&project, api.ProjectID).Error; err != nil {
+	if err := database.DB.Select("user_id").First(&project, "id = ?", api.ProjectID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Associated project not found"})
 	}
 
@@ -497,7 +501,7 @@ func PauseAPI(c *fiber.Ctx) error {
 	}
 
 	var baseAPI models.API
-	database.DB.First(&baseAPI, apiID)
+	database.DB.First(&baseAPI, "id = ?", apiID)
 	
 	if input.PauseHours > 0 {
 		pausedTime := time.Now().Add(time.Duration(input.PauseHours * float64(time.Hour)))
