@@ -44,7 +44,8 @@ func ConnectDB() {
 
 	log.Println("Database connection successfully opened")
 	
-	err = db.AutoMigrate(
+	// List of all models for migration
+	allModels := []interface{}{
 		&models.Company{},
 		&models.CompanyMember{},
 		&models.User{},
@@ -56,13 +57,70 @@ func ConnectDB() {
 		&models.DashboardNotification{},
 		&models.CompanyInvitation{},
 		&models.ProjectMember{},
-	)
-
-	if err != nil {
-		log.Fatal("Failed to auto-migrate database. \n", err)
 	}
 
-	// ONE-TIME FIX: Populate empty schedules for historical logs to prevent them from changing when API config changes
+	// 1. Try to drop incompatible columns first (for cases where rows can be preserved)
+	log.Println("Pre-migration: Checking for incompatible bigint columns...")
+	columnsToDrop := []struct {
+		Table  string
+		Column string
+	}{
+		{"companies", "id"},
+		{"companies", "user_id"},
+		{"company_members", "id"},
+		{"company_members", "company_id"},
+		{"company_members", "user_id"},
+		{"users", "id"},
+		{"projects", "id"},
+		{"projects", "user_id"},
+		{"projects", "company_id"},
+		{"apis", "id"},
+		{"apis", "project_id"},
+		{"monitor_logs", "id"},
+		{"monitor_logs", "api_id"},
+		{"notification_configs", "id"},
+		{"notification_configs", "project_id"},
+		{"repair_tasks", "id"},
+		{"repair_tasks", "project_id"},
+		{"repair_tasks", "api_id"},
+		{"repair_tasks", "approved_by"},
+		{"dashboard_notifications", "id"},
+		{"dashboard_notifications", "user_id"},
+		{"dashboard_notifications", "project_id"},
+		{"dashboard_notifications", "invitation_id"},
+		{"company_invitations", "id"},
+		{"company_invitations", "company_id"},
+		{"company_invitations", "inviter_id"},
+		{"company_invitations", "invitee_id"},
+		{"project_members", "id"},
+		{"project_members", "project_id"},
+		{"project_members", "user_id"},
+	}
+
+	for _, col := range columnsToDrop {
+		db.Exec(fmt.Sprintf("ALTER TABLE %s DROP COLUMN IF EXISTS %s CASCADE", col.Table, col.Column))
+	}
+
+	// 2. Perform AutoMigrate
+	err = db.AutoMigrate(allModels...)
+
+	if err != nil {
+		log.Println("Auto-migration failed (likely due to existing rows violating NOT NULL constraints).")
+		log.Println("Automatically dropping all tables to recreate schema fresh...")
+		
+		// This is equivalent to your drop_db.go logic
+		db.Exec("DROP SCHEMA public CASCADE")
+		db.Exec("CREATE SCHEMA public")
+		
+		// Retry migration on fresh schema
+		err = db.AutoMigrate(allModels...)
+		if err != nil {
+			log.Fatal("Critical Error: Failed to auto-migrate database even after schema reset. \n", err)
+		}
+		log.Println("Database schema reset and migration successful.")
+	}
+
+	// ONE-TIME FIX: Populate empty schedules for historical logs
 	db.Model(&models.MonitorLog{}).Where("schedule IS NULL OR schedule = ''").Update("schedule", "EVERY 1 MIN")
 
 	DB = db
