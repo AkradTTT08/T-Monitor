@@ -41,20 +41,20 @@
       );
       if (res.ok) {
         const data = await res.json();
-        if (data.config) {
+        if (data) {
           notifConfig = {
-            enable_telegram: data.config.enable_telegram || false,
-            telegram_bot_token: data.config.telegram_bot_token || "",
-            telegram_chat_id: data.config.telegram_chat_id || "",
-            enable_line: data.config.enable_line || false,
-            line_user_id: data.config.line_user_id || "",
-            enable_email: data.config.enable_email || false,
-            email_address: data.config.email_address || "",
-            smtp_host: data.config.smtp_host || "",
-            smtp_port: data.config.smtp_port || 587,
-            smtp_user: data.config.smtp_user || "",
-            smtp_pass: data.config.smtp_pass || "",
-            enable_ticketing: data.config.enable_ticketing || false,
+            enable_telegram: data.enable_telegram ?? false,
+            telegram_bot_token: data.telegram_bot_token || "",
+            telegram_chat_id: data.telegram_chat_id || "",
+            enable_line: data.enable_line ?? false,
+            line_user_id: data.line_user_id || "",
+            enable_email: data.enable_email ?? false,
+            email_address: data.email_address || "",
+            smtp_host: data.smtp_host || "",
+            smtp_port: data.smtp_port || 587,
+            smtp_user: data.smtp_user || "",
+            smtp_pass: data.smtp_pass || "",
+            enable_ticketing: data.enable_ticketing ?? false,
           };
         }
       }
