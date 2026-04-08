@@ -26,8 +26,9 @@ type APIInput struct {
 	Body               string `json:"body"`
 	ExpectedStatusCode int    `json:"expected_status_code"`
 	Interval           int    `json:"interval"`
-	ScheduleConfig     string `json:"schedule_config"`
-	OrderIndex         int    `json:"order_index"`
+	ScheduleConfig     string      `json:"schedule_config"`
+	ResponseScript     string      `json:"response_script"`
+	OrderIndex         int         `json:"order_index"`
 }
 
 func CreateAPI(c *fiber.Ctx) error {
@@ -70,6 +71,7 @@ func CreateAPI(c *fiber.Ctx) error {
 		ExpectedStatusCode: input.ExpectedStatusCode,
 		Interval:           input.Interval,
 		ScheduleConfig:     input.ScheduleConfig,
+		ResponseScript:     input.ResponseScript,
 		OrderIndex:         input.OrderIndex,
 	}
 
@@ -195,6 +197,7 @@ func UpdateAPI(c *fiber.Ctx) error {
 	baseAPI.ExpectedStatusCode = input.ExpectedStatusCode
 	baseAPI.Interval = input.Interval
 	baseAPI.ScheduleConfig = input.ScheduleConfig
+	baseAPI.ResponseScript = input.ResponseScript
 	baseAPI.OrderIndex = input.OrderIndex
 
 	if err := database.DB.Save(&baseAPI).Error; err != nil {

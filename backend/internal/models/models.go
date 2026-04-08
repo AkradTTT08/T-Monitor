@@ -94,6 +94,7 @@ type API struct {
 	ExpectedStatusCode int            `gorm:"default:200" json:"expected_status_code"`
 	Interval           int            `gorm:"default:60" json:"interval"`       // Monitoring interval in seconds
 	ScheduleConfig     string         `gorm:"type:text" json:"schedule_config"` // JSON Schedule settings mapping n8n
+	ResponseScript     string         `gorm:"type:text" json:"response_script"` // JavaScript for response processing
 	OrderIndex         int            `gorm:"default:0" json:"order_index"`
 	IsActive           bool           `gorm:"default:true" json:"is_active"`
 	PausedUntil        *time.Time     `json:"paused_until"` // Added for pause feature

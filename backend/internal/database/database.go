@@ -44,11 +44,11 @@ func ConnectDB() {
 
 	log.Println("Database connection successfully opened")
 	
-	// List of all models for migration
+	// List of all models for migration in dependency order
 	allModels := []interface{}{
+		&models.User{},
 		&models.Company{},
 		&models.CompanyMember{},
-		&models.User{},
 		&models.Project{},
 		&models.API{},
 		&models.MonitorLog{},
@@ -59,65 +59,11 @@ func ConnectDB() {
 		&models.ProjectMember{},
 	}
 
-	// 1. Try to drop incompatible columns first (for cases where rows can be preserved)
-	log.Println("Pre-migration: Checking for incompatible bigint columns...")
-	columnsToDrop := []struct {
-		Table  string
-		Column string
-	}{
-		{"companies", "id"},
-		{"companies", "user_id"},
-		{"company_members", "id"},
-		{"company_members", "company_id"},
-		{"company_members", "user_id"},
-		{"users", "id"},
-		{"projects", "id"},
-		{"projects", "user_id"},
-		{"projects", "company_id"},
-		{"apis", "id"},
-		{"apis", "project_id"},
-		{"monitor_logs", "id"},
-		{"monitor_logs", "api_id"},
-		{"notification_configs", "id"},
-		{"notification_configs", "project_id"},
-		{"repair_tasks", "id"},
-		{"repair_tasks", "project_id"},
-		{"repair_tasks", "api_id"},
-		{"repair_tasks", "approved_by"},
-		{"dashboard_notifications", "id"},
-		{"dashboard_notifications", "user_id"},
-		{"dashboard_notifications", "project_id"},
-		{"dashboard_notifications", "invitation_id"},
-		{"company_invitations", "id"},
-		{"company_invitations", "company_id"},
-		{"company_invitations", "inviter_id"},
-		{"company_invitations", "invitee_id"},
-		{"project_members", "id"},
-		{"project_members", "project_id"},
-		{"project_members", "user_id"},
-	}
-
-	for _, col := range columnsToDrop {
-		db.Exec(fmt.Sprintf("ALTER TABLE %s DROP COLUMN IF EXISTS %s CASCADE", col.Table, col.Column))
-	}
-
 	// 2. Perform AutoMigrate
 	err = db.AutoMigrate(allModels...)
 
 	if err != nil {
-		log.Println("Auto-migration failed (likely due to existing rows violating NOT NULL constraints).")
-		log.Println("Automatically dropping all tables to recreate schema fresh...")
-		
-		// This is equivalent to your drop_db.go logic
-		db.Exec("DROP SCHEMA public CASCADE")
-		db.Exec("CREATE SCHEMA public")
-		
-		// Retry migration on fresh schema
-		err = db.AutoMigrate(allModels...)
-		if err != nil {
-			log.Fatal("Critical Error: Failed to auto-migrate database even after schema reset. \n", err)
-		}
-		log.Println("Database schema reset and migration successful.")
+		log.Printf("Auto-migration failed: %v\n", err)
 	}
 
 	// ONE-TIME FIX: Populate empty schedules for historical logs

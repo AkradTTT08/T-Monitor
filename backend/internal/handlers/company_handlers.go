@@ -25,14 +25,9 @@ func GetCompanies(c *fiber.Ctx) error {
 	var companies []models.Company
 	db := database.DB.Preload("Projects").Preload("Owner").Preload("Members.User")
 
-	if role == "admin" {
-		if err := db.Find(&companies).Error; err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch companies"})
-		}
-	} else {
-		if err := db.Where("user_id = ? OR id IN (SELECT company_id FROM company_members WHERE user_id = ?)", userID, userID).Find(&companies).Error; err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch companies"})
-		}
+	// Strictly enforce visibility: Owners or Members only (even for administrators on this dashboard)
+	if err := db.Where("user_id = ? OR id IN (SELECT company_id FROM company_members WHERE user_id = ?)", userID, userID).Find(&companies).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch companies"})
 	}
 
 	// TRACE LOGGING
@@ -51,14 +46,12 @@ func GetCompanies(c *fiber.Ctx) error {
 func GetCompany(c *fiber.Ctx) error {
 	id := c.Params("id")
 	userID := c.Locals("user_id").(uuid.UUID)
-	role := c.Locals("role").(string)
 
 	var company models.Company
 	db := database.DB.Preload("Projects").Preload("Owner").Preload("Members.User")
 	
-	if role != "admin" {
-		db = db.Where("user_id = ? OR id IN (SELECT company_id FROM company_members WHERE user_id = ?)", userID, userID)
-	}
+	// Strictly enforce visibility: Owners or invited members only
+	db = db.Where("user_id = ? OR id IN (SELECT company_id FROM company_members WHERE user_id = ?)", userID, userID)
 
 	if err := db.First(&company, "id = ?", id).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Company not found or unauthorized"})
@@ -91,7 +84,6 @@ func CreateCompany(c *fiber.Ctx) error {
 func UpdateCompany(c *fiber.Ctx) error {
 	id := c.Params("id")
 	userID := c.Locals("user_id").(uuid.UUID)
-	role := c.Locals("role").(string)
 
 	var input CompanyInput
 	if err := c.BodyParser(&input); err != nil {
@@ -100,9 +92,8 @@ func UpdateCompany(c *fiber.Ctx) error {
 
 	var company models.Company
 	query := database.DB
-	if role != "admin" {
-		query = query.Where("user_id = ?", userID)
-	}
+	// Strictly enforce updating rights
+	query = query.Where("user_id = ?", userID)
 
 	if err := query.First(&company, "id = ?", id).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Company not found or unauthorized"})
@@ -124,13 +115,11 @@ func UpdateCompany(c *fiber.Ctx) error {
 func DeleteCompany(c *fiber.Ctx) error {
 	id := c.Params("id")
 	userID := c.Locals("user_id").(uuid.UUID)
-	role := c.Locals("role").(string)
 
 	var company models.Company
 	query := database.DB
-	if role != "admin" {
-		query = query.Where("user_id = ?", userID)
-	}
+	// Strictly enforce deletion rights
+	query = query.Where("user_id = ?", userID)
 
 	if err := query.First(&company, "id = ?", id).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Company not found or unauthorized"})
@@ -155,13 +144,11 @@ func UploadCompanyLogo(c *fiber.Ctx) error {
 
 	rawRole := c.Locals("role")
 	fmt.Printf(">>> Raw Role: %v\n", rawRole)
-	role := rawRole.(string)
 
 	var company models.Company
 	query := database.DB
-	if role != "admin" {
-		query = query.Where("user_id = ?", userID)
-	}
+	// Strictly enforce uploading rights
+	query = query.Where("user_id = ?", userID)
 
 	if err := query.First(&company, "id = ?", id).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Company not found or unauthorized"})

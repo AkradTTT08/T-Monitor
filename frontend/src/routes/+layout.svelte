@@ -1,5 +1,6 @@
 <script>
 	import '../app.css';
+	import AIChat from '$lib/components/AIChat.svelte';
 </script>
 
 <div class="min-h-screen flex flex-col items-center justify-center bg-slate-900 relative overflow-hidden text-slate-100">
@@ -35,6 +36,8 @@
     </div>
 
 	<slot />
+	<!-- Global AI Chat Widget -->
+	<AIChat />
 </div>
 
 <style lang="scss">

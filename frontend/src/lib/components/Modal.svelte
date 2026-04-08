@@ -4,7 +4,7 @@
   let { 
     open = $bindable(false), 
     title = "", 
-    maxWidth = "max-w-md", 
+    size = "md", // sm, md, lg, xl, full
     overflowVisible = false,
     children
   } = $props();
@@ -21,6 +21,15 @@
       close();
     }
   }
+
+  // Derive modal classes based on size
+  const sizeClasses: Record<string, string> = {
+    sm: "max-w-md h-auto",
+    md: "max-w-2xl h-auto",
+    lg: "max-w-4xl h-auto",
+    xl: "max-w-6xl h-auto",
+    full: "max-w-[95vw] w-full h-[95vh]"
+  };
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -28,7 +37,7 @@
 {#if open}
   <!-- Final Centering Strategy: Relative modal in a flex container with overflow-y-auto backdrop -->
   <div
-    class="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8 overflow-y-auto modal-backdrop-fade pointer-events-none"
+    class="fixed inset-0 z-[100] flex items-center justify-center p-2 md:p-8 overflow-y-auto modal-backdrop-fade pointer-events-none"
   >
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -41,7 +50,7 @@
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
-      class="relative bg-slate-900 border border-slate-700 w-full {maxWidth === 'max-w-md' ? 'max-w-4xl' : maxWidth} rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col h-auto max-h-[80vh] pointer-events-auto overflow-hidden transition-all duration-300"
+      class="relative bg-slate-900 border border-slate-700/60 w-full {sizeClasses[size] || sizeClasses.md} rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col pointer-events-auto overflow-hidden transition-all duration-300"
       onclick={(e) => e.stopPropagation()}
       role="dialog"
       aria-modal="true"

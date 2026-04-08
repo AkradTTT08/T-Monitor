@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dop251/goja"
 	"github.com/google/uuid"
 	"github.com/monitor-api/backend/internal/database"
 	"github.com/monitor-api/backend/internal/handlers"
@@ -188,8 +189,84 @@ func runPing(api models.API, envVars map[string]string) {
 		errMsg := fmt.Sprintf("Expected %d, got %d. Body: %s", api.ExpectedStatusCode, res.StatusCode, bodyString)
 		handleResult(api, res.StatusCode, duration, false, errMsg, bodyString)
 	} else {
+		// Success! Execute extraction script if present
+		if api.ResponseScript != "" {
+			executeResponseScript(api, bodyString, res.StatusCode, res.Header)
+		}
 		handleResult(api, res.StatusCode, duration, true, "", bodyString)
 	}
+}
+
+func executeResponseScript(api models.API, responseBody string, statusCode int, headers http.Header) {
+	vm := goja.New()
+
+	// 1. Set response object
+	respObj := vm.NewObject()
+	respObj.Set("body", responseBody)
+	respObj.Set("status", statusCode)
+	
+	// Convert headers to a simple map[string]string for the script
+	hdrMap := make(map[string]string)
+	for k, v := range headers {
+		if len(v) > 0 {
+			hdrMap[k] = v[0]
+		}
+	}
+	respObj.Set("headers", hdrMap)
+	vm.Set("response", respObj)
+
+	// 2. Set setEnv function
+	vm.Set("setEnv", func(call goja.FunctionCall) goja.Value {
+		if len(call.Arguments) < 2 {
+			return goja.Undefined()
+		}
+		key := call.Argument(0).String()
+		value := call.Argument(1).String()
+		updateProjectEnv(api.ProjectID, key, value)
+		return goja.Undefined()
+	})
+
+	// 3. Set pm object for Postman familiarity
+	pm := vm.NewObject()
+	env := vm.NewObject()
+	env.Set("set", func(call goja.FunctionCall) goja.Value {
+		if len(call.Arguments) < 2 {
+			return goja.Undefined()
+		}
+		key := call.Argument(0).String()
+		value := call.Argument(1).String()
+		updateProjectEnv(api.ProjectID, key, value)
+		return goja.Undefined()
+	})
+	pm.Set("environment", env)
+	vm.Set("pm", pm)
+
+	// Execute with local timeout handling could be added here
+	// For now, execute directly
+	_, err := vm.RunString(api.ResponseScript)
+	if err != nil {
+		log.Printf("[Script Error] API %s (%s): %v", api.Name, api.ID, err)
+	}
+}
+
+func updateProjectEnv(projectID uuid.UUID, key string, value string) {
+	var project models.Project
+	if err := database.DB.First(&project, "id = ?", projectID).Error; err != nil {
+		return
+	}
+
+	var envVars map[string]string
+	if project.EnvironmentVariables != "" && project.EnvironmentVariables != "{}" {
+		json.Unmarshal([]byte(project.EnvironmentVariables), &envVars)
+	} else {
+		envVars = make(map[string]string)
+	}
+
+	// Update or Add
+	envVars[key] = value
+	envBytes, _ := json.Marshal(envVars)
+	
+	database.DB.Model(&models.Project{}).Where("id = ?", projectID).Update("environment_variables", string(envBytes))
 }
 
 func handleResult(api models.API, statusCode int, duration int64, isSuccess bool, errorMsg string, responseBody string) {

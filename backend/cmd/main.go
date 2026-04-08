@@ -142,6 +142,9 @@ func setupRoutes(app *fiber.App) {
 	protected.Get("/notifications/unread", handlers.GetNotifications)
 	protected.Put("/notifications/:id/read", handlers.MarkNotificationRead)
 
+	// AI Chat Route
+	protected.Post("/ai/chat", handlers.ChatWithAI)
+
 	// Admin User Routes
 	users := protected.Group("/users", middleware.AdminOnly())
 	users.Get("/", handlers.GetAllUsers)

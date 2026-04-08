@@ -70,6 +70,7 @@
     parameters: "[]",
     expected_status_code: 200,
     interval: 60,
+    response_script: "",
   };
   
   // API Search and Pagination State
@@ -711,6 +712,7 @@
       parameters: "[]",
       expected_status_code: 200,
       interval: 60,
+      response_script: "",
     };
     headerMode = "json";
     bodyMode = "json";
@@ -733,6 +735,7 @@
       parameters: api.parameters || "[]",
       expected_status_code: api.expected_status_code || 200,
       interval: api.interval || 60,
+      response_script: api.response_script || "",
     };
 
     // Parse into KV states
@@ -830,6 +833,7 @@
             expected_status_code: selectedApi.expected_status_code,
             interval: intervalSeconds,
             schedule_config: JSON.stringify(scheduleConfig),
+            response_script: selectedApi.response_script || "",
           }),
         },
       );
@@ -872,6 +876,7 @@
             body: apiForm.body,
             expected_status_code: apiForm.expected_status_code,
             interval: apiForm.interval,
+            response_script: apiForm.response_script,
           }),
         },
       );
@@ -1061,6 +1066,7 @@
             body: apiForm.body,
             expected_status_code: apiForm.expected_status_code,
             interval: apiForm.interval,
+            response_script: apiForm.response_script,
           }),
         },
       );
@@ -1923,8 +1929,8 @@
           ></line></svg
         >
         <span class="font-bold text-sm">Replace Mode</span>
-        <span class="text-xs mt-1 text-cyan-500/80"
-          >Clear project and add only this API.</span
+        <span class="text-xs mt-1 text-red-500/80"
+          >Clear project and use only this API.</span
         >
       </button>
     </div>
@@ -1935,460 +1941,205 @@
 <Modal
   bind:open={showAddApiModal}
   title="Create API Endpoint"
-  maxWidth="max-w-2xl"
+  size="full"
 >
-  <form onsubmit={(e) => { e.preventDefault(); handleAddApiSubmit(); }} class="space-y-4">
-    <div
-      class="grid grid-cols-1 md:grid-cols-2 gap-4 border-b border-slate-800 pb-4"
-    >
-      <div class="md:col-span-1">
-        <label
-          for="api_folder"
-          class="block text-sm font-semibold text-cyan-50 mb-1"
-          >Folder Name (Optional)</label
-        >
-        <input
-          id="api_folder"
-          type="text"
-          bind:value={apiForm.folder}
-          class="w-full px-4 py-2 bg-slate-900/50 rounded-lg border border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all text-sm"
-          placeholder="e.g. Authentication"
-        />
-      </div>
-
-      <div class="md:col-span-1">
-        <label
-          for="api_name"
-          class="block text-sm font-semibold text-cyan-50 mb-1"
-          >Endpoint Name</label
-        >
-        <input
-          id="api_name"
-          type="text"
-          bind:value={apiForm.name}
-          required
-          class="w-full px-4 py-2 bg-slate-900/50 rounded-lg border border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all text-sm"
-          placeholder="e.g. Fetch User Data"
-        />
-      </div>
-
-      <div class="md:col-span-1">
-        <label
-          for="api_method"
-          class="block text-sm font-semibold text-cyan-50 mb-1">Method</label
-        >
-        <select
-          id="api_method"
-          bind:value={apiForm.method}
-          class="w-full px-4 py-2 bg-slate-900/50 rounded-lg border border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all text-sm font-medium"
-        >
-          <option value="GET">GET</option>
-          <option value="POST">POST</option>
-          <option value="PUT">PUT</option>
-          <option value="DELETE">DELETE</option>
-          <option value="PATCH">PATCH</option>
-        </select>
-      </div>
-
-      <div class="md:col-span-2">
-        <label
-          for="api_url"
-          class="block text-sm font-semibold text-cyan-50 mb-1"
-          >Request URL</label
-        >
-        <div class="flex">
-          <span
-            class="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-slate-700/50 bg-slate-800 text-cyan-500/80 text-sm font-medium"
-            >URL</span
-          >
-          <div
-            class="flex-1 w-full bg-slate-900/50 rounded-r-lg border border-slate-700/50 focus-within:ring-2 focus-within:ring-blue-500/50 transition-all text-sm overflow-hidden h-[38px] relative"
-          >
-            <InputWithVariables
-              bind:value={apiForm.url}
-              placeholder="&#123;&#123;base_url&#125;&#125;/api/v1/users"
-              required={true}
-              variables={envVarDict}
-              onpaste={handleUrlPaste}
-            />
+  <form onsubmit={(e) => { e.preventDefault(); handleAddApiSubmit(); }} class="flex flex-col h-full bg-slate-900/10">
+    <div class="flex-1 overflow-y-auto px-1 pt-2 space-y-6 custom-scrollbar pb-10">
+      <!-- Section 1: Basic Information -->
+      <div class="bg-slate-800/20 rounded-2xl p-6 border border-slate-700/30">
+        <h4 class="text-xs font-bold text-cyan-500/80 uppercase tracking-widest mb-4 flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+          Basic Configuration
+        </h4>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div class="md:col-span-1">
+            <label for="api_folder" class="block text-xs font-bold text-slate-400 uppercase mb-2">Folder (Optional)</label>
+            <input id="api_folder" type="text" bind:value={apiForm.folder} class="w-full px-4 py-2.5 bg-slate-950 border border-slate-700/50 rounded-xl focus:ring-2 focus:ring-cyan-500/30 outline-none text-sm font-medium transition-all" placeholder="e.g. Authentication" />
+          </div>
+          <div class="md:col-span-2">
+            <label for="api_name" class="block text-xs font-bold text-slate-400 uppercase mb-2">Endpoint Name</label>
+            <input id="api_name" type="text" bind:value={apiForm.name} required class="w-full px-4 py-2.5 bg-slate-950 border border-slate-700/50 rounded-xl focus:ring-2 focus:ring-cyan-500/30 outline-none text-sm font-medium transition-all" placeholder="e.g. Fetch User Data" />
+          </div>
+          <div class="md:col-span-1">
+            <label for="api_method" class="block text-xs font-bold text-slate-400 uppercase mb-2">HTTP Method</label>
+            <select id="api_method" bind:value={apiForm.method} class="w-full px-4 py-2.5 bg-slate-950 border border-slate-700/50 rounded-xl focus:ring-2 focus:ring-cyan-500/30 outline-none text-sm font-bold text-cyan-400 uppercase transition-all cursor-pointer">
+              <optgroup label="Standard Methods" class="bg-slate-950">
+                <option value="GET">GET</option>
+                <option value="POST">POST</option>
+                <option value="PUT">PUT</option>
+                <option value="PATCH">PATCH</option>
+                <option value="DELETE">DELETE</option>
+              </optgroup>
+            </select>
+          </div>
+          <div class="md:col-span-4">
+            <label for="api_url" class="block text-xs font-bold text-slate-400 uppercase mb-2">Target URL</label>
+            <div class="flex group">
+              <span class="inline-flex items-center px-4 rounded-l-xl border border-r-0 border-slate-700/50 bg-slate-950 text-cyan-500 text-xs font-bold tracking-widest transition-colors group-focus-within:border-cyan-500/30 group-focus-within:bg-cyan-950/20">URL</span>
+              <div class="flex-1 w-full bg-slate-950 rounded-r-xl border border-slate-700/50 focus-within:ring-2 focus-within:ring-cyan-500/30 transition-all text-sm overflow-hidden h-[42px] relative">
+                <InputWithVariables bind:value={apiForm.url} placeholder="&#123;&#123;base_url&#125;&#125;/api/v1/users" required={true} variables={envVarDict} onpaste={handleUrlPaste} />
+              </div>
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <div class="space-y-4">
-      <!-- Parameters Toggle (Only on GET/PUT/DELETE) -->
-      {#if ["GET", "PUT", "DELETE"].includes(apiForm.method)}
-        <div>
-          <div class="flex items-center justify-between mb-2">
-            <label class="block text-sm font-semibold text-cyan-50"
-              >Query Parameters</label
-            >
-            <div
-              class="flex bg-slate-800 p-0.5 rounded-lg border border-slate-700/50"
-            >
-              <button
-                type="button"
-                class="px-3 py-1 text-xs font-semibold rounded-md transition-all {paramMode ===
-                'json'
-                  ? 'bg-slate-900/40 shadow-sm text-cyan-300'
-                  : 'text-cyan-500/80 hover:text-cyan-50'}"
-                onclick={() => toggleParamMode("json")}>JSON</button
-              >
-              <button
-                type="button"
-                class="px-3 py-1 text-xs font-semibold rounded-md transition-all {paramMode ===
-                'kv'
-                  ? 'bg-slate-900/40 shadow-sm text-cyan-300'
-                  : 'text-cyan-500/80 hover:text-cyan-50'}"
-                onclick={() => toggleParamMode("kv")}>Key-Value</button
-              >
+      <!-- Section 2: Parameters, Headers, Body -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Left Column: Parameters & Headers -->
+        <div class="space-y-6">
+          <div class="bg-slate-800/20 rounded-2xl p-6 border border-slate-700/30">
+            <div class="flex items-center justify-between mb-4">
+              <h4 class="text-xs font-bold text-cyan-500/80 uppercase tracking-widest flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
+                Query Parameters
+              </h4>
+              <div class="flex bg-slate-950 p-1 rounded-xl border border-slate-800 shadow-inner">
+                <button type="button" class="px-3 py-1 text-[10px] uppercase font-bold rounded-lg transition-all {paramMode === 'json' ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-500/20' : 'text-slate-500 hover:text-cyan-400'}" onclick={() => toggleParamMode("json")}>JSON</button>
+                <button type="button" class="px-3 py-1 text-[10px] uppercase font-bold rounded-lg transition-all {paramMode === 'kv' ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-500/20' : 'text-slate-500 hover:text-cyan-400'}" onclick={() => toggleParamMode("kv")}>Key-Value</button>
+              </div>
             </div>
-          </div>
-          {#if paramMode === "json"}
-            <TextareaWithVariables
-              rows={2}
-              bind:value={apiForm.parameters}
-              variables={envVarDict}
-              placeholder={`[\n  {"key": "search", "value": "keyword"}\n]`}
-            />
-          {:else}
-            <div class="space-y-2">
-              {#each paramsKV as param, i}
-                <div class="flex gap-2">
-                  <input
-                    type="text"
-                    bind:value={param.key}
-                    placeholder="Key"
-                    class="flex-1 px-3 py-2 bg-slate-900/50 rounded-lg border border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-xs font-mono"
-                  />
-                  <div
-                    class="flex-1 bg-slate-900/50 rounded-lg border border-slate-700/50 focus-within:ring-2 focus-within:ring-blue-500/50 text-xs font-mono h-[34px] overflow-hidden relative"
-                  >
-                    <InputWithVariables
-                      bind:value={param.value}
-                      placeholder="Value"
-                      variables={envVarDict}
-                    />
+            {#if paramMode === "json"}
+              <TextareaWithVariables rows={3} bind:value={apiForm.parameters} variables={envVarDict} placeholder={`[\n  {"key": "search", "value": "keyword"}\n]`} />
+            {:else}
+              <div class="space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar pr-2">
+                {#each paramsKV as param, i}
+                  <div class="flex gap-2 group/kv">
+                    <input type="text" bind:value={param.key} placeholder="Key" class="w-1/3 px-3 py-2 bg-slate-950 rounded-lg border border-slate-800 focus:border-cyan-500/50 outline-none text-xs font-mono" />
+                    <div class="flex-1 bg-slate-950 rounded-lg border border-slate-800 focus-within:border-cyan-500/50 text-xs font-mono h-[34px] overflow-hidden relative">
+                      <InputWithVariables bind:value={param.value} placeholder="Value" variables={envVarDict} />
+                    </div>
+                    <button type="button" onclick={() => (paramsKV = paramsKV.filter((_, idx) => idx !== i))} class="p-2 text-slate-600 hover:text-red-400 bg-slate-950 border border-slate-800 rounded-lg hover:border-red-500/30 transition-all opacity-40 group-hover/kv:opacity-100">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onclick={() =>
-                      (paramsKV = paramsKV.filter((_, idx) => idx !== i))}
-                    class="p-2 text-slate-500 hover:text-red-500 bg-slate-900/50 hover:bg-red-950/30 border border-slate-700/50 rounded-lg transition-colors"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      ><line x1="18" y1="6" x2="6" y2="18"></line><line
-                        x1="6"
-                        y1="6"
-                        x2="18"
-                        y2="18"
-                      ></line></svg
-                    >
-                  </button>
-                </div>
-              {/each}
-              <button
-                type="button"
-                onclick={() =>
-                  (paramsKV = [...paramsKV, { key: "", value: "" }])}
-                class="text-xs font-medium text-cyan-400 hover:text-cyan-400 flex items-center gap-1 mt-1"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  ><line x1="12" y1="5" x2="12" y2="19"></line><line
-                    x1="5"
-                    y1="12"
-                    x2="19"
-                    y2="12"
-                  ></line></svg
-                > Add Parameter
-              </button>
+                {/each}
+                <button type="button" onclick={() => (paramsKV = [...paramsKV, { key: "", value: "" }])} class="text-[10px] font-bold text-cyan-500 hover:underline flex items-center gap-1.5 mt-2 transition-all">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  ADD PARAMETER
+                </button>
+              </div>
+            {/if}
+          </div>
+
+          <div class="bg-slate-800/20 rounded-2xl p-6 border border-slate-700/30">
+            <div class="flex items-center justify-between mb-4">
+              <h4 class="text-xs font-bold text-cyan-500/80 uppercase tracking-widest flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
+                Headers
+              </h4>
+              <div class="flex bg-slate-950 p-1 rounded-xl border border-slate-800 shadow-inner">
+                <button type="button" class="px-3 py-1 text-[10px] uppercase font-bold rounded-lg transition-all {headerMode === 'json' ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-500/20' : 'text-slate-500 hover:text-cyan-400'}" onclick={() => toggleHeaderMode("json")}>JSON</button>
+                <button type="button" class="px-3 py-1 text-[10px] uppercase font-bold rounded-lg transition-all {headerMode === 'kv' ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-500/20' : 'text-slate-500 hover:text-cyan-400'}" onclick={() => toggleHeaderMode("kv")}>Key-Value</button>
+              </div>
             </div>
-          {/if}
-        </div>
-      {/if}
-
-      <!-- Headers Toggle -->
-      <div>
-        <div class="flex items-center justify-between mb-2">
-          <label class="block text-sm font-semibold text-cyan-50">Headers</label
-          >
-          <div
-            class="flex bg-slate-800 p-0.5 rounded-lg border border-slate-700/50"
-          >
-            <button
-              type="button"
-              class="px-3 py-1 text-xs font-semibold rounded-md transition-all {headerMode ===
-              'json'
-                ? 'bg-slate-900/40 shadow-sm text-cyan-300'
-                : 'text-cyan-500/80 hover:text-cyan-50'}"
-              onclick={() => toggleHeaderMode("json")}>JSON</button
-            >
-            <button
-              type="button"
-              class="px-3 py-1 text-xs font-semibold rounded-md transition-all {headerMode ===
-              'kv'
-                ? 'bg-slate-900/40 shadow-sm text-cyan-300'
-                : 'text-cyan-500/80 hover:text-cyan-50'}"
-              onclick={() => toggleHeaderMode("kv")}>Key-Value</button
-            >
-          </div>
-        </div>
-        {#if headerMode === "json"}
-          <TextareaWithVariables
-            rows={2}
-            bind:value={apiForm.headers}
-            variables={envVarDict}
-            placeholder={`[\n  {"key": "Authorization", "value": "Bearer token"}\n]`}
-          />
-        {:else}
-          <div class="space-y-2">
-            {#each headersKV as hdr, i}
-              <div class="flex gap-2">
-                <input
-                  type="text"
-                  bind:value={hdr.key}
-                  placeholder="Header Key"
-                  class="flex-1 px-3 py-2 bg-slate-900/50 rounded-lg border border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-xs font-mono"
-                />
-                <div
-                  class="flex-1 bg-slate-900/50 rounded-lg border border-slate-700/50 focus-within:ring-2 focus-within:ring-blue-500/50 text-xs font-mono h-[34px] overflow-hidden relative"
-                >
-                  <InputWithVariables
-                    bind:value={hdr.value}
-                    placeholder="Value"
-                    variables={envVarDict}
-                  />
-                </div>
-                <button
-                  type="button"
-                  onclick={() =>
-                    (headersKV = headersKV.filter((_, idx) => idx !== i))}
-                  class="p-2 text-slate-500 hover:text-red-500 bg-slate-900/50 hover:bg-red-950/30 border border-slate-700/50 rounded-lg transition-colors"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    ><line x1="18" y1="6" x2="6" y2="18"></line><line
-                      x1="6"
-                      y1="6"
-                      x2="18"
-                      y2="18"
-                    ></line></svg
-                  >
+            {#if headerMode === "json"}
+              <TextareaWithVariables rows={3} bind:value={apiForm.headers} variables={envVarDict} placeholder={`[\n  {"key": "Authorization", "value": "Bearer token"}\n]`} />
+            {:else}
+              <div class="space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar pr-2">
+                {#each headersKV as hdr, i}
+                  <div class="flex gap-2 group/kv">
+                    <input type="text" bind:value={hdr.key} placeholder="Header Name" class="w-1/3 px-3 py-2 bg-slate-950 rounded-lg border border-slate-800 focus:border-cyan-500/50 outline-none text-xs font-mono" />
+                    <div class="flex-1 bg-slate-950 rounded-lg border border-slate-800 focus-within:border-cyan-500/50 text-xs font-mono h-[34px] overflow-hidden relative">
+                      <InputWithVariables bind:value={hdr.value} placeholder="Value" variables={envVarDict} />
+                    </div>
+                    <button type="button" onclick={() => (headersKV = headersKV.filter((_, idx) => idx !== i))} class="p-2 text-slate-600 hover:text-red-400 bg-slate-950 border border-slate-800 rounded-lg hover:border-red-500/30 transition-all opacity-40 group-hover/kv:opacity-100">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </button>
+                  </div>
+                {/each}
+                <button type="button" onclick={() => (headersKV = [...headersKV, { key: "", value: "" }])} class="text-[10px] font-bold text-cyan-500 hover:underline flex items-center gap-1.5 mt-2 transition-all">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  ADD HEADER
                 </button>
               </div>
-            {/each}
-            <button
-              type="button"
-              onclick={() =>
-                (headersKV = [...headersKV, { key: "", value: "" }])}
-              class="text-xs font-medium text-cyan-400 hover:text-cyan-400 flex items-center gap-1 mt-1"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                ><line x1="12" y1="5" x2="12" y2="19"></line><line
-                  x1="5"
-                  y1="12"
-                  x2="19"
-                  y2="12"
-                ></line></svg
-              > Add Header
-            </button>
-          </div>
-        {/if}
-      </div>
-
-      <!-- Body Toggle -->
-      <div class={apiForm.method === "GET" ? "opacity-50" : ""}>
-        <div class="flex items-center justify-between mb-2">
-          <label class="block text-sm font-semibold text-cyan-50"
-            >Body / Payload</label
-          >
-          <div
-            class="flex bg-slate-800 p-0.5 rounded-lg border border-slate-700/50"
-          >
-            <button
-              type="button"
-              disabled={apiForm.method === "GET"}
-              class="px-3 py-1 text-xs font-semibold rounded-md transition-all {bodyMode ===
-              'json'
-                ? 'bg-slate-900/40 shadow-sm text-cyan-300'
-                : 'text-cyan-500/80 hover:text-cyan-50'} disabled:cursor-not-allowed"
-              onclick={() => toggleBodyMode("json")}>JSON</button
-            >
-            <button
-              type="button"
-              disabled={apiForm.method === "GET"}
-              class="px-3 py-1 text-xs font-semibold rounded-md transition-all {bodyMode ===
-              'kv'
-                ? 'bg-slate-900/40 shadow-sm text-cyan-300'
-                : 'text-cyan-500/80 hover:text-cyan-50'} disabled:cursor-not-allowed"
-              onclick={() => toggleBodyMode("kv")}>Key-Value</button
-            >
+            {/if}
           </div>
         </div>
-        {#if bodyMode === "json"}
-          <TextareaWithVariables
-            rows={3}
-            bind:value={apiForm.body}
-            variables={envVarDict}
-            disabled={apiForm.method === "GET"}
-            placeholder={`{ "key": "value" }`}
-          />
-        {:else}
-          <div class="space-y-2">
-            {#each bodyKV as bdy, i}
-              <div class="flex gap-2">
-                <input
-                  type="text"
-                  bind:value={bdy.key}
-                  disabled={apiForm.method === "GET"}
-                  placeholder="Body Key"
-                  class="flex-1 px-3 py-2 bg-slate-900/50 rounded-lg border border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-xs font-mono disabled:cursor-not-allowed"
-                />
-                <div
-                  class="flex-1 bg-slate-900/50 rounded-lg border border-slate-700/50 focus-within:ring-2 focus-within:ring-blue-500/50 text-xs font-mono h-[34px] overflow-hidden relative {apiForm.method ===
-                  'GET'
-                    ? 'opacity-50 cursor-not-allowed hidden'
-                    : ''}"
-                >
-                  <InputWithVariables
-                    bind:value={bdy.value}
-                    disabled={apiForm.method === "GET"}
-                    placeholder="Value"
-                    variables={envVarDict}
-                  />
-                </div>
-                <!-- Fallback input when GET mode triggers disabling -->
-                <input
-                  type="text"
-                  bind:value={bdy.value}
-                  disabled={true}
-                  placeholder="Value"
-                  class="flex-1 px-3 py-2 bg-slate-900/50 rounded-lg border border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-xs font-mono disabled:cursor-not-allowed {apiForm.method !==
-                  'GET'
-                    ? 'hidden'
-                    : ''}"
-                />
-                <button
-                  type="button"
-                  disabled={apiForm.method === "GET"}
-                  onclick={() =>
-                    (bodyKV = bodyKV.filter((_, idx) => idx !== i))}
-                  class="p-2 text-slate-500 hover:text-red-500 bg-slate-900/50 hover:bg-red-950/30 border border-slate-700/50 rounded-lg transition-colors disabled:cursor-not-allowed disabled:hover:bg-slate-900/50 disabled:hover:text-slate-500"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    ><line x1="18" y1="6" x2="6" y2="18"></line><line
-                      x1="6"
-                      y1="6"
-                      x2="18"
-                      y2="18"
-                    ></line></svg
-                  >
+
+        <!-- Right Column: Body & Expected Status -->
+        <div class="space-y-6">
+          <div class="bg-slate-800/20 rounded-2xl p-6 border border-slate-700/30 {apiForm.method === 'GET' ? 'opacity-40 grayscale pointer-events-none' : ''}">
+            <div class="flex items-center justify-between mb-4">
+              <h4 class="text-xs font-bold text-cyan-500/80 uppercase tracking-widest flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                Request Body
+              </h4>
+              <div class="flex bg-slate-950 p-1 rounded-xl border border-slate-800 shadow-inner">
+                <button type="button" class="px-3 py-1 text-[10px] uppercase font-bold rounded-lg transition-all {bodyMode === 'json' ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-500/20' : 'text-slate-500 hover:text-cyan-400'}" onclick={() => toggleBodyMode("json")}>JSON</button>
+                <button type="button" class="px-3 py-1 text-[10px] uppercase font-bold rounded-lg transition-all {bodyMode === 'kv' ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-500/20' : 'text-slate-500 hover:text-cyan-400'}" onclick={() => toggleBodyMode("kv")}>Key-Value</button>
+              </div>
+            </div>
+            {#if bodyMode === "json"}
+              <TextareaWithVariables rows={7} bind:value={apiForm.body} variables={envVarDict} disabled={apiForm.method === "GET"} placeholder={`{ "key": "value" }`} />
+            {:else}
+              <div class="space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar pr-2">
+                {#each bodyKV as bdy, i}
+                  <div class="flex gap-2 group/kv">
+                    <input type="text" bind:value={bdy.key} disabled={apiForm.method === 'GET'} placeholder="Key" class="w-1/3 px-3 py-2 bg-slate-950 rounded-lg border border-slate-800 focus:border-cyan-500/50 outline-none text-xs font-mono" />
+                    <div class="flex-1 bg-slate-950 rounded-lg border border-slate-800 focus-within:border-cyan-500/50 text-xs font-mono h-[34px] overflow-hidden relative">
+                      <InputWithVariables bind:value={bdy.value} disabled={apiForm.method === 'GET'} placeholder="Value" variables={envVarDict} />
+                    </div>
+                    <button type="button" onclick={() => (bodyKV = bodyKV.filter((_, idx) => idx !== i))} class="p-2 text-slate-600 hover:text-red-400 bg-slate-950 border border-slate-800 rounded-lg hover:border-red-500/30 transition-all opacity-40 group-hover/kv:opacity-100">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </button>
+                  </div>
+                {/each}
+                <button type="button" onclick={() => (bodyKV = [...bodyKV, { key: "", value: "" }])} class="text-[10px] font-bold text-cyan-500 hover:underline flex items-center gap-1.5 mt-2 transition-all">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  ADD BODY FIELD
                 </button>
               </div>
-            {/each}
-            <button
-              type="button"
-              disabled={apiForm.method === "GET"}
-              onclick={() => (bodyKV = [...bodyKV, { key: "", value: "" }])}
-              class="text-xs font-medium text-cyan-400 hover:text-cyan-400 flex items-center gap-1 mt-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-cyan-400"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                ><line x1="12" y1="5" x2="12" y2="19"></line><line
-                  x1="5"
-                  y1="12"
-                  x2="19"
-                  y2="12"
-                ></line></svg
-              > Add Body Field
-            </button>
+            {/if}
+            {#if apiForm.method === 'GET'}
+              <p class="text-[10px] text-amber-500/80 mt-2 italic font-medium">Body is not supported for GET requests</p>
+            {/if}
           </div>
-        {/if}
-        {#if apiForm.method === "GET"}
-          <p class="text-xs text-orange-500 mt-1">
-            Request body is disabled for GET requests.
-          </p>
-        {/if}
+
+          <div class="grid grid-cols-2 gap-4 bg-slate-800/20 rounded-2xl p-6 border border-slate-700/30">
+            <div>
+              <label for="api_expected_status" class="block text-xs font-bold text-slate-400 uppercase mb-2">Expected Status</label>
+              <input id="api_expected_status" type="number" bind:value={apiForm.expected_status_code} required class="w-full px-4 py-2 bg-slate-950 border border-slate-700/50 rounded-xl focus:ring-2 focus:ring-emerald-500/30 outline-none text-sm font-bold text-emerald-400" />
+            </div>
+            <div>
+              <label for="api_interval" class="block text-xs font-bold text-slate-400 uppercase mb-2">Interval (SEC)</label>
+              <input id="api_interval" type="number" bind:value={apiForm.interval} required class="w-full px-4 py-2 bg-slate-950 border border-slate-700/50 rounded-xl focus:ring-2 focus:ring-indigo-500/30 outline-none text-sm font-bold text-indigo-400" />
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div class="w-full md:w-1/2">
-        <label
-          for="api_expected_status"
-          class="block text-sm font-semibold text-cyan-50 mb-1"
-          >Expected HTTP Status Code</label
-        >
-        <input
-          id="api_expected_status"
-          type="number"
-          min="100"
-          max="599"
-          bind:value={apiForm.expected_status_code}
-          required
-          class="w-full px-4 py-2 bg-slate-900/50 rounded-lg border border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all text-sm font-mono"
-        />
+      <!-- Section 3: Response Extraction Script (JS) -->
+      <div class="bg-slate-800/30 rounded-2xl p-6 border border-cyan-500/20 shadow-[0_0_20px_rgba(6,182,212,0.05)]">
+        <div class="flex items-center justify-between mb-4">
+          <h4 class="text-xs font-bold text-cyan-400 uppercase tracking-widest flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+            Post-Response Script (JavaScript)
+          </h4>
+          <span class="text-[10px] bg-cyan-950/40 text-cyan-500 px-3 py-1 rounded-full border border-cyan-500/30 font-bold">BETA</span>
+        </div>
+        <p class="text-[10px] text-slate-500 mb-3 italic">
+          Use JavaScript to extract data from the response and update Environment Variables. 
+          Use <code>pm.environment.set("key", "value")</code> or <code>setEnv("key", "value")</code>.
+          The <code>response</code> object is available with <code>body</code>, <code>status</code>, and <code>headers</code>.
+        </p>
+        <textarea 
+          bind:value={apiForm.response_script} 
+          rows={6}
+          spellcheck={false}
+          class="w-full font-mono text-xs px-4 py-3 bg-slate-950 rounded-xl border border-slate-800 focus:border-cyan-500/50 outline-none resize-none transition-all placeholder:text-slate-700 leading-relaxed shadow-inner"
+          placeholder={`// Example: Extract token from JSON\nconst data = JSON.parse(response.body);\nif (data.token) {\n    pm.environment.set("AUTH_TOKEN", data.token);\n    console.log("Token updated!");\n}`}
+        ></textarea>
       </div>
     </div>
 
-    <div class="pb-12"></div>
-
-    <div
-      class="pt-3 flex justify-end gap-3 border-t border-slate-800 sticky bottom-0 bg-slate-900/40 z-10 -mx-6 px-6 -mb-6 pb-4 mt-2 backdrop-blur-md"
-    >
-      <button
-        type="button"
-        onclick={() => (showAddApiModal = false)}
-        class="px-4 py-2 text-xs rounded-xl font-semibold text-slate-500 bg-slate-800 hover:bg-slate-700 transition-colors"
-        >Cancel</button
-      >
-      <button
-        type="submit"
-        class="px-4 py-2 text-xs rounded-xl font-semibold text-white bg-cyan-600 hover:bg-cyan-700 transition-colors shadow-sm shadow-cyan-500/20"
-        >Save Endpoint</button
-      >
+    <!-- Modal Footer -->
+    <div class="flex justify-end gap-3 p-6 bg-slate-900 border-t border-slate-700/50 sticky bottom-0 z-10">
+      <button type="button" onclick={() => (showAddApiModal = false)} class="px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-400 hover:text-white transition-colors">Cancel</button>
+      <button type="submit" class="px-8 py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-cyan-900/40 flex items-center gap-2">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+        Save Endpoint
+      </button>
     </div>
   </form>
 </Modal>
@@ -2397,460 +2148,133 @@
 <Modal
   bind:open={showEditApiModal}
   title="Edit API Endpoint"
-  maxWidth="max-w-2xl"
+  size="full"
 >
-  <form onsubmit={(e) => { e.preventDefault(); handleEditApiSubmit(); }} class="space-y-4">
-    <div
-      class="grid grid-cols-1 md:grid-cols-2 gap-4 border-b border-slate-800 pb-4"
-    >
-      <div class="md:col-span-1">
-        <label
-          for="api_folder_edit"
-          class="block text-sm font-semibold text-cyan-50 mb-1"
-          >Folder Name (Optional)</label
-        >
-        <input
-          id="api_folder_edit"
-          type="text"
-          bind:value={apiForm.folder}
-          class="w-full px-4 py-2 bg-slate-900/50 rounded-lg border border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all text-sm"
-          placeholder="e.g. Authentication"
-        />
-      </div>
-
-      <div class="md:col-span-1">
-        <label
-          for="api_name_edit"
-          class="block text-sm font-semibold text-cyan-50 mb-1"
-          >Endpoint Name</label
-        >
-        <input
-          id="api_name_edit"
-          type="text"
-          bind:value={apiForm.name}
-          required
-          class="w-full px-4 py-2 bg-slate-900/50 rounded-lg border border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all text-sm"
-          placeholder="e.g. Fetch User Data"
-        />
-      </div>
-
-      <div class="md:col-span-1">
-        <label
-          for="api_method_edit"
-          class="block text-sm font-semibold text-cyan-50 mb-1">Method</label
-        >
-        <select
-          id="api_method_edit"
-          bind:value={apiForm.method}
-          class="w-full px-4 py-2 bg-slate-900/50 rounded-lg border border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all text-sm font-medium"
-        >
-          <option value="GET">GET</option>
-          <option value="POST">POST</option>
-          <option value="PUT">PUT</option>
-          <option value="DELETE">DELETE</option>
-          <option value="PATCH">PATCH</option>
-        </select>
-      </div>
-
-      <div class="md:col-span-2">
-        <label
-          for="api_url_edit"
-          class="block text-sm font-semibold text-cyan-50 mb-1"
-          >Request URL</label
-        >
-        <div class="flex">
-          <span
-            class="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-slate-700/50 bg-slate-800 text-cyan-500/80 text-sm font-medium"
-            >URL</span
-          >
-          <div
-            class="flex-1 w-full bg-slate-900/50 rounded-r-lg border border-slate-700/50 focus-within:ring-2 focus-within:ring-blue-500/50 transition-all text-sm overflow-hidden h-[38px] relative"
-          >
-            <InputWithVariables
-              bind:value={apiForm.url}
-              placeholder="&#123;&#123;base_url&#125;&#125;/api/v1/users"
-              required={true}
-              variables={envVarDict}
-              onpaste={handleUrlPaste}
-            />
+  <form onsubmit={(e) => { e.preventDefault(); handleEditApiSubmit(); }} class="flex flex-col h-full bg-slate-900/10">
+    <div class="flex-1 overflow-y-auto px-1 pt-2 space-y-6 custom-scrollbar pb-10">
+      <!-- Section 1: Basic Information -->
+      <div class="bg-slate-800/20 rounded-2xl p-6 border border-slate-700/30">
+        <h4 class="text-xs font-bold text-cyan-500/80 uppercase tracking-widest mb-4 flex items-center gap-2">
+          Basic Configuration (Editing)
+        </h4>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div class="md:col-span-1">
+            <label for="api_folder_edit" class="block text-xs font-bold text-slate-400 uppercase mb-2">Folder</label>
+            <input id="api_folder_edit" type="text" bind:value={apiForm.folder} class="w-full px-4 py-2.5 bg-slate-950 border border-slate-700/50 rounded-xl outline-none text-sm font-medium" />
+          </div>
+          <div class="md:col-span-2">
+            <label for="api_name_edit" class="block text-xs font-bold text-slate-400 uppercase mb-2">Name</label>
+            <input id="api_name_edit" type="text" bind:value={apiForm.name} required class="w-full px-4 py-2.5 bg-slate-950 border border-slate-700/50 rounded-xl outline-none text-sm font-medium" />
+          </div>
+          <div class="md:col-span-1">
+            <label for="api_method_edit" class="block text-xs font-bold text-slate-400 uppercase mb-2">Method</label>
+            <select id="api_method_edit" bind:value={apiForm.method} class="w-full px-4 py-2.5 bg-slate-950 border border-slate-700/50 rounded-xl outline-none text-sm font-bold text-cyan-400 uppercase">
+              <optgroup label="Standard" class="bg-slate-950">
+                <option value="GET">GET</option><option value="POST">POST</option><option value="PUT">PUT</option><option value="PATCH">PATCH</option><option value="DELETE">DELETE</option>
+              </optgroup>
+            </select>
+          </div>
+          <div class="md:col-span-4">
+            <label for="api_url_edit" class="block text-xs font-bold text-slate-400 uppercase mb-2">URL</label>
+            <div class="flex group bg-slate-950 rounded-xl border border-slate-700/50 focus-within:ring-2 focus-within:ring-cyan-500/30 text-sm overflow-hidden h-[42px] relative">
+              <InputWithVariables bind:value={apiForm.url} variables={envVarDict} onpaste={handleUrlPaste} />
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <div class="space-y-4">
-      <!-- Parameters Toggle (Only on GET/PUT/DELETE) -->
-      {#if ["GET", "PUT", "DELETE"].includes(apiForm.method)}
-        <div>
-          <div class="flex items-center justify-between mb-2">
-            <label class="block text-sm font-semibold text-cyan-50"
-              >Query Parameters</label
-            >
-            <div
-              class="flex bg-slate-800 p-0.5 rounded-lg border border-slate-700/50"
-            >
-              <button
-                type="button"
-                class="px-3 py-1 text-xs font-semibold rounded-md transition-all {paramMode ===
-                'json'
-                  ? 'bg-slate-900/40 shadow-sm text-cyan-300'
-                  : 'text-cyan-500/80 hover:text-cyan-50'}"
-                onclick={() => toggleParamMode("json")}>JSON</button
-              >
-              <button
-                type="button"
-                class="px-3 py-1 text-xs font-semibold rounded-md transition-all {paramMode ===
-                'kv'
-                  ? 'bg-slate-900/40 shadow-sm text-cyan-300'
-                  : 'text-cyan-500/80 hover:text-cyan-50'}"
-                onclick={() => toggleParamMode("kv")}>Key-Value</button
-              >
+      <!-- Section 2: Params, Headers, Body -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="space-y-6">
+          <div class="bg-slate-800/20 rounded-2xl p-6 border border-slate-700/30">
+            <div class="flex items-center justify-between mb-4">
+              <h4 class="text-xs font-bold text-cyan-500/80 uppercase tracking-widest">Query Parameters</h4>
+              <div class="flex bg-slate-950 p-1 rounded-xl">
+                <button type="button" class="px-3 py-1 text-[10px] font-bold rounded-lg {paramMode === 'json' ? 'bg-cyan-600 text-white' : 'text-slate-500'}" onclick={() => toggleParamMode("json")}>JSON</button>
+                <button type="button" class="px-3 py-1 text-[10px] font-bold rounded-lg {paramMode === 'kv' ? 'bg-cyan-600 text-white' : 'text-slate-500'}" onclick={() => toggleParamMode("kv")}>KV</button>
+              </div>
             </div>
-          </div>
-          {#if paramMode === "json"}
-            <TextareaWithVariables
-              rows={2}
-              bind:value={apiForm.parameters}
-              variables={envVarDict}
-              placeholder={`[\n  {"key": "search", "value": "keyword"}\n]`}
-            />
-          {:else}
-            <div class="space-y-2">
-              {#each paramsKV as param, i}
-                <div class="flex gap-2">
-                  <input
-                    type="text"
-                    bind:value={param.key}
-                    placeholder="Key"
-                    class="flex-1 px-3 py-2 bg-slate-900/50 rounded-lg border border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-xs font-mono"
-                  />
-                  <div
-                    class="flex-1 bg-slate-900/50 rounded-lg border border-slate-700/50 focus-within:ring-2 focus-within:ring-blue-500/50 text-xs font-mono h-[34px] overflow-hidden relative"
-                  >
-                    <InputWithVariables
-                      bind:value={param.value}
-                      placeholder="Value"
-                      variables={envVarDict}
-                    />
+            {#if paramMode === "json"}
+              <TextareaWithVariables rows={3} bind:value={apiForm.parameters} variables={envVarDict} />
+            {:else}
+              <div class="space-y-2 max-h-[200px] overflow-y-auto">
+                {#each paramsKV as param, i}
+                  <div class="flex gap-2">
+                    <input type="text" bind:value={param.key} class="w-1/3 px-3 py-2 bg-slate-950 rounded-lg border border-slate-800 text-xs font-mono" />
+                    <div class="flex-1 bg-slate-950 rounded-lg border border-slate-800 text-xs font-mono h-[34px] overflow-hidden relative">
+                      <InputWithVariables bind:value={param.value} variables={envVarDict} />
+                    </div>
+                    <button type="button" onclick={() => (paramsKV = paramsKV.filter((_, idx) => idx !== i))} class="p-2 text-slate-600 hover:text-red-400"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
                   </div>
-                  <button
-                    type="button"
-                    onclick={() =>
-                      (paramsKV = paramsKV.filter((_, idx) => idx !== i))}
-                    class="p-2 text-slate-500 hover:text-red-500 bg-slate-900/50 hover:bg-red-950/30 border border-slate-700/50 rounded-lg transition-colors"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      ><line x1="18" y1="6" x2="6" y2="18"></line><line
-                        x1="6"
-                        y1="6"
-                        x2="18"
-                        y2="18"
-                      ></line></svg
-                    >
-                  </button>
-                </div>
-              {/each}
-              <button
-                type="button"
-                onclick={() =>
-                  (paramsKV = [...paramsKV, { key: "", value: "" }])}
-                class="text-xs font-medium text-cyan-400 hover:text-cyan-400 flex items-center gap-1 mt-1"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  ><line x1="12" y1="5" x2="12" y2="19"></line><line
-                    x1="5"
-                    y1="12"
-                    x2="19"
-                    y2="12"
-                  ></line></svg
-                > Add Parameter
-              </button>
+                {/each}
+                <button type="button" onclick={() => (paramsKV = [...paramsKV, { key: "", value: "" }])} class="text-[10px] font-bold text-cyan-500 mt-2">+ ADD PARAM</button>
+              </div>
+            {/if}
+          </div>
+
+          <div class="bg-slate-800/20 rounded-2xl p-6 border border-slate-700/30">
+            <h4 class="text-xs font-bold text-cyan-500/80 uppercase tracking-widest mb-4">Headers</h4>
+            {#if headerMode === "json"}
+              <TextareaWithVariables rows={3} bind:value={apiForm.headers} variables={envVarDict} />
+            {:else}
+              <div class="space-y-2 max-h-[200px] overflow-y-auto">
+                {#each headersKV as hdr, i}
+                  <div class="flex gap-2">
+                    <input type="text" bind:value={hdr.key} class="w-1/3 px-3 py-2 bg-slate-950 rounded-lg border border-slate-800 text-xs font-mono" />
+                    <div class="flex-1 bg-slate-950 rounded-lg border border-slate-800 text-xs font-mono h-[34px] overflow-hidden relative">
+                      <InputWithVariables bind:value={hdr.value} variables={envVarDict} />
+                    </div>
+                    <button type="button" onclick={() => (headersKV = headersKV.filter((_, idx) => idx !== i))} class="p-2 text-slate-600 hover:text-red-400"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+                  </div>
+                {/each}
+                <button type="button" onclick={() => (headersKV = [...headersKV, { key: "", value: "" }])} class="text-[10px] font-bold text-cyan-500 mt-2">+ ADD HEADER</button>
+              </div>
+            {/if}
+          </div>
+        </div>
+
+        <div class="space-y-6">
+          <div class="bg-slate-800/20 rounded-2xl p-6 border border-slate-700/30 {apiForm.method === 'GET' ? 'opacity-40 grayscale pointer-events-none' : ''}">
+            <h4 class="text-xs font-bold text-cyan-500/80 uppercase tracking-widest mb-4">Body</h4>
+            {#if bodyMode === "json"}
+              <TextareaWithVariables rows={7} bind:value={apiForm.body} variables={envVarDict} disabled={apiForm.method === "GET"} />
+            {:else}
+              <div class="space-y-2 max-h-[300px] overflow-y-auto">
+                {#each bodyKV as bdy, i}
+                  <div class="flex gap-2">
+                    <input type="text" bind:value={bdy.key} class="w-1/3 px-3 py-2 bg-slate-950 rounded-lg border border-slate-800 text-xs font-mono" />
+                    <div class="flex-1 bg-slate-950 rounded-lg border border-slate-800 text-xs font-mono h-[34px] overflow-hidden relative"><InputWithVariables bind:value={bdy.value} variables={envVarDict} /></div>
+                    <button type="button" onclick={() => (bodyKV = bodyKV.filter((_, idx) => idx !== i))} class="p-2 text-slate-600 hover:text-red-400"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+                  </div>
+                {/each}
+                <button type="button" onclick={() => (bodyKV = [...bodyKV, { key: "", value: "" }])} class="text-[10px] font-bold text-cyan-500 mt-2">+ ADD FIELD</button>
+              </div>
+            {/if}
+          </div>
+
+          <div class="grid grid-cols-2 gap-4 bg-slate-800/20 rounded-2xl p-6 border border-slate-700/30">
+            <div>
+              <label for="api_expected_status_edit" class="block text-xs font-bold text-slate-400 uppercase mb-2">Status</label>
+              <input id="api_expected_status_edit" type="number" bind:value={apiForm.expected_status_code} class="w-full px-4 py-2 bg-slate-950 border border-slate-700 rounded-xl text-emerald-400 font-bold" />
             </div>
-          {/if}
-        </div>
-      {/if}
-
-      <!-- Headers Toggle -->
-      <div>
-        <div class="flex items-center justify-between mb-2">
-          <label class="block text-sm font-semibold text-cyan-50">Headers</label
-          >
-          <div
-            class="flex bg-slate-800 p-0.5 rounded-lg border border-slate-700/50"
-          >
-            <button
-              type="button"
-              class="px-3 py-1 text-xs font-semibold rounded-md transition-all {headerMode ===
-              'json'
-                ? 'bg-slate-900/40 shadow-sm text-cyan-300'
-                : 'text-cyan-500/80 hover:text-cyan-50'}"
-              onclick={() => toggleHeaderMode("json")}>JSON</button
-            >
-            <button
-              type="button"
-              class="px-3 py-1 text-xs font-semibold rounded-md transition-all {headerMode ===
-              'kv'
-                ? 'bg-slate-900/40 shadow-sm text-cyan-300'
-                : 'text-cyan-500/80 hover:text-cyan-50'}"
-              onclick={() => toggleHeaderMode("kv")}>Key-Value</button
-            >
+            <div>
+              <label for="api_interval_edit" class="block text-xs font-bold text-slate-400 uppercase mb-2">Interval</label>
+              <input id="api_interval_edit" type="number" bind:value={apiForm.interval} class="w-full px-4 py-2 bg-slate-950 border border-slate-700 rounded-xl text-indigo-400 font-bold" />
+            </div>
           </div>
         </div>
-        {#if headerMode === "json"}
-          <TextareaWithVariables
-            rows={2}
-            bind:value={apiForm.headers}
-            variables={envVarDict}
-            placeholder={`[\n  {"key": "Authorization", "value": "Bearer token"}\n]`}
-          />
-        {:else}
-          <div class="space-y-2">
-            {#each headersKV as hdr, i}
-              <div class="flex gap-2">
-                <input
-                  type="text"
-                  bind:value={hdr.key}
-                  placeholder="Header Key"
-                  class="flex-1 px-3 py-2 bg-slate-900/50 rounded-lg border border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-xs font-mono"
-                />
-                <div
-                  class="flex-1 bg-slate-900/50 rounded-lg border border-slate-700/50 focus-within:ring-2 focus-within:ring-blue-500/50 text-xs font-mono h-[34px] overflow-hidden relative"
-                >
-                  <InputWithVariables
-                    bind:value={hdr.value}
-                    placeholder="Value"
-                    variables={envVarDict}
-                  />
-                </div>
-                <button
-                  type="button"
-                  onclick={() =>
-                    (headersKV = headersKV.filter((_, idx) => idx !== i))}
-                  class="p-2 text-slate-500 hover:text-red-500 bg-slate-900/50 hover:bg-red-950/30 border border-slate-700/50 rounded-lg transition-colors"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    ><line x1="18" y1="6" x2="6" y2="18"></line><line
-                      x1="6"
-                      y1="6"
-                      x2="18"
-                      y2="18"
-                    ></line></svg
-                  >
-                </button>
-              </div>
-            {/each}
-            <button
-              type="button"
-              onclick={() =>
-                (headersKV = [...headersKV, { key: "", value: "" }])}
-              class="text-xs font-medium text-cyan-400 hover:text-cyan-400 flex items-center gap-1 mt-1"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                ><line x1="12" y1="5" x2="12" y2="19"></line><line
-                  x1="5"
-                  y1="12"
-                  x2="19"
-                  y2="12"
-                ></line></svg
-              > Add Header
-            </button>
-          </div>
-        {/if}
       </div>
 
-      <!-- Body Toggle -->
-      <div class={apiForm.method === "GET" ? "opacity-50" : ""}>
-        <div class="flex items-center justify-between mb-2">
-          <label class="block text-sm font-semibold text-cyan-50"
-            >Body / Payload</label
-          >
-          <div
-            class="flex bg-slate-800 p-0.5 rounded-lg border border-slate-700/50"
-          >
-            <button
-              type="button"
-              disabled={apiForm.method === "GET"}
-              class="px-3 py-1 text-xs font-semibold rounded-md transition-all {bodyMode ===
-              'json'
-                ? 'bg-slate-900/40 shadow-sm text-cyan-300'
-                : 'text-cyan-500/80 hover:text-cyan-50'} disabled:cursor-not-allowed"
-              onclick={() => toggleBodyMode("json")}>JSON</button
-            >
-            <button
-              type="button"
-              disabled={apiForm.method === "GET"}
-              class="px-3 py-1 text-xs font-semibold rounded-md transition-all {bodyMode ===
-              'kv'
-                ? 'bg-slate-900/40 shadow-sm text-cyan-300'
-                : 'text-cyan-500/80 hover:text-cyan-50'} disabled:cursor-not-allowed"
-              onclick={() => toggleBodyMode("kv")}>Key-Value</button
-            >
-          </div>
-        </div>
-        {#if bodyMode === "json"}
-          <textarea
-            rows="3"
-            bind:value={apiForm.body}
-            disabled={apiForm.method === "GET"}
-            class="w-full font-mono px-4 py-3 bg-slate-900/50 rounded-lg border border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all text-xs resize-y disabled:cursor-not-allowed"
-            placeholder={`{ "key": "value" }`}
-          ></textarea>
-        {:else}
-          <div class="space-y-2">
-            {#each bodyKV as bdy, i}
-              <div class="flex gap-2">
-                <input
-                  type="text"
-                  bind:value={bdy.key}
-                  disabled={apiForm.method === "GET"}
-                  placeholder="Body Key"
-                  class="flex-1 px-3 py-2 bg-slate-900/50 rounded-lg border border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-xs font-mono disabled:cursor-not-allowed"
-                />
-                <div
-                  class="flex-1 bg-slate-900/50 rounded-lg border border-slate-700/50 focus-within:ring-2 focus-within:ring-blue-500/50 text-xs font-mono h-[34px] overflow-hidden relative {apiForm.method ===
-                  'GET'
-                    ? 'opacity-50 cursor-not-allowed hidden'
-                    : ''}"
-                >
-                  <InputWithVariables
-                    bind:value={bdy.value}
-                    disabled={apiForm.method === "GET"}
-                    placeholder="Value"
-                    variables={envVarDict}
-                  />
-                </div>
-                <!-- Fallback input when GET mode triggers disabling -->
-                <input
-                  type="text"
-                  bind:value={bdy.value}
-                  disabled={true}
-                  placeholder="Value"
-                  class="flex-1 px-3 py-2 bg-slate-900/50 rounded-lg border border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-xs font-mono disabled:cursor-not-allowed {apiForm.method !==
-                  'GET'
-                    ? 'hidden'
-                    : ''}"
-                />
-                <button
-                  type="button"
-                  disabled={apiForm.method === "GET"}
-                  onclick={() =>
-                    (bodyKV = bodyKV.filter((_, idx) => idx !== i))}
-                  class="p-2 text-slate-500 hover:text-red-500 bg-slate-900/50 hover:bg-red-950/30 border border-slate-700/50 rounded-lg transition-colors disabled:cursor-not-allowed disabled:hover:bg-slate-900/50 disabled:hover:text-slate-500"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    ><line x1="18" y1="6" x2="6" y2="18"></line><line
-                      x1="6"
-                      y1="6"
-                      x2="18"
-                      y2="18"
-                    ></line></svg
-                  >
-                </button>
-              </div>
-            {/each}
-            <button
-              type="button"
-              disabled={apiForm.method === "GET"}
-              onclick={() => (bodyKV = [...bodyKV, { key: "", value: "" }])}
-              class="text-xs font-medium text-cyan-400 hover:text-cyan-400 flex items-center gap-1 mt-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-cyan-400"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                ><line x1="12" y1="5" x2="12" y2="19"></line><line
-                  x1="5"
-                  y1="12"
-                  x2="19"
-                  y2="12"
-                ></line></svg
-              > Add Body Field
-            </button>
-          </div>
-        {/if}
-        {#if apiForm.method === "GET"}
-          <p class="text-xs text-orange-500 mt-1">
-            Request body is disabled for GET requests.
-          </p>
-        {/if}
-      </div>
-
-      <div class="w-full md:w-1/2">
-        <label
-          for="api_expected_status_edit"
-          class="block text-sm font-semibold text-cyan-50 mb-1"
-          >Expected HTTP Status Code</label
-        >
-        <input
-          id="api_expected_status_edit"
-          type="number"
-          min="100"
-          max="599"
-          bind:value={apiForm.expected_status_code}
-          required
-          class="w-full px-4 py-2 bg-slate-900/50 rounded-lg border border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all text-sm font-mono"
-        />
+      <!-- Section 3: Response Extraction Script -->
+      <div class="bg-slate-800/30 rounded-2xl p-6 border border-cyan-500/20">
+        <h4 class="text-xs font-bold text-cyan-400 uppercase tracking-widest mb-4">Post-Response Script (JavaScript)</h4>
+        <textarea bind:value={apiForm.response_script} rows={6} shadow-inner bg-slate-950 class="w-full font-mono text-xs px-4 py-3 bg-slate-950 rounded-xl border border-slate-800 outline-none" placeholder={`pm.environment.set("token", JSON.parse(response.body).token);`}></textarea>
       </div>
     </div>
 
-    <div class="pb-12"></div>
-
-    <div
-      class="pt-3 flex justify-end gap-3 border-t border-slate-800 sticky bottom-0 bg-slate-900/40 z-10 -mx-6 px-6 -mb-6 pb-4 mt-2 backdrop-blur-md"
-    >
-      <button
-        type="button"
-        onclick={() => (showEditApiModal = false)}
-        class="px-4 py-2 text-xs rounded-xl font-semibold text-slate-500 bg-slate-800 hover:bg-slate-700 transition-colors"
-        >Cancel</button
-      >
-      <button
-        type="submit"
-        class="px-4 py-2 text-xs rounded-xl font-semibold text-white bg-cyan-600 hover:bg-cyan-700 transition-colors shadow-sm shadow-cyan-500/20"
-        >Save Changes</button
-      >
+    <div class="flex justify-end gap-3 p-6 bg-slate-900 border-t border-slate-700/50 sticky bottom-0 z-10">
+      <button type="button" onclick={() => (showEditApiModal = false)} class="px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-500">Cancel</button>
+      <button type="submit" class="px-8 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-bold uppercase tracking-wider rounded-xl shadow-lg ring-1 ring-emerald-500/50">Save Changes</button>
     </div>
   </form>
 </Modal>
