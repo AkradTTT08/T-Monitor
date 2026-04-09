@@ -65,6 +65,9 @@ func setupRoutes(app *fiber.App) {
 		return c.JSON(fiber.Map{"status": "ok", "message": "API Monitoring Backend is running"})
 	})
 
+	// Public Routes (Unauthenticated)
+	api.Get("/public/status/:id", handlers.GetPublicProjectStatus)
+
 	// Auth Routes
 	auth := api.Group("/auth")
 	auth.Post("/register", handlers.Register)
@@ -142,8 +145,14 @@ func setupRoutes(app *fiber.App) {
 	protected.Get("/notifications/unread", handlers.GetNotifications)
 	protected.Put("/notifications/:id/read", handlers.MarkNotificationRead)
 
-	// AI Chat Route
+	// AI Routes
 	protected.Post("/ai/chat", handlers.ChatWithAI)
+	protected.Post("/ai/analyze-incident", handlers.AnalyzeIncident)
+
+	// Analytics Routes
+	protected.Get("/analytics/uptime", handlers.GetUptimeStats)
+	protected.Get("/analytics/latency-trend", handlers.GetLatencyTrend)
+	protected.Get("/analytics/incidents", handlers.GetIncidentTimeline)
 
 	// Admin User Routes
 	users := protected.Group("/users", middleware.AdminOnly())

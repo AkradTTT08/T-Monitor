@@ -71,6 +71,7 @@
     expected_status_code: 200,
     interval: 60,
     response_script: "",
+    recovery_script: "",
   };
   
   // API Search and Pagination State
@@ -639,6 +640,48 @@
   $: indeterminate =
     selectedApiIds.length > 0 && selectedApiIds.length < apis.length;
 
+  let isAnalyzingRCA = false;
+  async function analyzeIncident(logId: string) {
+    if (isAnalyzingRCA) return;
+    isAnalyzingRCA = true;
+    
+    Swal.fire({
+      title: 'AI is analyzing...',
+      text: 'Please wait while Gemini processes the error logs.',
+      allowOutsideClick: false,
+      background: '#0f172a',
+      color: '#f8fafc',
+      didOpen: () => { Swal.showLoading(); }
+    });
+
+    try {
+      const token = localStorage.getItem("monitor_token");
+      const res = await fetch(`${API_BASE_URL}/api/v1/ai/analyze-incident`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ log_id: logId })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        Swal.fire({
+          title: '<span class="text-indigo-400 font-bold flex items-center justify-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>AI Analysis (RCA)</span>',
+          html: `<pre style="white-space: pre-wrap; font-family: inherit; text-align: left; font-size: 14px; color: #cbd5e1; max-height: 60vh; overflow-y: auto;">${data.reason}</pre>`,
+          width: 800,
+          background: '#0f172a',
+          confirmButtonColor: '#6366f1'
+        });
+      } else {
+        systemAlert.fire('Failed', data.error || 'Failed to analyze incident', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      systemAlert.fire('Error', 'Network error occurred while contacting AI.', 'error');
+    } finally {
+      isAnalyzingRCA = false;
+    }
+  }
+
   function toggleAllSelection() {
     if (allSelected) {
       selectedApiIds = [];
@@ -713,6 +756,7 @@
       expected_status_code: 200,
       interval: 60,
       response_script: "",
+      recovery_script: "",
     };
     headerMode = "json";
     bodyMode = "json";
@@ -736,6 +780,7 @@
       expected_status_code: api.expected_status_code || 200,
       interval: api.interval || 60,
       response_script: api.response_script || "",
+      recovery_script: api.recovery_script || "",
     };
 
     // Parse into KV states
@@ -834,6 +879,7 @@
             interval: intervalSeconds,
             schedule_config: JSON.stringify(scheduleConfig),
             response_script: selectedApi.response_script || "",
+            recovery_script: selectedApi.recovery_script || "",
           }),
         },
       );
@@ -877,6 +923,7 @@
             expected_status_code: apiForm.expected_status_code,
             interval: apiForm.interval,
             response_script: apiForm.response_script,
+            recovery_script: apiForm.recovery_script,
           }),
         },
       );
@@ -924,12 +971,36 @@
   }
 
   function getStatusInfo(api: any, currentTime: Date) {
-    if (!api.paused_until) return { status: 'LIVE', detail: 'Monitoring' };
-    const pausedUntil = new Date(api.paused_until);
-    if (pausedUntil <= currentTime) return { status: 'LIVE', detail: 'Monitoring' };
+    let statusObj: any = { status: 'UNKNOWN', detail: 'No data', latency: 0, tls: null, securityScore: 0 };
+    
+    // Evaluate Logs for dynamic real-time data
+    if (api.logs && api.logs.length > 0) {
+      const latestLog = api.logs[0];
+      statusObj.status = latestLog.is_success ? 'ONLINE' : 'DOWN';
+      statusObj.latency = latestLog.response_time;
+      statusObj.detail = latestLog.is_success ? 'Healthy' : 'Failing';
 
+      if (latestLog.tls_status) {
+         try { statusObj.tls = JSON.parse(latestLog.tls_status); } catch(e){}
+      }
+      if (latestLog.security_headers) {
+         try {
+           const headers = JSON.parse(latestLog.security_headers);
+           let score = 0;
+           Object.values(headers).forEach(v => { if (v === 'Present') score += 25; });
+           statusObj.securityScore = score;
+         } catch(e){}
+      }
+    }
+
+    if (!api.paused_until) return statusObj;
+    const pausedUntil = new Date(api.paused_until);
+    if (pausedUntil <= currentTime) return statusObj;
+
+    statusObj.status = 'PAUSED';
     if (pausedUntil.getFullYear() > 9000) {
-      return { status: 'PAUSED', detail: 'Indefinite' };
+      statusObj.detail = 'Indefinite';
+      return statusObj;
     }
 
     const diffMs = pausedUntil.getTime() - currentTime.getTime();
@@ -938,15 +1009,15 @@
     
     if (diffMins < 60) {
       if (diffSecs < 60) {
-        return { status: 'PAUSED', detail: `${diffSecs}s remaining` };
+        statusObj.detail = `${diffSecs}s remaining`;
+      } else {
+        statusObj.detail = `${diffMins}m remaining`;
       }
-      return { status: 'PAUSED', detail: `${diffMins}m remaining` };
+    } else {
+      statusObj.detail = `until ${pausedUntil.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
     }
     
-    return { 
-      status: 'PAUSED', 
-      detail: `until ${pausedUntil.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` 
-    };
+    return statusObj;
   }
 
   function openPauseApiModal(api: any) {
@@ -1067,6 +1138,7 @@
             expected_status_code: apiForm.expected_status_code,
             interval: apiForm.interval,
             response_script: apiForm.response_script,
+            recovery_script: apiForm.recovery_script,
           }),
         },
       );
@@ -1143,6 +1215,8 @@
             name: project.name,
             description: project.description,
             environment_variables: JSON.stringify(envObj),
+            company_id: project.company_id,
+            cover_position: project.cover_position,
           }),
         },
       );
@@ -1498,6 +1572,7 @@
               <th class="p-3 md:p-4">URL</th>
               <th class="p-3 md:p-4">Expected</th>
               <th class="p-3 md:p-4">Status</th>
+              <th class="p-3 md:p-4">Security</th>
               <th class="p-3 md:p-4 text-right">Actions</th>
             </tr>
           </thead>
@@ -1513,7 +1588,7 @@
                 ondragleave={handleDragLeave}
                 ondrop={(e) => handleDrop(e, folderName, -1)}
               >
-                <td colspan="7" class="px-4 py-2">
+                <td colspan="8" class="px-4 py-2">
                   <div class="flex items-center justify-between">
                     <div
                       class="flex items-center gap-2 text-cyan-100 font-bold text-sm tracking-wide"
@@ -1647,24 +1722,72 @@
                   </td>
                   <td class="p-3 md:p-4">
                     <div class="flex flex-col gap-1">
-                      <span
-                        class="px-2 py-0.5 rounded border text-[9px] font-bold w-fit tracking-wider shadow-[0_0_5px_rgba(0,0,0,0.2)]
-                        {info.status === 'LIVE'
-                          ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-400'
-                          : 'bg-amber-950/40 border-amber-500/30 text-amber-400'}"
-                      >
-                        {info.status}
-                      </span>
+                      <div class="flex items-center gap-2">
+                        <span
+                          class="px-2 py-0.5 rounded border text-[9px] font-bold w-fit tracking-wider shadow-[0_0_5px_rgba(0,0,0,0.2)] flex items-center gap-1
+                          {info.status === 'ONLINE'
+                            ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-400'
+                            : info.status === 'DOWN' 
+                              ? 'bg-red-950/40 border-red-500/30 text-red-400'
+                              : info.status === 'PAUSED'
+                                ? 'bg-amber-950/40 border-amber-500/30 text-amber-400'
+                                : 'bg-slate-800/40 border-slate-600/30 text-slate-400'}"
+                        >
+                          {#if info.status === 'ONLINE'}
+                            <span class="relative flex h-2 w-2 mr-0.5">
+                              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                              <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                            </span>
+                          {/if}
+                          {info.status}
+                        </span>
+                        
+                        {#if info.latency > 0}
+                          <span class="text-[10px] font-mono text-cyan-400/80 tracking-tighter">
+                            {info.latency}ms
+                          </span>
+                        {/if}
+                      </div>
+
                       {#if info.detail}
-                        <span class="text-xs text-slate-400 font-medium italic lowercase">
+                        <span class="text-[10px] text-slate-500 font-medium italic lowercase">
                           {info.detail}
                         </span>
+                      {/if}
+                    </div>
+                  </td>
+                  
+                  <td class="p-3 md:p-4">
+                    <div class="flex flex-col gap-1 items-start">
+                      {#if info.securityScore > 0}
+                        <div class="flex items-center gap-1.5" title="Security Score">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-indigo-400"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                          <span class="text-[10px] font-bold {info.securityScore >= 75 ? 'text-emerald-400' : 'text-amber-400'}">{info.securityScore}/100</span>
+                        </div>
+                      {/if}
+                      {#if info.tls}
+                        <div class="flex items-center gap-1.5" title="SSL Certificate ({info.tls.issuer})">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-cyan-400"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                          <span class="text-[10px] font-medium {info.tls.valid ? 'text-cyan-300/80' : 'text-red-400'}">SSL {info.tls.valid ? 'Active' : 'Expired'}</span>
+                        </div>
+                      {/if}
+                      {#if !info.securityScore && !info.tls}
+                        <span class="text-[10px] text-slate-600 font-mono italic">N/A</span>
                       {/if}
                     </div>
                   </td>
                   <td
                     class="p-3 md:p-4 text-right flex items-center justify-end gap-1 sm:gap-2"
                   >
+                    {#if info.status === 'DOWN' && api.logs && api.logs.length > 0}
+                      <button
+                        onclick={() => analyzeIncident(api.logs[0].id)}
+                        class="text-indigo-400 hover:text-indigo-300 transition-colors p-1.5 rounded-lg hover:bg-slate-900 border border-transparent hover:border-indigo-500/30 hover:shadow-[0_0_10px_rgba(99,102,241,0.2)] animate-pulse"
+                        title="Ask AI to Analyze Root Cause"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+                      </button>
+                    {/if}
                     <button
                       onclick={() => openEditApiModal(api)}
                       class="text-cyan-500/80 hover:text-cyan-400 transition-colors p-1.5 rounded-lg hover:bg-slate-900 border border-transparent hover:border-cyan-500/30 hover:shadow-[0_0_10px_rgba(6,182,212,0.2)]"
@@ -2127,8 +2250,26 @@
           bind:value={apiForm.response_script} 
           rows={6}
           spellcheck={false}
-          class="w-full font-mono text-xs px-4 py-3 bg-slate-950 rounded-xl border border-slate-800 focus:border-cyan-500/50 outline-none resize-none transition-all placeholder:text-slate-700 leading-relaxed shadow-inner"
+          class="w-full font-mono text-xs px-4 py-3 bg-slate-950 rounded-xl border border-slate-800 focus:border-cyan-500/50 outline-none resize-none transition-all placeholder:text-slate-700 leading-relaxed shadow-inner mb-6"
           placeholder={`// Example: Extract token from JSON\nconst data = JSON.parse(response.body);\nif (data.token) {\n    pm.environment.set("AUTH_TOKEN", data.token);\n    console.log("Token updated!");\n}`}
+        ></textarea>
+
+        <div class="flex items-center justify-between mb-4">
+          <h4 class="text-xs font-bold text-amber-400 uppercase tracking-widest flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+            Auto-Recovery / Self-Healing Script
+          </h4>
+          <span class="text-[10px] bg-amber-950/40 text-amber-500 px-3 py-1 rounded-full border border-amber-500/30 font-bold">EXPERIMENTAL</span>
+        </div>
+        <p class="text-[10px] text-slate-500 mb-3 italic">
+          If the API fails (timeout or invalid status), this script runs before retrying. Use logic like <code>fetch</code> to refresh a token and <code>setEnv("KEY", "VAL")</code> to store it. The error message is available as <code>errorReason</code>.
+        </p>
+        <textarea 
+          bind:value={apiForm.recovery_script} 
+          rows={6}
+          spellcheck={false}
+          class="w-full font-mono text-xs px-4 py-3 bg-slate-950 rounded-xl border border-slate-800 focus:border-amber-500/50 outline-none resize-none transition-all placeholder:text-slate-700 leading-relaxed shadow-inner"
+          placeholder={`// Example: Refresh token logic\nconsole.log("API Failed because: " + errorReason);\n// perform a fetch call to refresh token...`}
         ></textarea>
       </div>
     </div>

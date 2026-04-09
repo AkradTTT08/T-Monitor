@@ -13,6 +13,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/monitor-api/backend/internal/database"
 	"github.com/monitor-api/backend/internal/models"
+	"gorm.io/gorm"
 )
 
 type APIInput struct {
@@ -28,6 +29,7 @@ type APIInput struct {
 	Interval           int    `json:"interval"`
 	ScheduleConfig     string      `json:"schedule_config"`
 	ResponseScript     string      `json:"response_script"`
+	RecoveryScript     string      `json:"recovery_script"`
 	OrderIndex         int         `json:"order_index"`
 }
 
@@ -72,6 +74,7 @@ func CreateAPI(c *fiber.Ctx) error {
 		Interval:           input.Interval,
 		ScheduleConfig:     input.ScheduleConfig,
 		ResponseScript:     input.ResponseScript,
+		RecoveryScript:     input.RecoveryScript,
 		OrderIndex:         input.OrderIndex,
 	}
 
@@ -153,7 +156,9 @@ func GetAPIs(c *fiber.Ctx) error {
 		query = query.Joins("JOIN projects ON projects.id = apis.project_id").Where("projects.user_id = ?", userID)
 	}
 
-	query.Order("folder ASC, order_index ASC").Find(&apis)
+	query.Preload("Logs", func(db *gorm.DB) *gorm.DB {
+		return db.Order("checked_at DESC").Limit(1)
+	}).Order("folder ASC, order_index ASC").Find(&apis)
 
 	return c.JSON(apis)
 }
@@ -198,6 +203,7 @@ func UpdateAPI(c *fiber.Ctx) error {
 	baseAPI.Interval = input.Interval
 	baseAPI.ScheduleConfig = input.ScheduleConfig
 	baseAPI.ResponseScript = input.ResponseScript
+	baseAPI.RecoveryScript = input.RecoveryScript
 	baseAPI.OrderIndex = input.OrderIndex
 
 	if err := database.DB.Save(&baseAPI).Error; err != nil {

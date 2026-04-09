@@ -11,6 +11,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/generative-ai-go/genai"
 	"github.com/monitor-api/backend/internal/database"
+	"github.com/monitor-api/backend/internal/models"
 	"google.golang.org/api/option"
 )
 
@@ -151,5 +152,78 @@ Use Thai language.
 
 	return c.JSON(fiber.Map{
 		"answer": finalAnswer,
+	})
+}
+
+// AnalyzeIncident uses Gemini to perform Root Cause Analysis on a failed API request
+func AnalyzeIncident(c *fiber.Ctx) error {
+	type AnalyzeRequest struct {
+		LogID string `json:"log_id"`
+	}
+
+	var req AnalyzeRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
+	}
+
+	// Fetch the log with its associated API
+	var logEntry models.MonitorLog
+	if err := database.DB.Preload("API").First(&logEntry, "id = ?", req.LogID).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Monitor log not found"})
+	}
+
+	// if log is success, early return
+	if logEntry.IsSuccess {
+		return c.JSON(fiber.Map{"reason": "ระบบทำงานปกติ 200 OK ไม่พบข้อผิดพลาดที่ต้องวิเคราะห์ครับ"})
+	}
+
+	apiKey := os.Getenv("GEMINI_API_KEY")
+	if apiKey == "" {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Gemini API key is not configured"})
+	}
+
+	ctx := context.Background()
+	client, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to connect to AI service"})
+	}
+	defer client.Close()
+
+	rcaModel := client.GenerativeModel("gemini-2.5-flash")
+	
+	prompt := fmt.Sprintf(`
+You are an expert Backend & DevOps Engineer. I need your help to perform a Root Cause Analysis (RCA) on an API failure.
+Here are the details of the failed request:
+
+API Endpoint: [%s] %s
+Expected Status Code: %d
+Actual Status Code: %d
+Error Message: %s
+Response Body:
+%s
+
+Please analyze this failure. Explain what likely went wrong and suggest 1-2 actionable steps to fix it.
+Format your response in Thai language, make it concise, easy to read, and polite. 
+Use Markdown lists for readability.
+`, 
+		logEntry.API.Method, logEntry.API.URL, 
+		logEntry.API.ExpectedStatusCode, logEntry.StatusCode, 
+		logEntry.ErrorMessage, logEntry.ResponseBody,
+	)
+
+	resp, err := rcaModel.GenerateContent(ctx, genai.Text(prompt))
+	if err != nil {
+		log.Printf("Failed to generate RCA from Gemini: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "AI failed to process the request"})
+	}
+
+	if len(resp.Candidates) == 0 || len(resp.Candidates[0].Content.Parts) == 0 {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "AI returned empty response"})
+	}
+
+	rcaAnswer := fmt.Sprintf("%v", resp.Candidates[0].Content.Parts[0])
+
+	return c.JSON(fiber.Map{
+		"reason": rcaAnswer,
 	})
 }

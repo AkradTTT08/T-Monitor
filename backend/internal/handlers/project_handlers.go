@@ -186,6 +186,12 @@ func UpdateProject(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
 	}
 
+	// Use a map to check which fields were actually provided in the request
+	var body map[string]interface{}
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
+	}
+
 	var project models.Project
 	query := database.DB
 	if role != "admin" {
@@ -196,21 +202,32 @@ func UpdateProject(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Project not found or unauthorized"})
 	}
 
-	// If not provided, default to empty JSON object
-	if input.EnvironmentVariables == "" {
-		input.EnvironmentVariables = "{}"
+	// Prepare update data only for fields present in the request
+	updateData := make(map[string]interface{})
+	
+	if _, ok := body["name"]; ok {
+		updateData["name"] = input.Name
 	}
-	// Use Updates with a map to only update specific fields, avoiding overwriting LogoURL/CoverImageURL
-	updateData := map[string]interface{}{
-		"name":                  input.Name,
-		"description":           input.Description,
-		"environment_variables": input.EnvironmentVariables,
-		"cover_position":        input.CoverPosition,
-		"company_id":            input.CompanyID,
+	if _, ok := body["description"]; ok {
+		updateData["description"] = input.Description
+	}
+	if _, ok := body["environment_variables"]; ok {
+		if input.EnvironmentVariables == "" {
+			input.EnvironmentVariables = "{}"
+		}
+		updateData["environment_variables"] = input.EnvironmentVariables
+	}
+	if _, ok := body["cover_position"]; ok {
+		updateData["cover_position"] = input.CoverPosition
+	}
+	if _, ok := body["company_id"]; ok {
+		updateData["company_id"] = input.CompanyID
 	}
 
-	if err := database.DB.Model(&project).Updates(updateData).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update project"})
+	if len(updateData) > 0 {
+		if err := database.DB.Model(&project).Updates(updateData).Error; err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update project"})
+		}
 	}
 
 	return c.JSON(project)

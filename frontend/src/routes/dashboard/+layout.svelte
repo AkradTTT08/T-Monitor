@@ -641,6 +641,34 @@
             {/if}
           </a>
 
+          <!-- Analytics Link — Level 3: requires Project -->
+          <a
+            href={hasProject ? `/dashboard/analytics?project_id=${selectedProjectId}` : '#'}
+            on:click={(e) => { isMobileMenuOpen = false; handleRequireProject(e); }}
+            title="Analytics"
+            class="w-full flex items-center group/navitem {isSidebarCollapsed
+              ? 'justify-center px-0'
+              : 'justify-between px-3'} py-2.5 rounded-xl text-sm font-semibold transition-all
+              {!hasProject
+                ? 'opacity-40 cursor-not-allowed border border-transparent text-slate-500'
+                : currentPath === '/dashboard/analytics'
+                  ? 'bg-indigo-900/30 border border-indigo-500/50 text-indigo-300 shadow-[0_0_15px_rgba(99,102,241,0.15)]'
+                  : 'text-slate-400 hover:bg-slate-800/80 hover:text-indigo-400 border border-transparent'}"
+          >
+            <div class="flex items-center gap-3">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                class="transition-colors {currentPath === '/dashboard/analytics' ? 'text-indigo-400' : 'text-slate-500 group-hover/navitem:text-indigo-400'}"
+                stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+              ><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
+              {#if !isSidebarCollapsed}<span>Analytics</span>{/if}
+            </div>
+            {#if !isSidebarCollapsed && !hasProject}
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-600 shrink-0">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+            {/if}
+          </a>
+
           <!-- Repair API Link — Level 3: requires Project -->
           <a
             href={hasProject ? `/dashboard/projects/${selectedProjectId}/repair` : '#'}

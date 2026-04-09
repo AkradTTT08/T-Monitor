@@ -21,7 +21,15 @@
     smtp_user: "",
     smtp_pass: "",
     enable_ticketing: false,
+    enable_webhook: false,
+    webhook_url: "",
+    webhook_secret: "",
   };
+
+  let publicStatusUrl = "";
+  onMount(() => {
+    publicStatusUrl = `${window.location.origin}/status/${projectId}`;
+  });
 
   onMount(() => {
     fetchNotificationSettings();
@@ -55,6 +63,9 @@
             smtp_user: data.smtp_user || "",
             smtp_pass: data.smtp_pass || "",
             enable_ticketing: data.enable_ticketing ?? false,
+            enable_webhook: data.enable_webhook ?? false,
+            webhook_url: data.webhook_url || "",
+            webhook_secret: data.webhook_secret || "",
           };
         }
       }
@@ -481,6 +492,103 @@
             >
           </div>
         </div>
+      </div>
+
+      <!-- Webhook Config -->
+      <div
+        class="border rounded-2xl p-5 transition-all {notifConfig.enable_webhook
+          ? 'bg-violet-950/30 border-violet-500/50 shadow-[0_0_15px_rgba(139,92,246,0.15)]'
+          : 'bg-slate-900/50 border-slate-700 hover:border-slate-500'}"
+      >
+        <label class="flex items-center gap-3 cursor-pointer mb-4">
+          <input
+            type="checkbox"
+            bind:checked={notifConfig.enable_webhook}
+            class="w-5 h-5 text-violet-500 bg-slate-900 rounded border-slate-600 focus:ring-violet-500/50 focus:ring-offset-slate-900 transition-all cursor-pointer appearance-none checked:bg-violet-500 checked:border-violet-500 relative before:content-[''] checked:before:absolute checked:before:inset-0 checked:before:flex checked:before:items-center checked:before:justify-center"
+          />
+          <div class="flex items-center gap-2">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              class="text-violet-400 {notifConfig.enable_webhook
+                ? 'drop-shadow-[0_0_8px_rgba(167,139,250,0.8)]'
+                : ''}"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              ><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg
+            >
+            <span
+              class="font-bold text-cyan-50 font-mono tracking-widest text-lg uppercase"
+              >GENERIC_WEBHOOK</span
+            >
+          </div>
+        </label>
+
+        {#if notifConfig.enable_webhook}
+          <div class="pl-8 fade-in space-y-3">
+            <div
+              class="bg-slate-900/80 p-4 rounded-xl border border-slate-700/50 shadow-inner"
+            >
+              <label
+                class="block text-[10px] font-bold text-slate-400 font-mono tracking-widest uppercase mb-2"
+                >WEBHOOK_URL</label
+              >
+              <input
+                type="url"
+                bind:value={notifConfig.webhook_url}
+                placeholder="HTTPS://YOUR-DOMAIN.COM/API/WEBHOOK"
+                class="w-full bg-slate-950/50 border border-slate-700 text-violet-100 rounded-lg focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/50 block p-3 outline-none transition-all font-mono text-sm tracking-wide placeholder:text-slate-600"
+              />
+            </div>
+            <div
+              class="bg-slate-900/80 p-4 rounded-xl border border-slate-700/50 shadow-inner"
+            >
+              <label
+                class="block text-[10px] font-bold text-slate-400 font-mono tracking-widest uppercase mb-2"
+                >WEBHOOK_SECRET_(FOR_HMAC_SIGNATURE)</label
+              >
+              <input
+                type="password"
+                bind:value={notifConfig.webhook_secret}
+                placeholder="OPTIONAL_SECRET"
+                class="w-full bg-slate-950/50 border border-slate-700 text-violet-100 rounded-lg focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/50 block p-3 outline-none transition-all font-mono text-sm tracking-wide placeholder:text-slate-600"
+              />
+            </div>
+          </div>
+        {/if}
+      </div>
+
+      <!-- Public Status Link Section -->
+      <div class="border rounded-2xl p-5 bg-slate-900/40 border-slate-800">
+        <div class="flex items-center gap-2 mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" class="text-slate-400" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            <span class="font-bold text-slate-400 font-mono tracking-widest text-xs uppercase">PUBLIC_STATUS_PAGE</span>
+        </div>
+        <div class="flex gap-2">
+            <input
+                type="text"
+                readonly
+                value={publicStatusUrl}
+                class="flex-1 bg-slate-950/50 border border-slate-700 text-slate-400 rounded-lg p-2.5 outline-none font-mono text-[10px]"
+            />
+            <button
+                on:click={() => {
+                  navigator.clipboard.writeText(publicStatusUrl);
+                  // Optional: trigger a success toast here
+                }}
+                class="px-4 py-2 bg-slate-800 text-cyan-400 rounded-lg border border-slate-700 hover:bg-slate-700 transition-colors text-[10px] font-bold font-mono tracking-widest uppercase"
+            >
+                COPY_URL
+            </button>
+        </div>
+        <p class="text-[9px] text-slate-600 mt-2 font-mono tracking-widest uppercase italic">
+            * NO AUTHENTICATION REQUIRED. ANYONE WITH THIS LINK CAN VIEW THE HEALTH STATUS OF THIS PROJECT.
+        </p>
       </div>
     </div>
 

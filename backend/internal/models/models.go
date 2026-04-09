@@ -61,6 +61,7 @@ type Project struct {
 	CoverPosition        int                  `gorm:"default:50" json:"cover_position"`
 	UserID               uuid.UUID            `gorm:"type:uuid;not null" json:"user_id"`
 	CompanyID            *uuid.UUID           `gorm:"type:uuid" json:"company_id"`
+	Company              *Company             `gorm:"foreignKey:CompanyID" json:"company,omitempty"`
 	APIs                 []API                `gorm:"foreignKey:ProjectID" json:"apis,omitempty"`
 	Members              []ProjectMember      `gorm:"foreignKey:ProjectID" json:"members,omitempty"`
 	NotificationConfigs  []NotificationConfig `gorm:"foreignKey:ProjectID" json:"notification_configs,omitempty"`
@@ -95,6 +96,7 @@ type API struct {
 	Interval           int            `gorm:"default:60" json:"interval"`       // Monitoring interval in seconds
 	ScheduleConfig     string         `gorm:"type:text" json:"schedule_config"` // JSON Schedule settings mapping n8n
 	ResponseScript     string         `gorm:"type:text" json:"response_script"` // JavaScript for response processing
+	RecoveryScript     string         `gorm:"type:text" json:"recovery_script"` // JavaScript for self-healing/auto-retry
 	OrderIndex         int            `gorm:"default:0" json:"order_index"`
 	IsActive           bool           `gorm:"default:true" json:"is_active"`
 	PausedUntil        *time.Time     `json:"paused_until"` // Added for pause feature
@@ -112,10 +114,12 @@ type MonitorLog struct {
 	ResponseTime int64     `json:"response_time"` // in milliseconds
 	IsSuccess    bool      `json:"is_success"`
 	ErrorMessage string    `gorm:"type:text" json:"error_message"`
-	ResponseBody string    `gorm:"type:text" json:"response_body"`
-	Schedule     string    `gorm:"type:text" json:"schedule"` // Added for historical schedule tracking
-	CheckedAt    time.Time `json:"checked_at"`
-	API          *API      `gorm:"foreignKey:ApiID" json:"api,omitempty"`
+	ResponseBody    string         `gorm:"type:text" json:"response_body"`
+	Schedule        string         `gorm:"type:text" json:"schedule"` // Added for historical schedule tracking
+	TlsStatus       string         `gorm:"type:text" json:"tls_status"` // JSON summary of cert expiry
+	SecurityHeaders string         `gorm:"type:text" json:"security_headers"` // JSON mapping of header checks
+	CheckedAt       time.Time      `json:"checked_at"`
+	API             *API           `gorm:"foreignKey:ApiID" json:"api,omitempty"`
 	DeletedAt    gorm.DeletedAt `gorm:"index" json:"deleted_at"` // Soft delete
 }
 
@@ -128,6 +132,9 @@ type NotificationConfig struct {
 	TelegramChatID   string    `json:"telegram_chat_id"`
 	EnableLINE       bool      `gorm:"default:false" json:"enable_line"`
 	LINEUserID       string    `json:"line_user_id"`
+	EnableWebhook    bool      `gorm:"default:false" json:"enable_webhook"`
+	WebhookURL       string    `json:"webhook_url"`
+	WebhookSecret    string    `json:"webhook_secret"`
 	EnableEmail      bool      `gorm:"default:false" json:"enable_email"`
 	EmailAddress     string    `json:"email_address"` // Multi-email as comma-separated
 	SmtpHost         string    `json:"smtp_host"`
