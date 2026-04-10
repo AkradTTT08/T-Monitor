@@ -513,6 +513,29 @@
             ? 'px-0'
             : 'pr-1'} hide-scrollbar"
         >
+          <!-- Global Pulse Link -->
+          <a
+            href="/dashboard"
+            on:click={() => (isMobileMenuOpen = false)}
+            title="Global Pulse"
+            class="w-full flex items-center group/navitem {isSidebarCollapsed
+              ? 'justify-center px-0'
+              : 'justify-between px-3'} py-3 rounded-xl text-sm font-semibold transition-all {currentPath === '/dashboard'
+              ? 'bg-blue-900/30 border border-blue-500/50 text-blue-300 shadow-[0_0_15px_rgba(59,130,246,0.15)]'
+              : 'text-slate-400 hover:bg-slate-800/80 hover:text-blue-400 border border-transparent'}"
+          >
+            <div class="flex items-center gap-3">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                class="transition-colors {currentPath === '/dashboard' ? 'text-blue-400' : 'text-slate-500 group-hover/navitem:text-blue-400'}"
+                stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+              ><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+              {#if !isSidebarCollapsed}<span>Global Pulse</span>{/if}
+            </div>
+            {#if !isSidebarCollapsed}
+               <span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse shadow-[0_0_8px_rgba(59,130,246,0.8)]"></span>
+            {/if}
+          </a>
+
           <a
             href="/dashboard/companies"
             on:click={() => (isMobileMenuOpen = false)}

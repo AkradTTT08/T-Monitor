@@ -81,17 +81,16 @@
     const points = latencyData.data_points;
     const labels = points.map((p: any) => {
       const ts = p.timestamp;
-      if (ts.length <= 10) return ts.slice(5); // MM-DD
-      return ts.slice(11) + ":00"; // HH:00
+      if (selectedPeriod === "30d" && ts.length <= 10) return ts.slice(5); // MM-DD
+      if (selectedPeriod === "7d") return ts.slice(5, 10) + " " + ts.slice(11) + ":00"; // MM-DD HH:00
+      return ts.slice(11) + ":00"; // HH:00 for 24h
     });
 
-    if (latencyChart) {
-      latencyChart.data.labels = labels;
-      latencyChart.data.datasets[0].data = points.map((p: any) => p.avg_latency);
-      latencyChart.data.datasets[1].data = points.map((p: any) => p.max_latency);
-      latencyChart.data.datasets[2].data = points.map((p: any) => p.success_rate);
-      latencyChart.update();
-    } else {
+    try {
+      if (latencyChart) {
+        latencyChart.destroy();
+      }
+
       latencyChart = new Chart(latencyChartCanvas, {
         type: "line",
         data: {
@@ -167,6 +166,8 @@
           },
         },
       });
+    } catch (err) {
+      console.error("Error creating latency chart:", err);
     }
   }
 
@@ -178,12 +179,11 @@
     const data = apis.map((a: any) => a.uptime_percent);
     const colors = data.map((v: number) => v >= 99 ? "rgba(34, 197, 94, 0.7)" : v >= 95 ? "rgba(234, 179, 8, 0.7)" : "rgba(239, 68, 68, 0.7)");
 
-    if (uptimeBarChart) {
-      uptimeBarChart.data.labels = labels;
-      uptimeBarChart.data.datasets[0].data = data;
-      uptimeBarChart.data.datasets[0].backgroundColor = colors;
-      uptimeBarChart.update();
-    } else {
+    try {
+      if (uptimeBarChart) {
+        uptimeBarChart.destroy();
+      }
+
       uptimeBarChart = new Chart(uptimeBarCanvas, {
         type: "bar",
         data: {
@@ -214,6 +214,8 @@
           },
         },
       });
+    } catch (err) {
+      console.error("Error creating uptime bar chart:", err);
     }
   }
 

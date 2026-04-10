@@ -45,9 +45,9 @@
     return "bg-slate-500/10 border-slate-500/20";
   }
 
-  $: allSystemsOperational = data?.apis?.every((a: any) => a.Status === "UP");
-  $: partialOutage = data?.apis?.some((a: any) => a.Status === "DOWN") && data?.apis?.some((a: any) => a.Status === "UP");
-  $: majorOutage = data?.apis?.length > 0 && data?.apis?.every((a: any) => a.Status === "DOWN");
+  $: allSystemsOperational = data?.apis?.every((a: any) => a.status === "UP");
+  $: partialOutage = data?.apis?.some((a: any) => a.status === "DOWN") && data?.apis?.some((a: any) => a.status === "UP");
+  $: majorOutage = data?.apis?.length > 0 && data?.apis?.every((a: any) => a.status === "DOWN");
 </script>
 
 <div class="z-20 w-full max-w-4xl px-6 py-12 flex flex-col items-center">
@@ -67,7 +67,11 @@
         <div class="flex items-center justify-between mb-8">
             <div class="flex items-center gap-4">
                 {#if data.company?.logo_url}
-                    <img src={data.company.logo_url} alt={data.company.name} class="w-12 h-12 object-contain" />
+                    <img 
+                        src={data.company.logo_url.startsWith("http") ? data.company.logo_url : `${API_BASE_URL}${data.company.logo_url}`} 
+                        alt={data.company.name} 
+                        class="w-12 h-12 object-contain" 
+                    />
                 {:else}
                     <div class="w-12 h-12 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-cyan-400"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
@@ -110,19 +114,19 @@
             {#each data.apis as api}
                 <div class="flex items-center justify-between p-5 border-b border-slate-700/20 last:border-0 hover:bg-slate-700/10 transition-colors">
                     <div class="flex flex-col gap-0.5">
-                        <span class="text-slate-100 font-bold">{api.Name}</span>
-                        <span class="text-[10px] text-slate-500 font-mono uppercase tracking-wider">{api.Folder}</span>
+                        <span class="text-slate-100 font-bold">{api.name}</span>
+                        <span class="text-[10px] text-slate-500 font-mono uppercase tracking-wider">{api.folder}</span>
                     </div>
                     <div class="flex items-center gap-6">
                         <div class="hidden md:flex flex-col items-end">
                             <span class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">7D Uptime</span>
-                            <span class="text-xs font-mono {api.UptimePercent >= 99 ? 'text-emerald-400' : 'text-amber-400'}">
-                                {api.UptimePercent}%
+                            <span class="text-xs font-mono {api.uptime_percent >= 99 ? 'text-emerald-400' : 'text-amber-400'}">
+                                {api.uptime_percent}%
                             </span>
                         </div>
-                        <div class="flex items-center gap-2 px-3 py-1 rounded-full border {getStatusBg(api.Status)}">
-                           <div class="w-2 h-2 rounded-full {getStatusColor(api.Status).replace('text-', 'bg-')} animate-pulse"></div>
-                           <span class="text-[10px] font-black tracking-widest uppercase {getStatusColor(api.Status)}">{api.Status === 'UP' ? 'Operational' : 'Outage'}</span>
+                        <div class="flex items-center gap-2 px-3 py-1 rounded-full border {getStatusBg(api.status)}">
+                            <div class="w-2 h-2 rounded-full {getStatusColor(api.status).replace('text-', 'bg-')} animate-pulse"></div>
+                            <span class="text-[10px] font-black tracking-widest uppercase {getStatusColor(api.status)}">{api.status === 'UP' ? 'Operational' : 'Outage'}</span>
                         </div>
                     </div>
                 </div>
@@ -137,10 +141,10 @@
             {#each data.history as day}
                 <div class="group relative flex flex-col justify-end gap-2">
                     <div class="w-full rounded-lg transition-all duration-500 cursor-default
-                        {day.UptimePercent >= 99 ? 'bg-emerald-500/40 hover:bg-emerald-500/60' : 
-                         day.UptimePercent >= 95 ? 'bg-amber-500/40 hover:bg-amber-500/60' : 
+                        {day.uptime_percent >= 99 ? 'bg-emerald-500/40 hover:bg-emerald-500/60' : 
+                         day.uptime_percent >= 95 ? 'bg-amber-500/40 hover:bg-amber-500/60' : 
                          'bg-rose-500/40 hover:bg-rose-500/60'}"
-                        style="height: {day.UptimePercent}%">
+                        style="height: {day.uptime_percent}%">
                     </div>
                     <span class="text-[9px] text-center text-slate-600 font-mono uppercase tracking-tighter">
                         {new Date(day.day).toLocaleDateString('en-US', {weekday: 'short'})}
@@ -148,7 +152,7 @@
 
                     <!-- Tooltip -->
                     <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-[10px] text-slate-100 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-30 shadow-2xl">
-                        {day.day}: <span class="font-bold">{day.UptimePercent}%</span>
+                        {day.day}: <span class="font-bold">{day.uptime_percent}%</span>
                     </div>
                 </div>
             {/each}

@@ -142,11 +142,25 @@ func GetUptimeStats(c *fiber.Ctx) error {
 
 // GetLatencyTrend returns time-series latency data for charts
 func GetLatencyTrend(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(uuid.UUID)
+	role := c.Locals("role").(string)
 	projectID := c.Query("project_id")
 	period := c.Query("period", "24h")
 
 	if projectID == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "project_id is required"})
+	}
+
+	// Verify ownership unless admin
+	if role != "admin" {
+		var project models.Project
+		if err := database.DB.First(&project, "id = ? AND user_id = ?", projectID, userID).Error; err != nil {
+			// Check if user is a member
+			var member models.ProjectMember
+			if err := database.DB.First(&member, "project_id = ? AND user_id = ?", projectID, userID).Error; err != nil {
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Access denied"})
+			}
+		}
 	}
 
 	now := time.Now()
@@ -166,7 +180,7 @@ func GetLatencyTrend(c *fiber.Ctx) error {
 	}
 
 	type DataPoint struct {
-		Timestamp   string  `json:"timestamp"`
+		Timestamp   string  `json:"timestamp" gorm:"column:bucket_time"`
 		AvgLatency  float64 `json:"avg_latency"`
 		MaxLatency  float64 `json:"max_latency"`
 		MinLatency  float64 `json:"min_latency"`
@@ -177,21 +191,26 @@ func GetLatencyTrend(c *fiber.Ctx) error {
 
 	var dataPoints []DataPoint
 
-	database.DB.Model(&models.MonitorLog{}).
+	// Using explicit table names and avoiding 'timestamp' keyword
+	err := database.DB.Model(&models.MonitorLog{}).
 		Select(`
-			TO_CHAR(checked_at, '`+groupFormat+`') as timestamp,
-			ROUND(AVG(response_time)::numeric, 2) as avg_latency,
-			MAX(response_time) as max_latency,
-			MIN(response_time) as min_latency,
+			TO_CHAR(monitor_logs.checked_at, '`+groupFormat+`') as bucket_time,
+			ROUND(AVG(monitor_logs.response_time)::numeric, 2) as avg_latency,
+			MAX(monitor_logs.response_time) as max_latency,
+			MIN(monitor_logs.response_time) as min_latency,
 			COUNT(*) as total_checks,
-			COUNT(*) FILTER (WHERE is_success = false) as fail_count,
-			ROUND((COUNT(*) FILTER (WHERE is_success = true)::numeric / NULLIF(COUNT(*)::numeric, 0)) * 100, 2) as success_rate
+			COUNT(*) FILTER (WHERE monitor_logs.is_success = false) as fail_count,
+			ROUND((COUNT(*) FILTER (WHERE monitor_logs.is_success = true)::numeric / NULLIF(COUNT(*)::numeric, 0)) * 100, 2) as success_rate
 		`).
 		Joins("JOIN apis ON apis.id = monitor_logs.api_id").
-		Where("apis.project_id = ? AND checked_at >= ?", projectID, since).
-		Group("timestamp").
-		Order("timestamp ASC").
-		Scan(&dataPoints)
+		Where("apis.project_id = ? AND monitor_logs.checked_at >= ? AND apis.deleted_at IS NULL", projectID, since).
+		Group("bucket_time").
+		Order("bucket_time ASC").
+		Scan(&dataPoints).Error
+
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch trend data: " + err.Error()})
+	}
 
 	return c.JSON(fiber.Map{
 		"data_points": dataPoints,
@@ -236,5 +255,115 @@ func GetIncidentTimeline(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"incidents": incidents,
 		"total":     len(incidents),
+	})
+}
+
+// GetGlobalPulse returns high-level metrics and recent pings across all accessible projects
+func GetGlobalPulse(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(uuid.UUID)
+	role := c.Locals("role").(string)
+
+	now := time.Now()
+	since24h := now.Add(-24 * time.Hour)
+
+	var accessibleProjectIDs []uuid.UUID
+
+	if role == "admin" {
+		database.DB.Model(&models.Project{}).Pluck("id", &accessibleProjectIDs)
+	} else {
+		// Projects owned by user
+		var owned []uuid.UUID
+		database.DB.Model(&models.Project{}).Where("user_id = ?", userID).Pluck("id", &owned)
+		// Projects user is member of
+		var memberOf []uuid.UUID
+		database.DB.Model(&models.ProjectMember{}).Where("user_id = ?", userID).Pluck("project_id", &memberOf)
+		
+		// Uniquify IDs
+		idMap := make(map[uuid.UUID]bool)
+		for _, id := range owned {
+			if !idMap[id] {
+				accessibleProjectIDs = append(accessibleProjectIDs, id)
+				idMap[id] = true
+			}
+		}
+		for _, id := range memberOf {
+			if !idMap[id] {
+				accessibleProjectIDs = append(accessibleProjectIDs, id)
+				idMap[id] = true
+			}
+		}
+	}
+
+	if len(accessibleProjectIDs) == 0 {
+		return c.JSON(fiber.Map{
+			"active_apis":    0,
+			"global_uptime":  100,
+			"avg_latency":    0,
+			"recent_pings":   []interface{}{},
+		})
+	}
+
+	// 1. Active APIs count
+	var activeAPIsCount int64
+	database.DB.Model(&models.API{}).Where("project_id IN ? AND is_active = true AND deleted_at IS NULL", accessibleProjectIDs).Count(&activeAPIsCount)
+
+	// 2. Global Uptime (Last 24h)
+	var totalChecks, successChecks int64
+	database.DB.Model(&models.MonitorLog{}).
+		Joins("JOIN apis ON apis.id = monitor_logs.api_id").
+		Where("apis.project_id IN ? AND monitor_logs.checked_at >= ?", accessibleProjectIDs, since24h).
+		Count(&totalChecks)
+
+	database.DB.Model(&models.MonitorLog{}).
+		Joins("JOIN apis ON apis.id = monitor_logs.api_id").
+		Where("apis.project_id IN ? AND monitor_logs.checked_at >= ? AND monitor_logs.is_success = true", accessibleProjectIDs, since24h).
+		Count(&successChecks)
+
+	var globalUptime float64 = 100.0
+	if totalChecks > 0 {
+		globalUptime = math.Round((float64(successChecks)/float64(totalChecks))*10000) / 100
+	}
+
+	// 3. Average Global Latency (Last 24h, successful only)
+	var avgLatency float64
+	database.DB.Model(&models.MonitorLog{}).
+		Select("COALESCE(AVG(monitor_logs.response_time), 0)").
+		Joins("JOIN apis ON apis.id = monitor_logs.api_id").
+		Where("apis.project_id IN ? AND monitor_logs.checked_at >= ? AND monitor_logs.is_success = true", accessibleProjectIDs, since24h).
+		Scan(&avgLatency)
+	avgLatency = math.Round(avgLatency*100) / 100
+
+	// 4. Live Pings (Last 50)
+	type Ping struct {
+		ID           uuid.UUID `json:"id"`
+		APIName      string    `json:"api_name"`
+		ProjectName  string    `json:"project_name"`
+		URL          string    `json:"url"`
+		Method       string    `json:"method"`
+		IsSuccess    bool      `json:"is_success"`
+		ResponseTime int64     `json:"response_time"`
+		StatusCode   int       `json:"status_code"`
+		CheckedAt    time.Time `json:"checked_at"`
+	}
+
+	var recentPings []Ping
+	database.DB.Model(&models.MonitorLog{}).
+		Select(`
+			monitor_logs.id, apis.name as api_name, projects.name as project_name, 
+			apis.url, apis.method, monitor_logs.is_success, 
+			monitor_logs.response_time, monitor_logs.status_code, monitor_logs.checked_at
+		`).
+		Joins("JOIN apis ON apis.id = monitor_logs.api_id").
+		Joins("JOIN projects ON projects.id = apis.project_id").
+		Where("apis.project_id IN ? AND apis.deleted_at IS NULL", accessibleProjectIDs).
+		Order("monitor_logs.checked_at DESC").
+		Limit(50).
+		Scan(&recentPings)
+
+	return c.JSON(fiber.Map{
+		"active_apis":    activeAPIsCount,
+		"global_uptime":  globalUptime,
+		"avg_latency":    avgLatency,
+		"recent_pings":   recentPings,
 	})
 }

@@ -150,6 +150,7 @@ func setupRoutes(app *fiber.App) {
 	protected.Post("/ai/analyze-incident", handlers.AnalyzeIncident)
 
 	// Analytics Routes
+	protected.Get("/analytics/pulse", handlers.GetGlobalPulse)
 	protected.Get("/analytics/uptime", handlers.GetUptimeStats)
 	protected.Get("/analytics/latency-trend", handlers.GetLatencyTrend)
 	protected.Get("/analytics/incidents", handlers.GetIncidentTimeline)
