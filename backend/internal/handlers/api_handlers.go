@@ -43,14 +43,14 @@ func CreateAPI(c *fiber.Ctx) error {
 	role := c.Locals("role").(string)
 	mode := c.Query("mode")
 
-	// Verify project ownership
+	// Verify project ownership or membership
 	var project models.Project
 	if role == "admin" {
 		if err := database.DB.First(&project, "id = ?", input.ProjectID).Error; err != nil {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Project not found"})
 		}
 	} else {
-		if err := database.DB.Where("id = ? AND user_id = ?", input.ProjectID, userID).First(&project).Error; err != nil {
+		if err := database.DB.Where("id = ? AND (user_id = ? OR id IN (SELECT project_id FROM project_members WHERE user_id = ?))", input.ProjectID, userID, userID).First(&project).Error; err != nil {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Project not found or unauthorized"})
 		}
 	}
@@ -61,6 +61,7 @@ func CreateAPI(c *fiber.Ctx) error {
 		}
 	}
 
+	indefinite := time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
 	api := models.API{
 		ProjectID:          input.ProjectID,
 		Folder:             input.Folder,
@@ -76,6 +77,7 @@ func CreateAPI(c *fiber.Ctx) error {
 		ResponseScript:     input.ResponseScript,
 		RecoveryScript:     input.RecoveryScript,
 		OrderIndex:         input.OrderIndex,
+		PausedUntil:        &indefinite,
 	}
 
 	if c.Locals("is_dry_run") == true {
@@ -97,14 +99,14 @@ func ReorderAPIs(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(uuid.UUID)
 	role := c.Locals("role").(string)
 
-	// Verify project ownership
+	// Verify project ownership or membership
 	var project models.Project
 	if role == "admin" {
 		if err := database.DB.First(&project, "id = ?", projectID).Error; err != nil {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Project not found"})
 		}
 	} else {
-		if err := database.DB.Where("id = ? AND user_id = ?", projectID, userID).First(&project).Error; err != nil {
+		if err := database.DB.Where("id = ? AND (user_id = ? OR id IN (SELECT project_id FROM project_members WHERE user_id = ?))", projectID, userID, userID).First(&project).Error; err != nil {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Project not found or unauthorized"})
 		}
 	}
@@ -151,9 +153,10 @@ func GetAPIs(c *fiber.Ctx) error {
 		query = query.Where("project_id = ?", projectID)
 	}
 
-	// Filter by ownership if not Admin
+	// Filter by ownership or membership if not Admin
 	if role != "admin" {
-		query = query.Joins("JOIN projects ON projects.id = apis.project_id").Where("projects.user_id = ?", userID)
+		query = query.Joins("JOIN projects ON projects.id = apis.project_id").
+			Where("projects.user_id = ? OR projects.id IN (SELECT project_id FROM project_members WHERE user_id = ?)", userID, userID)
 	}
 
 	query.Preload("Logs", func(db *gorm.DB) *gorm.DB {
@@ -178,8 +181,16 @@ func UpdateAPI(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Associated project not found"})
 	}
 
-	// Verify project ownership
-	if role != "admin" && project.UserID != userID {
+	// Verify project ownership or membership
+	isAuthorized := role == "admin" || project.UserID == userID
+	if !isAuthorized {
+		var memberCount int64
+		database.DB.Model(&models.ProjectMember{}).Where("project_id = ? AND user_id = ?", project.ID, userID).Count(&memberCount)
+		if memberCount > 0 {
+			isAuthorized = true
+		}
+	}
+	if !isAuthorized {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Unauthorized to edit this API"})
 	}
 
@@ -228,8 +239,16 @@ func DeleteAPI(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Associated project not found"})
 	}
 
-	// Verify project ownership
-	if role != "admin" && project.UserID != userID {
+	// Verify project ownership or membership
+	isAuthorized := role == "admin" || project.UserID == userID
+	if !isAuthorized {
+		var memberCount int64
+		database.DB.Model(&models.ProjectMember{}).Where("project_id = ? AND user_id = ?", project.ID, userID).Count(&memberCount)
+		if memberCount > 0 {
+			isAuthorized = true
+		}
+	}
+	if !isAuthorized {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Unauthorized to delete this API"})
 	}
 
@@ -418,6 +437,7 @@ func UploadPostmanCollection(c *fiber.Ctx) error {
 				}
 
 				projectUUID, _ := uuid.Parse(projectID)
+				indefinite := time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
 
 				parsedAPIs = append(parsedAPIs, models.API{
 					ProjectID:          projectUUID,
@@ -430,6 +450,7 @@ func UploadPostmanCollection(c *fiber.Ctx) error {
 					Body:               item.Request.Body.Raw,
 					ExpectedStatusCode: 200,
 					Interval:           60,
+					PausedUntil:        &indefinite,
 				})
 			}
 		}
@@ -496,8 +517,16 @@ func PauseAPI(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Associated project not found"})
 	}
 
-	// Verify project ownership
-	if role != "admin" && project.UserID != userID {
+	// Verify project ownership or membership
+	isAuthorized := role == "admin" || project.UserID == userID
+	if !isAuthorized {
+		var memberCount int64
+		database.DB.Model(&models.ProjectMember{}).Where("project_id = ? AND user_id = ?", project.ID, userID).Count(&memberCount)
+		if memberCount > 0 {
+			isAuthorized = true
+		}
+	}
+	if !isAuthorized {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Unauthorized to modify this API"})
 	}
 

@@ -7,6 +7,24 @@
   let loading = true;
   let error = "";
   let refreshInterval: any;
+  
+  let selectedCompanyId = "";
+  let selectedProjectId = "all";
+  let projects: any[] = [];
+
+  async function fetchProjects() {
+    try {
+      const token = localStorage.getItem("monitor_token");
+      const res = await fetch(`${API_BASE_URL}/api/v1/projects`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const allProjects = await res.json();
+        // filter by company
+        projects = allProjects.filter((p: any) => p.company_id?.toString() === selectedCompanyId);
+      }
+    } catch (err) {}
+  }
 
   async function fetchGlobalPulse() {
     try {
@@ -14,7 +32,21 @@
       const token = localStorage.getItem("monitor_token");
       if (!token) return;
 
-      const res = await fetch(`${API_BASE_URL}/api/v1/analytics/pulse`, {
+      let url = `${API_BASE_URL}/api/v1/analytics/pulse`;
+      const queryParams = new URLSearchParams();
+      if (selectedCompanyId) {
+         queryParams.append("company_id", selectedCompanyId);
+      }
+      if (selectedProjectId && selectedProjectId !== "all") {
+         queryParams.append("project_id", selectedProjectId);
+      }
+      
+      const q = queryParams.toString();
+      if (q) {
+         url += `?${q}`;
+      }
+
+      const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -28,14 +60,33 @@
   }
 
   onMount(() => {
+    selectedCompanyId = localStorage.getItem("monitor_selected_company") || "";
+    if (selectedCompanyId) {
+      fetchProjects();
+    }
     fetchGlobalPulse();
     // Poll every 5 seconds for real-time vibe
     refreshInterval = setInterval(fetchGlobalPulse, 5000);
+    window.addEventListener('storage', handleStorageChange);
   });
 
   onDestroy(() => {
     if (refreshInterval) clearInterval(refreshInterval);
+    window.removeEventListener('storage', handleStorageChange);
   });
+
+  function handleStorageChange(e: StorageEvent) {
+    if (e.key === 'monitor_selected_company') {
+      selectedCompanyId = e.newValue || "";
+      selectedProjectId = "all";
+      if (selectedCompanyId) fetchProjects();
+      fetchGlobalPulse();
+    }
+  }
+
+  function handleFilterChange() {
+    fetchGlobalPulse();
+  }
 
   function getStatusColor(isSuccess: boolean) {
     return isSuccess ? "bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.8)]" : "bg-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.8)]";
@@ -56,6 +107,21 @@
       <p class="text-cyan-500/60 text-sm font-mono tracking-widest uppercase">
         Live aggregate telemetry across all accessible workspaces
       </p>
+      {#if selectedCompanyId}
+        <div class="mt-4 flex items-center gap-3">
+          <label class="text-cyan-400 font-mono text-xs tracking-widest uppercase">Filter by Project:</label>
+          <select 
+            bind:value={selectedProjectId} 
+            onchange={handleFilterChange}
+            class="bg-slate-900 border border-slate-700 text-cyan-50 text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block p-2 font-mono shadow-[0_0_10px_rgba(6,182,212,0.1)] outline-none"
+          >
+            <option value="all">All Projects</option>
+            {#each projects as p}
+              <option value={p.id}>{p.name}</option>
+            {/each}
+          </select>
+        </div>
+      {/if}
     </div>
 
     <!-- Info/Help Panel -->

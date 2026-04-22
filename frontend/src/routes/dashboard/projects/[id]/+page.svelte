@@ -826,7 +826,10 @@
     return `${hour}:00 ${ampm}`;
   });
 
+  let isBulkSchedule = false;
+
   function openScheduleModal(api: any) {
+    isBulkSchedule = false;
     selectedApi = api;
     if (api.schedule_config) {
       try {
@@ -845,6 +848,17 @@
     showScheduleModal = true;
   }
 
+  function openBulkScheduleModal() {
+    isBulkSchedule = true;
+    scheduleConfig = {
+      mode: "Minute timer",
+      value: 1,
+      day: "Every day",
+      time: "4:00 PM",
+    };
+    showScheduleModal = true;
+  }
+
   async function handleScheduleSubmit() {
     showScheduleModal = false;
     let intervalSeconds = 60;
@@ -858,34 +872,113 @@
 
     try {
       const token = localStorage.getItem("monitor_token");
-      const res = await fetch(
-        `${API_BASE_URL}/api/v1/apis/${selectedApi.id}`,
-        {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
+
+      if (isBulkSchedule) {
+        systemToast.fire({
+          icon: "info",
+          title: "Processing",
+          text: `Applying schedule to ${selectedApiIds.length} APIs...`,
+        });
+
+        const promises = selectedApiIds.map((id) => {
+          const api = apis.find(a => a.id === id);
+          if (!api) return Promise.resolve(null);
+          return fetch(`${API_BASE_URL}/api/v1/apis/${id}`, {
+            method: "PUT",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              project_id: projectId,
+              folder: api.folder,
+              name: api.name,
+              method: api.method,
+              url: api.url,
+              headers: api.headers || "[]",
+              body: api.body || "{}",
+              parameters: api.parameters || "[]",
+              expected_status_code: api.expected_status_code,
+              interval: intervalSeconds,
+              schedule_config: JSON.stringify(scheduleConfig),
+              response_script: api.response_script || "",
+              recovery_script: api.recovery_script || "",
+            }),
+          }).then(res => {
+            if (res.ok) {
+              return fetch(`${API_BASE_URL}/api/v1/apis/${id}/pause`, {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ pause_hours: 0 }),
+              });
+            }
+            return res;
+          });
+        });
+
+        await Promise.all(promises);
+        
+        systemToast.fire({
+          icon: "success",
+          title: "Schedules Updated",
+          text: "All selected APIs have been scheduled and resumed.",
+        });
+        
+        isBulkSchedule = false;
+        selectedApiIds = [];
+        await fetchProjectDetails();
+
+      } else {
+        const res = await fetch(
+          `${API_BASE_URL}/api/v1/apis/${selectedApi.id}`,
+          {
+            method: "PUT",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              project_id: projectId,
+              folder: selectedApi.folder,
+              name: selectedApi.name,
+              method: selectedApi.method,
+              url: selectedApi.url,
+              headers: selectedApi.headers || "[]",
+              body: selectedApi.body || "{}",
+              parameters: selectedApi.parameters || "[]",
+              expected_status_code: selectedApi.expected_status_code,
+              interval: intervalSeconds,
+              schedule_config: JSON.stringify(scheduleConfig),
+              response_script: selectedApi.response_script || "",
+              recovery_script: selectedApi.recovery_script || "",
+            }),
           },
-          body: JSON.stringify({
-            project_id: projectId,
-            folder: selectedApi.folder,
-            name: selectedApi.name,
-            method: selectedApi.method,
-            url: selectedApi.url,
-            headers: selectedApi.headers || "[]",
-            body: selectedApi.body || "{}",
-            parameters: selectedApi.parameters || "[]",
-            expected_status_code: selectedApi.expected_status_code,
-            interval: intervalSeconds,
-            schedule_config: JSON.stringify(scheduleConfig),
-            response_script: selectedApi.response_script || "",
-            recovery_script: selectedApi.recovery_script || "",
-          }),
-        },
-      );
-      if (res.ok) await fetchProjectDetails();
+        );
+        
+        if (res.ok) {
+          // Unpause
+          await fetch(`${API_BASE_URL}/api/v1/apis/${selectedApi.id}/pause`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ pause_hours: 0 }),
+          });
+          
+          await fetchProjectDetails();
+        }
+      }
     } catch (err) {
       console.error(err);
+      systemAlert.fire({
+        icon: "error",
+        title: "Error",
+        text: "Failed to apply schedule.",
+      });
     }
   }
 
@@ -1512,6 +1605,13 @@
             class="text-sm font-bold text-cyan-400 border-r border-slate-700 pr-4 font-mono tracking-wide"
             >{selectedApiIds.length} SELECTED</span
           >
+          <button
+            onclick={openBulkScheduleModal}
+            class="bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 hover:text-indigo-300 border border-indigo-500/30 font-bold py-1.5 px-4 rounded-lg shadow-[0_0_10px_rgba(99,102,241,0.1)] transition-colors text-sm flex items-center gap-2 font-mono tracking-wide"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+            Set Schedule
+          </button>
           <button
             onclick={() => (showBulkDeleteModal = true)}
             class="bg-red-500/10 text-red-500 hover:bg-red-500/20 hover:text-red-400 border border-red-500/30 font-bold py-1.5 px-4 rounded-lg shadow-[0_0_10px_rgba(239,68,68,0.1)] transition-colors text-sm flex items-center gap-2 font-mono tracking-wide"

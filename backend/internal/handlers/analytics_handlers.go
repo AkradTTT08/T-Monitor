@@ -262,6 +262,9 @@ func GetIncidentTimeline(c *fiber.Ctx) error {
 func GetGlobalPulse(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(uuid.UUID)
 	role := c.Locals("role").(string)
+	
+	companyID := c.Query("company_id")
+	projectID := c.Query("project_id")
 
 	now := time.Now()
 	since24h := now.Add(-24 * time.Hour)
@@ -269,14 +272,40 @@ func GetGlobalPulse(c *fiber.Ctx) error {
 	var accessibleProjectIDs []uuid.UUID
 
 	if role == "admin" {
-		database.DB.Model(&models.Project{}).Pluck("id", &accessibleProjectIDs)
+		query := database.DB.Model(&models.Project{})
+		if companyID != "" {
+			query = query.Where("company_id = ?", companyID)
+		}
+		if projectID != "" && projectID != "all" {
+			query = query.Where("id = ?", projectID)
+		}
+		query.Pluck("id", &accessibleProjectIDs)
 	} else {
 		// Projects owned by user
 		var owned []uuid.UUID
-		database.DB.Model(&models.Project{}).Where("user_id = ?", userID).Pluck("id", &owned)
+		q1 := database.DB.Model(&models.Project{}).Where("user_id = ?", userID)
+		if companyID != "" {
+			q1 = q1.Where("company_id = ?", companyID)
+		}
+		if projectID != "" && projectID != "all" {
+			q1 = q1.Where("id = ?", projectID)
+		}
+		q1.Pluck("id", &owned)
+
 		// Projects user is member of
 		var memberOf []uuid.UUID
-		database.DB.Model(&models.ProjectMember{}).Where("user_id = ?", userID).Pluck("project_id", &memberOf)
+		q2 := database.DB.Model(&models.ProjectMember{}).
+			Select("project_members.project_id").
+			Joins("JOIN projects ON projects.id = project_members.project_id").
+			Where("project_members.user_id = ?", userID)
+		
+		if companyID != "" {
+			q2 = q2.Where("projects.company_id = ?", companyID)
+		}
+		if projectID != "" && projectID != "all" {
+			q2 = q2.Where("project_members.project_id = ?", projectID)
+		}
+		q2.Pluck("project_id", &memberOf)
 		
 		// Uniquify IDs
 		idMap := make(map[uuid.UUID]bool)

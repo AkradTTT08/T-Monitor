@@ -37,7 +37,7 @@
 
 	<slot />
 	<!-- Global AI Chat Widget -->
-	<AIChat />
+	<!-- <AIChat /> -->
 </div>
 
 <style lang="scss">
