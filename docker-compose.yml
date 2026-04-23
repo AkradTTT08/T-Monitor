@@ -16,6 +16,36 @@ services:
     networks:
       - monitor-network
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: monitor-ollama
+    restart: always
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - monitor-network
+
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: monitor-ollama-init
+    entrypoint: >
+      /bin/sh -c "
+        echo 'Waiting for Ollama to start...' &&
+        sleep 10 &&
+        echo 'Pulling Llama 3.2 model...' &&
+        ollama pull llama3.2 &&
+        echo 'Model pulled successfully!'
+      "
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    depends_on:
+      - ollama
+    networks:
+      - monitor-network
+    restart: "no"
+
   backend:
     build:
       context: ./backend
@@ -32,10 +62,13 @@ services:
       - DB_SSLMODE=disable
       - JWT_SECRET_KEY=yoursupersecurejwtsecretkey
       - N8N_WEBHOOK_URL=http://localhost:5678/webhook/api-healthcheck
+      - OLLAMA_HOST=http://ollama:11434
+      - OLLAMA_MODEL=llama3.2
     volumes:
       - backend_uploads:/app/uploads
     depends_on:
       - database
+      - ollama
     networks:
       - monitor-network
 
@@ -63,3 +96,4 @@ networks:
 volumes:
   postgres_data:
   backend_uploads:
+  ollama_data:

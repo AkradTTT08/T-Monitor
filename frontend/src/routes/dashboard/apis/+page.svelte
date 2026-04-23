@@ -435,7 +435,7 @@
 <Modal
   bind:open={showApiTestModal}
   title="API Details & Testing"
-  maxWidth="max-w-7xl"
+  size="2xl"
 >
   {#if selectedApi}
     <!-- 2-column split layout -->
@@ -633,13 +633,13 @@
                 </button>
               </div>
               <!-- Scrollable response body -->
-              <div class="p-4 overflow-y-auto flex-1 min-h-0">
+              <div class="p-4 overflow-auto flex-1 min-h-0">
                 {#if testResult.error}
-                  <pre class="text-red-400 font-mono text-xs whitespace-pre-wrap leading-relaxed">{testResult.error}</pre>
+                  <pre class="text-red-400 font-mono text-xs whitespace-pre-wrap break-words leading-relaxed">{testResult.error}</pre>
                 {:else if testResult.is_json}
-                  <pre class="text-emerald-400 font-mono text-xs whitespace-pre-wrap leading-relaxed">{JSON.stringify(testResult.response, null, 2)}</pre>
+                  <pre class="text-emerald-400 font-mono text-xs whitespace-pre-wrap break-words leading-relaxed">{JSON.stringify(testResult.response, null, 2)}</pre>
                 {:else}
-                  <pre class="text-slate-300 font-mono text-xs whitespace-pre-wrap leading-relaxed">{testResult.response || "Empty response"}</pre>
+                  <pre class="text-slate-300 font-mono text-xs whitespace-pre-wrap break-words leading-relaxed">{testResult.response || "Empty response"}</pre>
                 {/if}
               </div>
             </div>
@@ -677,6 +677,7 @@
     gap: 0.75rem;
     overflow-y: auto;
     padding-right: 4px;
+    min-width: 0;
   }
 
   .api-test-right {
@@ -684,6 +685,7 @@
     flex-direction: column;
     border-left: 1px solid rgba(71, 85, 105, 0.4);
     padding-left: 1.25rem;
+    min-width: 0;
   }
 
   .animate-fade-in {

@@ -22,12 +22,12 @@
     }
   }
 
-  // Derive modal classes based on size
   const sizeClasses: Record<string, string> = {
     sm: "max-w-md h-auto",
     md: "max-w-2xl h-auto",
     lg: "max-w-4xl h-auto",
     xl: "max-w-6xl h-auto",
+    "2xl": "max-w-7xl h-auto",
     full: "max-w-[95vw] w-full h-[95vh]"
   };
 </script>
