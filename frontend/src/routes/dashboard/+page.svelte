@@ -218,7 +218,7 @@
 
         <div class="w-full h-[400px] overflow-y-auto pr-3 custom-scrollbar relative z-10">
           <div class="space-y-3 pb-8">
-            {#each pulseData.recent_pings as ping}
+            {#each (pulseData.recent_pings ?? []) as ping}
               <div in:fly={{ y: -20, duration: 400 }} class="group flex items-center justify-between p-4 rounded-xl bg-slate-800/40 border border-slate-700/50 hover:bg-slate-700/50 hover:border-slate-500/50 hover:-translate-y-0.5 transition-all duration-300 backdrop-blur-md shadow-lg">
                 
                 <div class="flex items-center gap-4 min-w-0 flex-1">
@@ -255,7 +255,7 @@
               </div>
             {/each}
 
-            {#if pulseData.recent_pings.length === 0}
+            {#if (pulseData.recent_pings ?? []).length === 0}
               <div class="h-full flex flex-col items-center justify-center pt-24 pb-12">
                 <div class="w-16 h-16 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center mb-4">
                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-500"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
@@ -291,7 +291,7 @@
 
         <!-- Simulated live dots moving around based on recent pings -->
         <div class="w-[85%] aspect-square relative z-10 mt-8 group/radar">
-          {#each pulseData.recent_pings.slice(0, 18) as ping, i}
+          {#each (pulseData.recent_pings ?? []).slice(0, 18) as ping, i}
              <!-- Randomize position mathematically for aesthetics -->
              {@const topPos = 15 + Math.abs(Math.sin((i+1)*99))*70}
              {@const leftPos = 15 + Math.abs(Math.cos((i+1)*15))*70}

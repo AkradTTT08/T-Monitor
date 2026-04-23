@@ -1001,7 +1001,7 @@ if (errorReason && errorReason.includes("401")) {
       response_script: "",
       recovery_script: "",
     };
-    headerMode = "json";
+    headerMode = "kv";
     bodyMode = "json";
     paramMode = "json";
     headersKV = [{ key: "", value: "" }];
@@ -1031,7 +1031,7 @@ if (errorReason && errorReason.includes("401")) {
     bodyKV = parseToKVArray(apiForm.body);
     paramsKV = parseToKVArray(apiForm.parameters);
 
-    headerMode = "json";
+    headerMode = headersKV.length > 0 ? "kv" : "json";
     bodyMode = "json";
     paramMode = "json";
     showEditApiModal = true;
@@ -2534,12 +2534,12 @@ if (errorReason && errorReason.includes("401")) {
             {:else}
               <div class="space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar pr-2">
                 {#each headersKV as hdr, i}
-                  <div class="flex gap-2 group/kv">
-                    <input type="text" bind:value={hdr.key} placeholder="Header Name" class="w-1/3 px-3 py-2 bg-slate-950 rounded-lg border border-slate-800 focus:border-cyan-500/50 outline-none text-xs font-mono" />
-                    <div class="flex-1 bg-slate-950 rounded-lg border border-slate-800 focus-within:border-cyan-500/50 text-xs font-mono h-[34px] overflow-hidden relative">
+                  <div class="flex gap-2 group/kv items-center">
+                    <input type="text" bind:value={hdr.key} placeholder="Header Name" class="w-[40%] px-3 py-2.5 bg-slate-950 rounded-lg border border-slate-800 focus:border-cyan-500/50 outline-none text-sm font-mono" />
+                    <div class="flex-1 bg-slate-950 rounded-lg border border-slate-800 focus-within:border-cyan-500/50 text-sm font-mono h-[40px] overflow-hidden relative">
                       <InputWithVariables bind:value={hdr.value} placeholder="Value" variables={envVarDict} />
                     </div>
-                    <button type="button" onclick={() => (headersKV = headersKV.filter((_, idx) => idx !== i))} class="p-2 text-slate-600 hover:text-red-400 bg-slate-950 border border-slate-800 rounded-lg hover:border-red-500/30 transition-all opacity-40 group-hover/kv:opacity-100">
+                    <button type="button" onclick={() => (headersKV = headersKV.filter((_, idx) => idx !== i))} class="p-2.5 text-slate-600 hover:text-red-400 bg-slate-950 border border-slate-800 rounded-lg hover:border-red-500/30 transition-all opacity-40 group-hover/kv:opacity-100">
                       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                     </button>
                   </div>
@@ -2782,21 +2782,33 @@ if (errorReason && errorReason.includes("401")) {
           </div>
 
           <div class="bg-slate-800/20 rounded-2xl p-6 border border-slate-700/30">
-            <h4 class="text-xs font-bold text-cyan-500/80 uppercase tracking-widest mb-4">Headers</h4>
+            <div class="flex items-center justify-between mb-4">
+              <h4 class="text-xs font-bold text-cyan-500/80 uppercase tracking-widest flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
+                Headers
+              </h4>
+              <div class="flex bg-slate-950 p-1 rounded-xl border border-slate-800 shadow-inner">
+                <button type="button" class="px-3 py-1 text-[10px] uppercase font-bold rounded-lg transition-all {headerMode === 'json' ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-500/20' : 'text-slate-500 hover:text-cyan-400'}" onclick={() => toggleHeaderMode("json")}>JSON</button>
+                <button type="button" class="px-3 py-1 text-[10px] uppercase font-bold rounded-lg transition-all {headerMode === 'kv' ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-500/20' : 'text-slate-500 hover:text-cyan-400'}" onclick={() => toggleHeaderMode("kv")}>Key-Value</button>
+              </div>
+            </div>
             {#if headerMode === "json"}
               <TextareaWithVariables rows={3} bind:value={apiForm.headers} variables={envVarDict} />
             {:else}
-              <div class="space-y-2 max-h-[200px] overflow-y-auto">
+              <div class="space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar pr-2">
                 {#each headersKV as hdr, i}
-                  <div class="flex gap-2">
-                    <input type="text" bind:value={hdr.key} class="w-1/3 px-3 py-2 bg-slate-950 rounded-lg border border-slate-800 text-xs font-mono" />
-                    <div class="flex-1 bg-slate-950 rounded-lg border border-slate-800 text-xs font-mono h-[34px] overflow-hidden relative">
+                  <div class="flex gap-2 group/kv items-center">
+                    <input type="text" bind:value={hdr.key} placeholder="Header Name" class="w-[40%] px-3 py-2.5 bg-slate-950 rounded-lg border border-slate-800 focus:border-cyan-500/50 outline-none text-sm font-mono" />
+                    <div class="flex-1 bg-slate-950 rounded-lg border border-slate-800 focus-within:border-cyan-500/50 text-sm font-mono h-[40px] overflow-hidden relative">
                       <InputWithVariables bind:value={hdr.value} variables={envVarDict} />
                     </div>
-                    <button type="button" onclick={() => (headersKV = headersKV.filter((_, idx) => idx !== i))} class="p-2 text-slate-600 hover:text-red-400"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+                    <button type="button" onclick={() => (headersKV = headersKV.filter((_, idx) => idx !== i))} class="p-2.5 text-slate-600 hover:text-red-400 bg-slate-950 border border-slate-800 rounded-lg hover:border-red-500/30 transition-all opacity-40 group-hover/kv:opacity-100"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
                   </div>
                 {/each}
-                <button type="button" onclick={() => (headersKV = [...headersKV, { key: "", value: "" }])} class="text-[10px] font-bold text-cyan-500 mt-2">+ ADD HEADER</button>
+                <button type="button" onclick={() => (headersKV = [...headersKV, { key: "", value: "" }])} class="text-[10px] font-bold text-cyan-500 hover:underline flex items-center gap-1.5 mt-2 transition-all">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  ADD HEADER
+                </button>
               </div>
             {/if}
           </div>

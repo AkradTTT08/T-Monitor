@@ -30,7 +30,11 @@ func ConnectDB() {
 	
 	// Retry connection loop
 	for i := 1; i <= 10; i++ {
-		db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
+		db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
+			// Prevent AutoMigrate from creating/altering FK constraints
+			// This is the official GORM v2 fix for FK constraint issues with existing data
+			DisableForeignKeyConstraintWhenMigrating: true,
+		})
 		if err == nil {
 			break
 		}
