@@ -35,7 +35,7 @@ func GetCompanies(c *fiber.Ctx) error {
 	if f != nil {
 		defer f.Close()
 		for _, comp := range companies {
-			fmt.Fprintf(f, "[%s] User:%d Role:%s CompID:%d OwnerID:%d OwnerPreloaded:%v Members:%d\n", 
+			fmt.Fprintf(f, "[%s] User:%v Role:%s CompID:%v OwnerID:%v OwnerPreloaded:%v Members:%d\n", 
 				time.Now().Format("15:04:05"), userID, role, comp.ID, comp.UserID, comp.Owner != nil, len(comp.Members))
 		}
 	}
@@ -75,7 +75,8 @@ func CreateCompany(c *fiber.Ctx) error {
 	}
 
 	if err := database.DB.Create(&company).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create company"})
+		fmt.Printf(">>> CreateCompany DB Error: %v\n", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create company: " + err.Error()})
 	}
 
 	return c.Status(fiber.StatusCreated).JSON(company)

@@ -127,7 +127,8 @@ func CreateProject(c *fiber.Ctx) error {
 	}
 
 	if err := database.DB.Create(&project).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create project"})
+		fmt.Printf(">>> CreateProject DB Error: %v\n", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create project: " + err.Error()})
 	}
 
 	// Create default notification config

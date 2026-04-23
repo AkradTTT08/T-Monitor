@@ -32,6 +32,8 @@ services:
       - DB_SSLMODE=disable
       - JWT_SECRET_KEY=yoursupersecurejwtsecretkey
       - N8N_WEBHOOK_URL=http://localhost:5678/webhook/api-healthcheck
+    volumes:
+      - backend_uploads:/app/uploads
     depends_on:
       - database
     networks:
@@ -60,3 +62,4 @@ networks:
 
 volumes:
   postgres_data:
+  backend_uploads:

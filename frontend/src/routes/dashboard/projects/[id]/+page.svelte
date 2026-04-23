@@ -73,6 +73,211 @@
     response_script: "",
     recovery_script: "",
   };
+
+  // ===== Script Templates =====
+  const responseScriptTemplates = [
+    {
+      label: "-- เลือก Template --",
+      value: "",
+      script: "",
+    },
+    {
+      label: "✅ ตรวจสอบ Status 200",
+      value: "check_status_200",
+      script:
+`// ตรวจสอบว่า Response Status เป็น 200
+if (response.status === 200) {
+    console.log("✅ API ตอบกลับสำเร็จ Status:", response.status);
+} else {
+    console.error("❌ Status ไม่ถูกต้อง:", response.status);
+}`,
+    },
+    {
+      label: "🔑 บันทึก Token ลง ENV",
+      value: "save_token_env",
+      script:
+`// บันทึก Token จาก Response Body ลง Environment Variable
+const data = JSON.parse(response.body);
+if (data.token) {
+    setEnv("AUTH_TOKEN", data.token);
+    console.log("✅ Token บันทึกลง ENV สำเร็จ");
+} else {
+    console.error("❌ ไม่พบ token ใน response");
+}`,
+    },
+    {
+      label: "🔑 บันทึก AccessToken + RefreshToken",
+      value: "save_access_refresh_token",
+      script:
+`// บันทึก AccessToken และ RefreshToken ลง ENV
+const data = JSON.parse(response.body);
+if (data.accessToken) setEnv("ACCESS_TOKEN", data.accessToken);
+if (data.refreshToken) setEnv("REFRESH_TOKEN", data.refreshToken);
+console.log("✅ Tokens อัปเดตแล้ว");`,
+    },
+    {
+      label: "📦 บันทึก Field จาก JSON ลง ENV",
+      value: "save_field_env",
+      script:
+`// บันทึก Field ที่ต้องการจาก JSON Response ลง ENV
+const data = JSON.parse(response.body);
+// เปลี่ยน "fieldName" และ "ENV_KEY" ตามที่ต้องการ
+const value = data.fieldName;
+if (value !== undefined) {
+    setEnv("ENV_KEY", String(value));
+    console.log("✅ บันทึก ENV_KEY =", value);
+}`,
+    },
+    {
+      label: "🆔 บันทึก ID จาก Array แรก",
+      value: "save_first_id",
+      script:
+`// บันทึก ID จาก item แรกของ Array ใน Response
+const data = JSON.parse(response.body);
+if (Array.isArray(data) && data.length > 0) {
+    setEnv("FIRST_ID", String(data[0].id));
+    console.log("✅ FIRST_ID =", data[0].id);
+} else {
+    console.warn("⚠️ Array ว่างหรือ Response ไม่ใช่ Array");
+}`,
+    },
+    {
+      label: "📋 Log Response ทั้งหมด",
+      value: "log_response",
+      script:
+`// แสดง Response ใน Console เพื่อ Debug
+console.log("📋 Status:", response.status);
+console.log("📋 Headers:", JSON.stringify(response.headers));
+console.log("📋 Body:", response.body);`,
+    },
+    {
+      label: "🔀 เงื่อนไข: บันทึก Token ตาม Status",
+      value: "conditional_token",
+      script:
+`// บันทึก Token เฉพาะเมื่อ Status 200 หรือ 201
+if (response.status === 200 || response.status === 201) {
+    const data = JSON.parse(response.body);
+    if (data.token) {
+        setEnv("AUTH_TOKEN", data.token);
+        console.log("✅ Token อัปเดตแล้ว");
+    }
+} else {
+    console.warn("⚠️ ข้ามการบันทึก Token เนื่องจาก Status:", response.status);
+}`,
+    },
+  ];
+
+  const recoveryScriptTemplates = [
+    {
+      label: "-- เลือก Template --",
+      value: "",
+      script: "",
+    },
+    {
+      label: "🔄 Refresh Token อัตโนมัติ",
+      value: "refresh_token",
+      script:
+`// Auto-Refresh Token เมื่อ API พัง
+console.log("⚠️ API พังเนื่องจาก:", errorReason);
+
+try {
+    const res = await fetch("https://your-api.com/auth/refresh", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken: getEnv("REFRESH_TOKEN") })
+    });
+    const data = await res.json();
+    if (data.token) {
+        setEnv("AUTH_TOKEN", data.token);
+        console.log("✅ Token Refresh สำเร็จ");
+    }
+} catch (e) {
+    console.error("❌ Refresh Token ล้มเหลว:", e);
+}`,
+    },
+    {
+      label: "🔑 Login ใหม่ด้วย Credentials",
+      value: "relogin",
+      script:
+`// Login ใหม่เพื่อขอ Token ใหม่
+console.log("⚠️ พยายาม Re-Login เนื่องจาก:", errorReason);
+
+try {
+    const res = await fetch("https://your-api.com/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            username: getEnv("USERNAME"),
+            password: getEnv("PASSWORD")
+        })
+    });
+    const data = await res.json();
+    if (data.token) {
+        setEnv("AUTH_TOKEN", data.token);
+        console.log("✅ Re-Login สำเร็จ");
+    }
+} catch (e) {
+    console.error("❌ Re-Login ล้มเหลว:", e);
+}`,
+    },
+    {
+      label: "📋 Log Error แล้ว Skip",
+      value: "log_and_skip",
+      script:
+`// บันทึก Error และข้ามไป (ไม่ทำ Recovery)
+console.error("❌ API พัง:", errorReason);
+console.log("⏭️ ข้ามการ Retry ครั้งนี้");`,
+    },
+    {
+      label: "⏳ รอแล้วลองใหม่ (Delay Retry)",
+      value: "delay_retry",
+      script:
+`// รอก่อนที่ระบบจะ Retry
+console.log("⏳ รอ 5 วินาทีก่อน Retry...", "Error:", errorReason);
+await new Promise(resolve => setTimeout(resolve, 5000));
+console.log("✅ พร้อม Retry แล้ว");`,
+    },
+    {
+      label: "🔀 Refresh เฉพาะเมื่อ 401",
+      value: "refresh_on_401",
+      script:
+`// Refresh Token เฉพาะเมื่อได้ 401 Unauthorized
+if (errorReason && errorReason.includes("401")) {
+    console.log("🔒 401 Detected - กำลัง Refresh Token...");
+    const res = await fetch("https://your-api.com/auth/refresh", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken: getEnv("REFRESH_TOKEN") })
+    });
+    const data = await res.json();
+    if (data.token) {
+        setEnv("AUTH_TOKEN", data.token);
+        console.log("✅ Token Refresh สำเร็จ");
+    }
+} else {
+    console.warn("⚠️ ข้าม Recovery เนื่องจาก Error ไม่ใช่ 401:", errorReason);
+}`,
+    },
+  ];
+
+  function applyResponseTemplate(e: Event) {
+    const sel = (e.target as HTMLSelectElement).value;
+    const tpl = responseScriptTemplates.find(t => t.value === sel);
+    if (tpl && tpl.script) {
+      apiForm.response_script = tpl.script;
+    }
+    (e.target as HTMLSelectElement).value = "";
+  }
+
+  function applyRecoveryTemplate(e: Event) {
+    const sel = (e.target as HTMLSelectElement).value;
+    const tpl = recoveryScriptTemplates.find(t => t.value === sel);
+    if (tpl && tpl.script) {
+      apiForm.recovery_script = tpl.script;
+    }
+    (e.target as HTMLSelectElement).value = "";
+  }
+
   
   // API Search and Pagination State
   let apiSearchQuery = "";
@@ -494,6 +699,32 @@
     }
   }
 
+  // ===== Centralized auth-error handler =====
+  // 401 = token expired → logout and go to login
+  // 403 = forbidden (e.g. not a member) → show alert, stay on page
+  async function handleAuthError(res: Response, action = "perform this action") {
+    if (res.status === 401) {
+      localStorage.removeItem("monitor_token");
+      localStorage.removeItem("monitor_selected_project");
+      window.location.href = "/login";
+      return true;
+    }
+    if (res.status === 403) {
+      let msg = `You don't have permission to ${action}.`;
+      try {
+        const data = await res.clone().json();
+        if (data.error) msg = data.error;
+      } catch {}
+      systemAlert.fire({
+        icon: "error",
+        title: "Permission Denied",
+        text: msg,
+      });
+      return true;
+    }
+    return false;
+  }
+
   // Re-fetch whenever projectId changes
   $: if (projectId) {
     console.log("Project ID changed to:", projectId);
@@ -518,17 +749,29 @@
         }),
       ]);
 
+      // 401 = token expired → redirect to login
+      if (projRes.status === 401) {
+        localStorage.removeItem("monitor_token");
+        window.location.href = "/login";
+        return;
+      }
+
       if (projRes.ok) {
         project = await projRes.json();
       } else {
+        // 403/404 = not a member or not found → go back to dashboard
         localStorage.removeItem("monitor_selected_project");
         window.location.href = "/dashboard";
         return;
       }
-      if (apisRes.ok) apis = await apisRes.json();
+      if (apisRes.ok) {
+        const data = await apisRes.json();
+        apis = Array.isArray(data) ? data : [];
+      } else {
+        apis = [];
+      }
     } catch (err) {
       console.error(err);
-      // window.location.href = "/dashboard"; // Removed to prevent accidental redirects during dev or transient errors
     } finally {
       isLoading = false;
     }
@@ -1021,6 +1264,8 @@
         },
       );
 
+      if (await handleAuthError(res, "edit this API")) return;
+
       if (res.ok) {
         await fetchProjectDetails();
         systemToast.fire({
@@ -1029,15 +1274,12 @@
           text: "API endpoint updated successfully!",
         });
       } else {
-        throw new Error("Failed to update API");
+        const data = await res.json().catch(() => ({}));
+        systemAlert.fire({ icon: "error", title: "Error", text: data.error || "Failed to save changes." });
       }
     } catch (err) {
       console.error(err);
-      systemAlert.fire({
-        icon: "error",
-        title: "Error",
-        text: "Failed to save changes.",
-      });
+      systemAlert.fire({ icon: "error", title: "Network Error", text: "Could not reach the server." });
     }
   }
 
@@ -1055,11 +1297,19 @@
         },
       );
 
+      if (await handleAuthError(res, "delete this API")) return;
+
       if (res.ok) {
+        apis = apis.filter((a) => a.id !== selectedApi.id);
+        systemToast.fire({ icon: "success", title: "Deleted", text: "API endpoint removed." });
         await fetchProjectDetails();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        systemAlert.fire({ icon: "error", title: "Error", text: data.error || "Failed to delete API." });
       }
     } catch (err) {
       console.error(err);
+      systemAlert.fire({ icon: "error", title: "Network Error", text: "Could not reach the server." });
     }
   }
 
@@ -1165,6 +1415,8 @@
         },
       );
 
+      if (await handleAuthError(res, "pause/resume this API")) return;
+
       if (res.ok) {
         await fetchProjectDetails();
         systemToast.fire({
@@ -1172,16 +1424,19 @@
           title: pause_hours !== 0 ? "Monitor Paused" : "Monitor Resumed",
           text: label,
         });
+      } else {
+        const data = await res.json().catch(() => ({}));
+        systemAlert.fire({ icon: "error", title: "Error", text: data.error || "Failed to update pause status." });
       }
     } catch (err) {
       console.error(err);
+      systemAlert.fire({ icon: "error", title: "Network Error", text: "Could not reach the server." });
     }
   }
 
   async function handleBulkDeleteSubmit() {
     try {
       const token = localStorage.getItem("monitor_token");
-      // Fire requests concurrently using Promise.all
       const deletePromises = selectedApiIds.map((id) =>
         fetch(`${API_BASE_URL}/api/v1/apis/${id}`, {
           method: "DELETE",
@@ -1190,17 +1445,35 @@
       );
 
       const results = await Promise.all(deletePromises);
-      const allOk = results.every((res) => res.ok);
 
-      if (allOk || results.some((res) => res.ok)) {
+      // Check if any returned 401 (expired token)
+      const hasUnauth = results.find((r) => r.status === 401);
+      if (hasUnauth) {
+        await handleAuthError(hasUnauth, "delete APIs");
+        return;
+      }
+
+      // Check if any returned 403 (permission)
+      const hasForbidden = results.find((r) => r.status === 403);
+      if (hasForbidden) {
+        await handleAuthError(hasForbidden, "delete APIs");
+        return;
+      }
+
+      const allOk = results.every((res) => res.ok);
+      const someOk = results.some((res) => res.ok);
+
+      if (allOk || someOk) {
         showBulkDeleteModal = false;
         selectedApiIds = [];
         await fetchProjectDetails();
+        systemToast.fire({ icon: "success", title: "Deleted", text: allOk ? "All selected APIs removed." : "Some APIs were removed." });
       } else {
-        console.error("Some or all deletions failed");
+        systemAlert.fire({ icon: "error", title: "Error", text: "Failed to delete the selected APIs." });
       }
     } catch (err) {
       console.error("Bulk delete failed:", err);
+      systemAlert.fire({ icon: "error", title: "Network Error", text: "Could not reach the server." });
     }
   }
 
@@ -2346,6 +2619,23 @@
           Use <code>pm.environment.set("key", "value")</code> or <code>setEnv("key", "value")</code>.
           The <code>response</code> object is available with <code>body</code>, <code>status</code>, and <code>headers</code>.
         </p>
+        <!-- Response Script Template Dropdown -->
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-[10px] text-slate-500 uppercase tracking-widest font-mono shrink-0">📋 ใส่ Template:</span>
+          <div class="relative flex-1">
+            <select
+              onchange={applyResponseTemplate}
+              class="w-full appearance-none bg-slate-900 border border-slate-700/60 hover:border-cyan-500/50 text-slate-300 text-xs font-mono rounded-lg px-3 py-1.5 pr-7 outline-none transition-all cursor-pointer focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20"
+            >
+              {#each responseScriptTemplates as tpl}
+                <option value={tpl.value} class="bg-slate-900">{tpl.label}</option>
+              {/each}
+            </select>
+            <div class="pointer-events-none absolute inset-y-0 right-2 flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-slate-500"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </div>
+          </div>
+        </div>
         <textarea 
           bind:value={apiForm.response_script} 
           rows={6}
@@ -2358,12 +2648,50 @@
           <h4 class="text-xs font-bold text-amber-400 uppercase tracking-widest flex items-center gap-2">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
             Auto-Recovery / Self-Healing Script
+            <!-- Info Icon with Thai Tooltip (Tailwind inline) -->
+            <span class="relative inline-flex items-center group/tip ml-1">
+              <span class="inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-400 cursor-help transition-all duration-200 group-hover/tip:bg-amber-500/30 group-hover/tip:border-amber-500/70 group-hover/tip:shadow-[0_0_8px_rgba(245,158,11,0.4)] group-hover/tip:scale-110">
+                <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+              </span>
+              <!-- Tooltip panel -->
+              <span class="pointer-events-none invisible opacity-0 group-hover/tip:visible group-hover/tip:opacity-100 group-hover/tip:pointer-events-auto absolute bottom-[calc(100%+10px)] left-1/2 -translate-x-1/2 translate-y-1 group-hover/tip:translate-y-0 w-[320px] bg-slate-950/97 backdrop-blur-md border border-amber-500/30 rounded-xl p-[14px_16px] text-[11px] leading-[1.7] text-slate-300 font-normal normal-case tracking-normal shadow-[0_20px_40px_rgba(0,0,0,0.5),0_0_0_1px_rgba(245,158,11,0.1),inset_0_1px_0_rgba(255,255,255,0.05)] transition-all duration-200 z-[9999]" role="tooltip">
+                <strong class="text-amber-400 font-bold">📌 คืออะไร?</strong><br/>
+                สคริปต์นี้จะทำงาน<em class="text-orange-400 italic">เฉพาะเมื่อ API เกิดข้อผิดพลาด</em> (เช่น Timeout หรือได้ Status Code ที่ไม่ถูกต้อง) โดยจะรันก่อนที่ระบบจะลองเรียก API ซ้ำ (Retry)<br/><br/>
+                <strong class="text-amber-400 font-bold">🔧 ใช้ทำอะไร?</strong><br/>
+                ใช้เพื่อ &quot;ซ่อมแซม&quot; สถานการณ์ก่อน Retry เช่น ต่ออายุ Token ที่หมดอายุ<br/><br/>
+                <strong class="text-amber-400 font-bold">💡 ตัวแปรที่ใช้ได้:</strong><br/>
+                • <code class="bg-amber-500/15 border border-amber-500/25 rounded px-1 py-px font-mono text-[10px] text-yellow-300">errorReason</code> — สาเหตุที่ API พัง<br/>
+                • <code class="bg-amber-500/15 border border-amber-500/25 rounded px-1 py-px font-mono text-[10px] text-yellow-300">setEnv(&quot;KEY&quot;, &quot;VAL&quot;)</code> — อัปเดต Environment Variable<br/>
+                • <code class="bg-amber-500/15 border border-amber-500/25 rounded px-1 py-px font-mono text-[10px] text-yellow-300">fetch(...)</code> — เรียก API อื่นเพื่อขอ Token ใหม่<br/><br/>
+                <strong class="text-amber-400 font-bold">📝 ตัวอย่าง:</strong><br/>
+                ถ้า API พังเพราะ Token หมดอายุ ให้เขียนโค้ด fetch ไปขอ Token ใหม่ แล้วใช้ setEnv เก็บไว้ ระบบจะใช้ Token ใหม่ในการ Retry อัตโนมัติ
+                <!-- Arrow -->
+                <span class="absolute top-full left-1/2 -translate-x-1/2 border-[6px] border-transparent border-t-amber-500/30"></span>
+              </span>
+            </span>
           </h4>
           <span class="text-[10px] bg-amber-950/40 text-amber-500 px-3 py-1 rounded-full border border-amber-500/30 font-bold">EXPERIMENTAL</span>
         </div>
         <p class="text-[10px] text-slate-500 mb-3 italic">
           If the API fails (timeout or invalid status), this script runs before retrying. Use logic like <code>fetch</code> to refresh a token and <code>setEnv("KEY", "VAL")</code> to store it. The error message is available as <code>errorReason</code>.
         </p>
+        <!-- Recovery Script Template Dropdown -->
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-[10px] text-slate-500 uppercase tracking-widest font-mono shrink-0">📋 ใส่ Template:</span>
+          <div class="relative flex-1">
+            <select
+              onchange={applyRecoveryTemplate}
+              class="w-full appearance-none bg-slate-900 border border-slate-700/60 hover:border-amber-500/50 text-slate-300 text-xs font-mono rounded-lg px-3 py-1.5 pr-7 outline-none transition-all cursor-pointer focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20"
+            >
+              {#each recoveryScriptTemplates as tpl}
+                <option value={tpl.value} class="bg-slate-900">{tpl.label}</option>
+              {/each}
+            </select>
+            <div class="pointer-events-none absolute inset-y-0 right-2 flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-amber-600"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </div>
+          </div>
+        </div>
         <textarea 
           bind:value={apiForm.recovery_script} 
           rows={6}
@@ -2392,7 +2720,7 @@
   size="full"
 >
   <form onsubmit={(e) => { e.preventDefault(); handleEditApiSubmit(); }} class="flex flex-col h-full bg-slate-900/10">
-    <div class="flex-1 overflow-y-auto px-1 pt-2 space-y-6 custom-scrollbar pb-10">
+    <div class="flex-1 overflow-y-auto px-1 pt-2 space-y-6 custom-scrollbar pb-24">
       <!-- Section 1: Basic Information -->
       <div class="bg-slate-800/20 rounded-2xl p-6 border border-slate-700/30">
         <h4 class="text-xs font-bold text-cyan-500/80 uppercase tracking-widest mb-4 flex items-center gap-2">
@@ -2506,10 +2834,81 @@
         </div>
       </div>
 
-      <!-- Section 3: Response Extraction Script -->
-      <div class="bg-slate-800/30 rounded-2xl p-6 border border-cyan-500/20">
-        <h4 class="text-xs font-bold text-cyan-400 uppercase tracking-widest mb-4">Post-Response Script (JavaScript)</h4>
-        <textarea bind:value={apiForm.response_script} rows={6} shadow-inner bg-slate-950 class="w-full font-mono text-xs px-4 py-3 bg-slate-950 rounded-xl border border-slate-800 outline-none" placeholder={`pm.environment.set("token", JSON.parse(response.body).token);`}></textarea>
+      <!-- Section 3: Scripts (Post-Response + Auto-Recovery) -->
+      <div class="bg-slate-800/30 rounded-2xl p-6 border border-cyan-500/20 shadow-[0_0_20px_rgba(6,182,212,0.05)]">
+        <h4 class="text-xs font-bold text-cyan-400 uppercase tracking-widest mb-3">Post-Response Script (JavaScript)</h4>
+        <!-- Response Script Template Dropdown (Edit Modal) -->
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-[10px] text-slate-500 uppercase tracking-widest font-mono shrink-0">📋 ใส่ Template:</span>
+          <div class="relative flex-1">
+            <select
+              onchange={applyResponseTemplate}
+              class="w-full appearance-none bg-slate-900 border border-slate-700/60 hover:border-cyan-500/50 text-slate-300 text-xs font-mono rounded-lg px-3 py-1.5 pr-7 outline-none transition-all cursor-pointer focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20"
+            >
+              {#each responseScriptTemplates as tpl}
+                <option value={tpl.value} class="bg-slate-900">{tpl.label}</option>
+              {/each}
+            </select>
+            <div class="pointer-events-none absolute inset-y-0 right-2 flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-slate-500"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </div>
+          </div>
+        </div>
+        <textarea bind:value={apiForm.response_script} rows={6} spellcheck={false} class="w-full font-mono text-xs px-4 py-3 bg-slate-950 rounded-xl border border-slate-800 focus:border-cyan-500/50 outline-none resize-none transition-all placeholder:text-slate-700 leading-relaxed shadow-inner" placeholder={`pm.environment.set("token", JSON.parse(response.body).token);`}></textarea>
+
+        <div class="flex items-center justify-between mb-4 mt-6">
+          <h4 class="text-xs font-bold text-amber-400 uppercase tracking-widest flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+            Auto-Recovery / Self-Healing Script
+            <!-- Info Icon with Thai Tooltip (Tailwind inline) -->
+            <span class="relative inline-flex items-center group/tip ml-1">
+              <span class="inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-400 cursor-help transition-all duration-200 group-hover/tip:bg-amber-500/30 group-hover/tip:border-amber-500/70 group-hover/tip:shadow-[0_0_8px_rgba(245,158,11,0.4)] group-hover/tip:scale-110">
+                <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+              </span>
+              <span class="pointer-events-none invisible opacity-0 group-hover/tip:visible group-hover/tip:opacity-100 group-hover/tip:pointer-events-auto absolute bottom-[calc(100%+10px)] left-1/2 -translate-x-1/2 translate-y-1 group-hover/tip:translate-y-0 w-[320px] bg-slate-950/97 backdrop-blur-md border border-amber-500/30 rounded-xl p-[14px_16px] text-[11px] leading-[1.7] text-slate-300 font-normal normal-case tracking-normal shadow-[0_20px_40px_rgba(0,0,0,0.5),0_0_0_1px_rgba(245,158,11,0.1),inset_0_1px_0_rgba(255,255,255,0.05)] transition-all duration-200 z-[9999]" role="tooltip">
+                <strong class="text-amber-400 font-bold">📌 คืออะไร?</strong><br/>
+                สคริปต์นี้จะทำงาน<em class="text-orange-400 italic">เฉพาะเมื่อ API เกิดข้อผิดพลาด</em> (เช่น Timeout หรือได้ Status Code ที่ไม่ถูกต้อง) โดยจะรันก่อนที่ระบบจะลองเรียก API ซ้ำ (Retry)<br/><br/>
+                <strong class="text-amber-400 font-bold">🔧 ใช้ทำอะไร?</strong><br/>
+                ใช้เพื่อ &quot;ซ่อมแซม&quot; สถานการณ์ก่อน Retry เช่น ต่ออายุ Token ที่หมดอายุ<br/><br/>
+                <strong class="text-amber-400 font-bold">💡 ตัวแปรที่ใช้ได้:</strong><br/>
+                • <code class="bg-amber-500/15 border border-amber-500/25 rounded px-1 py-px font-mono text-[10px] text-yellow-300">errorReason</code> — สาเหตุที่ API พัง<br/>
+                • <code class="bg-amber-500/15 border border-amber-500/25 rounded px-1 py-px font-mono text-[10px] text-yellow-300">setEnv(&quot;KEY&quot;, &quot;VAL&quot;)</code> — อัปเดต Environment Variable<br/>
+                • <code class="bg-amber-500/15 border border-amber-500/25 rounded px-1 py-px font-mono text-[10px] text-yellow-300">fetch(...)</code> — เรียก API อื่นเพื่อขอ Token ใหม่<br/><br/>
+                <strong class="text-amber-400 font-bold">📝 ตัวอย่าง:</strong><br/>
+                ถ้า API พังเพราะ Token หมดอายุ ให้เขียนโค้ด fetch ไปขอ Token ใหม่ แล้วใช้ setEnv เก็บไว้ ระบบจะใช้ Token ใหม่ในการ Retry อัตโนมัติ
+                <span class="absolute top-full left-1/2 -translate-x-1/2 border-[6px] border-transparent border-t-amber-500/30"></span>
+              </span>
+            </span>
+          </h4>
+          <span class="text-[10px] bg-amber-950/40 text-amber-500 px-3 py-1 rounded-full border border-amber-500/30 font-bold">EXPERIMENTAL</span>
+        </div>
+        <p class="text-[10px] text-slate-500 mb-3 italic">
+          If the API fails (timeout or invalid status), this script runs before retrying. Use logic like <code>fetch</code> to refresh a token and <code>setEnv("KEY", "VAL")</code> to store it. The error message is available as <code>errorReason</code>.
+        </p>
+        <!-- Recovery Script Template Dropdown (Edit Modal) -->
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-[10px] text-slate-500 uppercase tracking-widest font-mono shrink-0">📋 ใส่ Template:</span>
+          <div class="relative flex-1">
+            <select
+              onchange={applyRecoveryTemplate}
+              class="w-full appearance-none bg-slate-900 border border-slate-700/60 hover:border-amber-500/50 text-slate-300 text-xs font-mono rounded-lg px-3 py-1.5 pr-7 outline-none transition-all cursor-pointer focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20"
+            >
+              {#each recoveryScriptTemplates as tpl}
+                <option value={tpl.value} class="bg-slate-900">{tpl.label}</option>
+              {/each}
+            </select>
+            <div class="pointer-events-none absolute inset-y-0 right-2 flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-amber-600"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </div>
+          </div>
+        </div>
+        <textarea
+          bind:value={apiForm.recovery_script}
+          rows={6}
+          spellcheck={false}
+          class="w-full font-mono text-xs px-4 py-3 bg-slate-950 rounded-xl border border-slate-800 focus:border-amber-500/50 outline-none resize-none transition-all placeholder:text-slate-700 leading-relaxed shadow-inner"
+          placeholder={`// Example: Refresh token logic\nconsole.log("API Failed because: " + errorReason);\n// perform a fetch call to refresh token...`}
+        ></textarea>
       </div>
     </div>
 
@@ -3189,6 +3588,102 @@
   }
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background: rgba(100, 116, 139, 0.5);
+  }
+
+  /* ===== Recovery Info Tooltip ===== */
+  .recovery-info-tooltip-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .recovery-info-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    color: #f59e0b;
+    cursor: help;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+  }
+
+  .recovery-info-icon:hover {
+    background: rgba(245, 158, 11, 0.3);
+    border-color: rgba(245, 158, 11, 0.7);
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+    transform: scale(1.1);
+  }
+
+  .recovery-tooltip {
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    position: absolute;
+    bottom: calc(100% + 10px);
+    left: 50%;
+    transform: translateX(-50%) translateY(4px);
+    width: 320px;
+    background: rgba(15, 23, 42, 0.97);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-size: 11px;
+    line-height: 1.7;
+    color: #cbd5e1;
+    font-weight: 400;
+    font-family: inherit;
+    text-transform: none;
+    letter-spacing: normal;
+    box-shadow:
+      0 20px 40px rgba(0, 0, 0, 0.5),
+      0 0 0 1px rgba(245, 158, 11, 0.1),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
+    z-index: 9999;
+  }
+
+  /* Tooltip arrow */
+  .recovery-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: rgba(245, 158, 11, 0.3);
+  }
+
+  .recovery-info-tooltip-wrapper:hover .recovery-tooltip {
+    visibility: visible;
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+    pointer-events: auto;
+  }
+
+  .recovery-tooltip strong {
+    color: #fbbf24;
+    font-weight: 700;
+  }
+
+  .recovery-tooltip em {
+    color: #fb923c;
+    font-style: italic;
+  }
+
+  .recovery-tooltip code {
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-family: 'Fira Code', 'Cascadia Code', monospace;
+    font-size: 10px;
+    color: #fcd34d;
   }
 </style>
 

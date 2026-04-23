@@ -28,7 +28,7 @@ func GenerateToken(user models.User) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"user_id": user.ID,
 		"role":    user.Role,
-		"exp":     time.Now().Add(time.Hour * 1).Unix(), // 1 hour expiration
+		"exp":     time.Now().Add(time.Hour * 24).Unix(), // 24 hour expiration
 	})
 
 	return token.SignedString(secret)

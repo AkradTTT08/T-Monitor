@@ -435,14 +435,17 @@
 <Modal
   bind:open={showApiTestModal}
   title="API Details & Testing"
-  maxWidth="max-w-4xl"
+  maxWidth="max-w-7xl"
 >
   {#if selectedApi}
-    <div class="space-y-6">
-      <div
-        class="bg-slate-900/60 border border-slate-700/60 rounded-xl p-4 flex items-center justify-between shadow-[inset_0_0_30px_rgba(0,0,0,0.3)]"
-      >
-        <div class="flex items-center gap-4 w-full">
+    <!-- 2-column split layout -->
+    <div class="api-test-layout">
+
+      <!-- ===== LEFT: Request Panel ===== -->
+      <div class="api-test-left">
+
+        <!-- URL Bar -->
+        <div class="bg-slate-900/60 border border-slate-700/60 rounded-xl p-3 flex items-center gap-3 shadow-[inset_0_0_30px_rgba(0,0,0,0.3)]">
           <span
             class="px-3 py-1.5 rounded text-sm font-black whitespace-nowrap
              {selectedApi.method === 'GET'
@@ -457,9 +460,7 @@
           >
             {selectedApi.method}
           </span>
-          <div
-            class="flex-1 overflow-hidden flex items-center gap-2 group/copy"
-          >
+          <div class="flex-1 overflow-hidden flex items-center gap-2 group/copy">
             <div class="flex-1">
               <InputWithVariables
                 bind:value={reqUrl}
@@ -473,407 +474,241 @@
               title="Copy URL"
             >
               {#if copyFeedback["url"]}
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  class="text-green-600"
-                  ><polyline points="20 6 9 17 4 12"></polyline></svg
-                >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-green-400"><polyline points="20 6 9 17 4 12"></polyline></svg>
               {:else}
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  ><rect x="9" y="9" width="13" height="13" rx="2" ry="2"
-                  ></rect><path
-                    d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
-                  ></path></svg
-                >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
               {/if}
             </button>
           </div>
         </div>
-      </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <!-- Headers Editor -->
-        <div
-          class="border border-slate-700/60 rounded-xl overflow-hidden flex flex-col h-48 bg-slate-950/30"
-        >
-          <div
-            class="bg-slate-800/70 border-b border-slate-700/60 px-3 py-2 flex justify-between items-center"
-          >
-            <span
-              class="text-xs font-bold text-cyan-500/80 uppercase tracking-widest font-mono"
-              >Headers (JSON)</span
-            >
-            <button
-              on:click={() => copyToClipboard(reqHeaders, "headers")}
-              class="p-1 text-slate-500 hover:text-cyan-400 transition-colors"
-              title="Copy JSON"
-            >
-              {#if copyFeedback["headers"]}
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  class="text-green-600"
-                  ><polyline points="20 6 9 17 4 12"></polyline></svg
-                >
-              {:else}
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  ><rect x="9" y="9" width="13" height="13" rx="2" ry="2"
-                  ></rect><path
-                    d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
-                  ></path></svg
-                >
-              {/if}
-            </button>
-          </div>
-          <TextareaWithVariables
-            bind:value={reqHeaders}
-            variables={activeProjectEnvVars}
-            outerClass="h-full bg-slate-900 border-0"
-            innerClass="w-full h-full p-3 resize-none"
-            textClass="text-green-400 font-mono text-xs"
-          />
-        </div>
-
-        <!-- Parameters Editor -->
-        <div
-          class="border border-slate-700/60 rounded-xl overflow-hidden flex flex-col h-48 bg-slate-950/30"
-        >
-          <div
-            class="bg-slate-800/70 border-b border-slate-700/60 px-3 py-2 flex justify-between items-center"
-          >
-            <span
-              class="text-xs font-bold text-amber-400/80 uppercase tracking-widest font-mono"
-              >Query Params (JSON)</span
-            >
-            <button
-              on:click={() => copyToClipboard(reqParams, "params")}
-              class="p-1 text-slate-500 hover:text-cyan-400 transition-colors"
-              title="Copy JSON"
-            >
-              {#if copyFeedback["params"]}
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  class="text-green-600"
-                  ><polyline points="20 6 9 17 4 12"></polyline></svg
-                >
-              {:else}
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  ><rect x="9" y="9" width="13" height="13" rx="2" ry="2"
-                  ></rect><path
-                    d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
-                  ></path></svg
-                >
-              {/if}
-            </button>
-          </div>
-          <TextareaWithVariables
-            bind:value={reqParams}
-            variables={activeProjectEnvVars}
-            outerClass="h-full bg-slate-900 border-0"
-            innerClass="w-full h-full p-3 resize-none"
-            textClass="text-amber-400 font-mono text-xs"
-          />
-        </div>
-      </div>
-
-      <!-- Body Editor -->
-      {#if reqMethod !== "GET"}
-        <div
-          class="border border-slate-700/60 rounded-xl overflow-hidden flex flex-col h-48 bg-slate-950/30"
-        >
-          <div
-            class="bg-slate-800/70 border-b border-slate-700/60 px-3 py-2 flex items-center justify-between"
-          >
-            <span
-              class="text-xs font-bold text-indigo-400/80 uppercase tracking-widest font-mono"
-              >Request Body</span
-            >
-            <div class="flex items-center gap-2">
-              <span
-                class="text-[10px] bg-slate-700 text-indigo-300 border border-slate-600 px-2 py-0.5 rounded uppercase font-mono font-bold"
-                >Raw JSON</span
-              >
-              <button
-                on:click={() => copyToClipboard(reqBody, "body")}
-                class="p-1 text-slate-500 hover:text-cyan-400 transition-colors"
-                title="Copy JSON"
-              >
-                {#if copyFeedback["body"]}
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    class="text-green-600"
-                    ><polyline points="20 6 9 17 4 12"></polyline></svg
-                  >
+        <!-- Headers + Params side by side -->
+        <div class="grid grid-cols-2 gap-3">
+          <!-- Headers Editor -->
+          <div class="border border-slate-700/60 rounded-xl overflow-hidden flex flex-col bg-slate-950/30" style="height:180px">
+            <div class="bg-slate-800/70 border-b border-slate-700/60 px-3 py-2 flex justify-between items-center shrink-0">
+              <span class="text-xs font-bold text-cyan-500/80 uppercase tracking-widest font-mono">Headers (JSON)</span>
+              <button on:click={() => copyToClipboard(reqHeaders, "headers")} class="p-1 text-slate-500 hover:text-cyan-400 transition-colors" title="Copy JSON">
+                {#if copyFeedback["headers"]}
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-green-400"><polyline points="20 6 9 17 4 12"></polyline></svg>
                 {:else}
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    ><rect x="9" y="9" width="13" height="13" rx="2" ry="2"
-                    ></rect><path
-                      d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
-                    ></path></svg
-                  >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
                 {/if}
               </button>
             </div>
+            <TextareaWithVariables
+              bind:value={reqHeaders}
+              variables={activeProjectEnvVars}
+              outerClass="h-full bg-slate-900 border-0"
+              innerClass="w-full h-full p-3 resize-none"
+              textClass="text-green-400 font-mono text-xs"
+            />
           </div>
-          <TextareaWithVariables
-            bind:value={reqBody}
-            variables={activeProjectEnvVars}
-            outerClass="h-full bg-slate-900 border-0"
-            innerClass="w-full h-full p-3 resize-none"
-            textClass="text-blue-300 font-mono text-xs"
-          />
-        </div>
-      {/if}
 
-      <div class="flex justify-between items-center pt-2">
-        <button
-          on:click={() => (showApiTestModal = false)}
-          class="px-4 py-2 text-slate-400 bg-slate-800 border border-slate-700 rounded-xl hover:bg-slate-700 hover:text-cyan-400 font-bold transition-colors text-xs"
-          >Close</button
-        >
-        <button
-          on:click={executeApiTest}
-          disabled={isTestingApi}
-          class="px-4 py-2 bg-cyan-600 text-cyan-50 rounded-xl hover:bg-cyan-700 font-bold transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] text-xs flex items-center gap-2 outline-none focus:ring-4 focus:ring-cyan-500/30 disabled:opacity-75 relative overflow-hidden"
-        >
-          {#if isTestingApi}
-            <svg
-              class="animate-spin h-4 w-4 text-cyan-50"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              ><circle
-                class="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                stroke-width="4"
-              ></circle><path
-                class="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-              ></path></svg
-            >
-            Firing Engine...
-          {:else}
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="3"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              ><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg
-            >
-            Send Request
-          {/if}
-        </button>
+          <!-- Parameters Editor -->
+          <div class="border border-slate-700/60 rounded-xl overflow-hidden flex flex-col bg-slate-950/30" style="height:180px">
+            <div class="bg-slate-800/70 border-b border-slate-700/60 px-3 py-2 flex justify-between items-center shrink-0">
+              <span class="text-xs font-bold text-amber-400/80 uppercase tracking-widest font-mono">Query Params (JSON)</span>
+              <button on:click={() => copyToClipboard(reqParams, "params")} class="p-1 text-slate-500 hover:text-cyan-400 transition-colors" title="Copy JSON">
+                {#if copyFeedback["params"]}
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-green-400"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                {:else}
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                {/if}
+              </button>
+            </div>
+            <TextareaWithVariables
+              bind:value={reqParams}
+              variables={activeProjectEnvVars}
+              outerClass="h-full bg-slate-900 border-0"
+              innerClass="w-full h-full p-3 resize-none"
+              textClass="text-amber-400 font-mono text-xs"
+            />
+          </div>
+        </div>
+
+        <!-- Body Editor (non-GET) -->
+        {#if reqMethod !== "GET"}
+          <div class="border border-slate-700/60 rounded-xl overflow-hidden flex flex-col bg-slate-950/30" style="height:180px">
+            <div class="bg-slate-800/70 border-b border-slate-700/60 px-3 py-2 flex items-center justify-between shrink-0">
+              <span class="text-xs font-bold text-indigo-400/80 uppercase tracking-widest font-mono">Request Body</span>
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] bg-slate-700 text-indigo-300 border border-slate-600 px-2 py-0.5 rounded uppercase font-mono font-bold">Raw JSON</span>
+                <button on:click={() => copyToClipboard(reqBody, "body")} class="p-1 text-slate-500 hover:text-cyan-400 transition-colors" title="Copy JSON">
+                  {#if copyFeedback["body"]}
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-green-400"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  {:else}
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                  {/if}
+                </button>
+              </div>
+            </div>
+            <TextareaWithVariables
+              bind:value={reqBody}
+              variables={activeProjectEnvVars}
+              outerClass="h-full bg-slate-900 border-0"
+              innerClass="w-full h-full p-3 resize-none"
+              textClass="text-blue-300 font-mono text-xs"
+            />
+          </div>
+        {/if}
+
+        <!-- Action buttons (pinned to bottom of left panel) -->
+        <div class="flex justify-between items-center pt-2 mt-auto">
+          <button
+            on:click={() => (showApiTestModal = false)}
+            class="px-4 py-2 text-slate-400 bg-slate-800 border border-slate-700 rounded-xl hover:bg-slate-700 hover:text-cyan-400 font-bold transition-colors text-xs"
+          >Close</button>
+          <button
+            on:click={executeApiTest}
+            disabled={isTestingApi}
+            class="px-5 py-2 bg-cyan-600 text-cyan-50 rounded-xl hover:bg-cyan-700 font-bold transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] text-xs flex items-center gap-2 outline-none focus:ring-4 focus:ring-cyan-500/30 disabled:opacity-75"
+          >
+            {#if isTestingApi}
+              <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+              Firing Engine...
+            {:else}
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
+              Send Request
+            {/if}
+          </button>
+        </div>
       </div>
 
-      <!-- Test Result Output -->
-      {#if testResult}
-        <div class="mt-8 border-t border-slate-700 pt-6 animate-fade-in">
-          <div class="flex items-center justify-between mb-3">
-            <h3
-              class="text-sm font-black text-slate-400 tracking-widest font-mono uppercase"
-            >
-              RESPONSE
-            </h3>
-            <div class="flex gap-3">
-              {#if testResult.status}
-                <span
-                  class="px-2.5 py-1 rounded text-[11px] font-black tracking-widest font-mono
+      <!-- ===== RIGHT: Response Panel ===== -->
+      <div class="api-test-right">
+        {#if testResult}
+          <div class="animate-fade-in h-full flex flex-col">
+            <!-- Response header bar -->
+            <div class="flex items-center justify-between mb-3 shrink-0">
+              <h3 class="text-xs font-black text-slate-400 tracking-widest font-mono uppercase">Response</h3>
+              <div class="flex gap-2">
+                {#if testResult.status}
+                  <span class="px-2.5 py-1 rounded text-[10px] font-black tracking-widest font-mono
                    {testResult.status >= 200 && testResult.status < 300
                     ? 'bg-green-950/50 text-green-400 border border-green-500/30'
                     : testResult.status >= 400 && testResult.status < 500
                       ? 'bg-amber-950/50 text-amber-400 border border-amber-500/30'
                       : testResult.status >= 500
                         ? 'bg-red-950/50 text-red-400 border border-red-500/30'
-                        : 'bg-slate-800 text-slate-400'}"
-                >
-                  STATUS: {testResult.status}
-                </span>
-              {/if}
-              {#if testResult.latency}
-                <span
-                  class="px-2.5 py-1 rounded text-[11px] font-black tracking-widest font-mono bg-cyan-950/50 text-cyan-400 border border-cyan-500/30"
-                >
-                  {testResult.latency} MS
-                </span>
-              {/if}
-              {#if testResult.error}
-                <span
-                  class="px-2.5 py-1 rounded text-[11px] font-black tracking-widest font-mono bg-red-950/50 text-red-400 border border-red-500/30"
-                >
-                  FAILED TO CONNECT
-                </span>
-              {/if}
-            </div>
-          </div>
-
-          <div
-            class="bg-[#0f172a] rounded-xl overflow-hidden border border-slate-700 relative group"
-          >
-            <div
-              class="absolute top-0 w-full h-8 bg-slate-800/80 backdrop-blur-sm border-b border-slate-700 flex items-center justify-between px-4"
-            >
-              <div class="flex gap-1.5">
-                <div class="w-2.5 h-2.5 rounded-full bg-red-500/80"></div>
-                <div class="w-2.5 h-2.5 rounded-full bg-amber-500/80"></div>
-                <div class="w-2.5 h-2.5 rounded-full bg-green-500/80"></div>
-              </div>
-              <button
-                on:click={() =>
-                  copyToClipboard(
-                    testResult.error ||
-                      (testResult.is_json
-                        ? JSON.stringify(testResult.response, null, 2)
-                        : testResult.response || ""),
-                    "response",
-                  )}
-                class="p-1 text-slate-400 hover:text-white transition-colors"
-                title="Copy Output"
-              >
-                {#if copyFeedback["response"]}
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    class="text-green-400"
-                    ><polyline points="20 6 9 17 4 12"></polyline></svg
-                  >
-                {:else}
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    ><rect x="9" y="9" width="13" height="13" rx="2" ry="2"
-                    ></rect><path
-                      d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
-                    ></path></svg
-                  >
+                        : 'bg-slate-800 text-slate-400'}">
+                    STATUS: {testResult.status}
+                  </span>
                 {/if}
-              </button>
+                {#if testResult.latency}
+                  <span class="px-2.5 py-1 rounded text-[10px] font-black tracking-widest font-mono bg-cyan-950/50 text-cyan-400 border border-cyan-500/30">
+                    {testResult.latency} MS
+                  </span>
+                {/if}
+                {#if testResult.error}
+                  <span class="px-2.5 py-1 rounded text-[10px] font-black tracking-widest font-mono bg-red-950/50 text-red-400 border border-red-500/30">
+                    FAILED
+                  </span>
+                {/if}
+              </div>
             </div>
-            <div class="p-4 pt-10 max-h-96 overflow-y-auto">
-              {#if testResult.error}
-                <pre
-                  class="text-red-400 font-mono text-sm whitespace-pre-wrap leading-relaxed">{testResult.error}</pre>
-              {:else if testResult.is_json}
-                <pre
-                  class="text-emerald-400 font-mono text-sm whitespace-pre-wrap leading-relaxed">{JSON.stringify(
-                    testResult.response,
-                    null,
-                    2,
-                  )}</pre>
-              {:else}
-                <pre
-                  class="text-slate-300 font-mono text-sm whitespace-pre-wrap leading-relaxed">{testResult.response ||
-                    "Empty response"}</pre>
-              {/if}
+
+            <!-- Code block -->
+            <div class="bg-[#0f172a] rounded-xl overflow-hidden border border-slate-700 flex flex-col flex-1 min-h-0">
+              <!-- Toolbar -->
+              <div class="h-8 bg-slate-800/80 backdrop-blur-sm border-b border-slate-700 flex items-center justify-between px-4 shrink-0">
+                <div class="flex gap-1.5">
+                  <div class="w-2.5 h-2.5 rounded-full bg-red-500/80"></div>
+                  <div class="w-2.5 h-2.5 rounded-full bg-amber-500/80"></div>
+                  <div class="w-2.5 h-2.5 rounded-full bg-green-500/80"></div>
+                </div>
+                <button
+                  on:click={() => copyToClipboard(
+                    testResult.error || (testResult.is_json ? JSON.stringify(testResult.response, null, 2) : testResult.response || ""),
+                    "response"
+                  )}
+                  class="p-1 text-slate-400 hover:text-white transition-colors"
+                  title="Copy Output"
+                >
+                  {#if copyFeedback["response"]}
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-green-400"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  {:else}
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                  {/if}
+                </button>
+              </div>
+              <!-- Scrollable response body -->
+              <div class="p-4 overflow-y-auto flex-1 min-h-0">
+                {#if testResult.error}
+                  <pre class="text-red-400 font-mono text-xs whitespace-pre-wrap leading-relaxed">{testResult.error}</pre>
+                {:else if testResult.is_json}
+                  <pre class="text-emerald-400 font-mono text-xs whitespace-pre-wrap leading-relaxed">{JSON.stringify(testResult.response, null, 2)}</pre>
+                {:else}
+                  <pre class="text-slate-300 font-mono text-xs whitespace-pre-wrap leading-relaxed">{testResult.response || "Empty response"}</pre>
+                {/if}
+              </div>
             </div>
           </div>
-        </div>
-      {/if}
+        {:else}
+          <!-- Empty state -->
+          <div class="h-full flex flex-col items-center justify-center text-slate-600 select-none gap-4">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="opacity-30"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+            <div class="text-center">
+              <p class="text-xs font-mono uppercase tracking-widest text-slate-600">Awaiting Request</p>
+              <p class="text-[10px] text-slate-700 mt-1">Hit "Send Request" to see the response here</p>
+            </div>
+          </div>
+        {/if}
+      </div>
+
     </div>
   {/if}
 </Modal>
 
 <style>
-  .animate-fade-in {
-    animation: slideUpFade 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  /* 2-column split layout for API test modal */
+  .api-test-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+    height: calc(85vh - 120px);
+    min-height: 400px;
+    max-height: 680px;
   }
-  @keyframes slideUpFade {
+
+  .api-test-left {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+
+  .api-test-right {
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid rgba(71, 85, 105, 0.4);
+    padding-left: 1.25rem;
+  }
+
+  .animate-fade-in {
+    animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+  @keyframes slideInRight {
     from {
       opacity: 0;
-      transform: translateY(10px);
+      transform: translateX(8px);
     }
     to {
       opacity: 1;
-      transform: translateY(0);
+      transform: translateX(0);
     }
+  }
+
+  /* thin scrollbar for left panel */
+  .api-test-left::-webkit-scrollbar {
+    width: 4px;
+  }
+  .api-test-left::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .api-test-left::-webkit-scrollbar-thumb {
+    background: rgba(71, 85, 105, 0.4);
+    border-radius: 4px;
   }
 </style>

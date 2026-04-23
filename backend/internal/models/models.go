@@ -14,7 +14,7 @@ type Company struct {
 	Description string          `json:"description"`
 	LogoURL     string          `gorm:"type:text" json:"logo_url"`
 	UserID      uuid.UUID       `gorm:"type:uuid;not null" json:"user_id"`
-	Owner       *User           `gorm:"foreignKey:UserID" json:"owner"`
+	Owner       *User           `gorm:"foreignKey:UserID;constraint:false" json:"owner"`
 	Projects    []Project       `gorm:"foreignKey:CompanyID" json:"projects"`
 	Members     []CompanyMember `gorm:"foreignKey:CompanyID" json:"members"`
 	CreatedAt   time.Time       `json:"created_at"`
