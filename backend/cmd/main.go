@@ -144,6 +144,7 @@ func setupRoutes(app *fiber.App) {
 	// Dashboard Notification Routes
 	protected.Get("/notifications/unread", handlers.GetNotifications)
 	protected.Put("/notifications/:id/read", handlers.MarkNotificationRead)
+	protected.Put("/notifications/read-all", handlers.MarkAllNotificationsRead)
 
 	// AI Routes
 	protected.Post("/ai/chat", handlers.ChatWithAI)

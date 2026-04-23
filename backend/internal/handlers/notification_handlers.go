@@ -34,6 +34,21 @@ func MarkNotificationRead(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"message": "Notification marked as read"})
 }
 
+// MarkAllNotificationsRead marks ALL unread notifications for the current user as read in one DB call
+func MarkAllNotificationsRead(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(uuid.UUID)
+
+	result := database.DB.Model(&models.DashboardNotification{}).
+		Where("is_read = ? AND (user_id = ? OR user_id = ?)", false, userID, uuid.Nil).
+		Update("is_read", true)
+
+	if result.Error != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to mark all notifications as read"})
+	}
+
+	return c.JSON(fiber.Map{"message": "All notifications marked as read", "count": result.RowsAffected})
+}
+
 func GetNotificationConfig(c *fiber.Ctx) error {
 	projectID := c.Params("projectId")
 	var config models.NotificationConfig

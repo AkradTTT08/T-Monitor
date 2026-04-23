@@ -53,7 +53,19 @@ var lastCheckMap = make(map[uuid.UUID]time.Time)
 
 func checkAPIs() {
 	var apis []models.API
+	// GORM soft-delete: deleted_at IS NULL is auto-applied, so deleted APIs won't appear
 	database.DB.Where("is_active = ?", true).Find(&apis)
+
+	// Clean up lastCheckMap for APIs that no longer exist (soft-deleted)
+	activeIDs := make(map[uuid.UUID]bool)
+	for _, api := range apis {
+		activeIDs[api.ID] = true
+	}
+	for id := range lastCheckMap {
+		if !activeIDs[id] {
+			delete(lastCheckMap, id)
+		}
+	}
 
 	// Fetch all projects to get their environment variables
 	var projects []models.Project

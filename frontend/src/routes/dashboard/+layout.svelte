@@ -143,14 +143,14 @@
   async function markAllNotificationsRead() {
     try {
       const token = localStorage.getItem("monitor_token");
-      for (const note of unreadNotifications) {
-        await fetch(`${API_BASE_URL}/api/v1/notifications/${note.id}/read`, {
-          method: 'PUT',
-          headers: { Authorization: `Bearer ${token}` }
-        });
-      }
+      // Clear UI immediately for instant feedback
       unreadNotifications = [];
       showNotificationCenter = false;
+      // Single atomic API call - mark all at once
+      await fetch(`${API_BASE_URL}/api/v1/notifications/read-all`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` }
+      });
     } catch (err) {
       console.error(err);
     }
