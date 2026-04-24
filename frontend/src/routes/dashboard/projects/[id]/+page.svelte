@@ -2104,7 +2104,9 @@ if (errorReason && errorReason.includes("401")) {
                               ? 'bg-red-950/40 border-red-500/30 text-red-400'
                               : info.status === 'PAUSED'
                                 ? 'bg-amber-950/40 border-amber-500/30 text-amber-400'
-                                : 'bg-slate-800/40 border-slate-600/30 text-slate-400'}"
+                                : info.status === 'LIVE'
+                                  ? 'bg-cyan-950/40 border-cyan-500/30 text-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.1)]'
+                                  : 'bg-slate-800/40 border-slate-600/30 text-slate-400'}"
                         >
                           {#if info.status === 'ONLINE'}
                             <span class="relative flex h-2 w-2 mr-0.5">
