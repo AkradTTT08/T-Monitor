@@ -17,6 +17,7 @@ type ProjectInput struct {
 	Name                 string `json:"name"`
 	Description          string `json:"description"`
 	EnvironmentVariables string `json:"environment_variables"`
+	Folders              string `json:"folders"`
 	CoverImageURL        string `json:"cover_image_url"`
 	CoverPosition        int    `json:"cover_position"`
 	CompanyID            *uuid.UUID  `json:"company_id"`
@@ -219,6 +220,12 @@ func UpdateProject(c *fiber.Ctx) error {
 			input.EnvironmentVariables = "{}"
 		}
 		updateData["environment_variables"] = input.EnvironmentVariables
+	}
+	if _, ok := body["folders"]; ok {
+		if input.Folders == "" {
+			input.Folders = "[]"
+		}
+		updateData["folders"] = input.Folders
 	}
 	if _, ok := body["cover_position"]; ok {
 		updateData["cover_position"] = input.CoverPosition

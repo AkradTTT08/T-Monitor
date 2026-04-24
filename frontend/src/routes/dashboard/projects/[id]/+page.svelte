@@ -551,9 +551,27 @@ if (errorReason && errorReason.includes("401")) {
     }
   }
 
+  async function saveFolders() {
+    if (!projectId) return;
+    try {
+      const token = localStorage.getItem("monitor_token");
+      await fetch(`${API_BASE_URL}/api/v1/projects/${projectId}`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ folders: JSON.stringify(customFolders) }),
+      });
+    } catch (err) {
+      console.error("Failed to save folders", err);
+    }
+  }
+
   function handleAddFolder() {
     if (newFolderName.trim() && !customFolders.includes(newFolderName.trim())) {
       customFolders = [...customFolders, newFolderName.trim()];
+      saveFolders();
     }
     showFolderModal = false;
     newFolderName = "";
@@ -595,6 +613,7 @@ if (errorReason && errorReason.includes("401")) {
     if (updatedApis.length > 0) {
       await saveReorder(updatedApis);
     }
+    saveFolders();
   }
 
   async function handleDeleteFolderSubmit() {
@@ -614,6 +633,7 @@ if (errorReason && errorReason.includes("401")) {
     if (uncategorizedApis.length > 0) {
       await saveReorder(uncategorizedApis);
     }
+    saveFolders();
   }
 
   // --- Drag & Drop Reordering Logic --- //
@@ -758,6 +778,13 @@ if (errorReason && errorReason.includes("401")) {
 
       if (projRes.ok) {
         project = await projRes.json();
+        if (project.folders) {
+          try {
+            customFolders = JSON.parse(project.folders);
+          } catch(e) {
+            customFolders = [];
+          }
+        }
       } else {
         // 403/404 = not a member or not found → go back to dashboard
         localStorage.removeItem("monitor_selected_project");
