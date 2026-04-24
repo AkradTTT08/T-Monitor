@@ -356,7 +356,11 @@ func UploadPostmanCollection(c *fiber.Ctx) error {
 			Raw  string `json:"raw"`
 		} `json:"body"`
 		URL struct {
-			Raw string `json:"raw"`
+			Raw   string `json:"raw"`
+			Query []struct {
+				Key   string `json:"key"`
+				Value string `json:"value"`
+			} `json:"query"`
 		} `json:"url"`
 	}
 
@@ -465,6 +469,13 @@ func UploadPostmanCollection(c *fiber.Ctx) error {
 				}
 
 				headersJSON, _ := json.Marshal(postmanHeaders)
+
+				// Handle Query Parameters
+				params := "[]"
+				if len(item.Request.URL.Query) > 0 {
+					pJSON, _ := json.Marshal(item.Request.URL.Query)
+					params = string(pJSON)
+				}
 				
 				folderAssign := currentFolder
 				if folderAssign == "" {
@@ -480,7 +491,7 @@ func UploadPostmanCollection(c *fiber.Ctx) error {
 					Name:               item.Name,
 					Method:             method,
 					URL:                item.Request.URL.Raw,
-					Parameters:         "[]",
+					Parameters:         params,
 					Headers:            string(headersJSON),
 					Body:               item.Request.Body.Raw,
 					ExpectedStatusCode: 200,
