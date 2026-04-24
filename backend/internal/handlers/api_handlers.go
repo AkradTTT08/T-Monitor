@@ -439,23 +439,25 @@ func UploadPostmanCollection(c *fiber.Ctx) error {
 				
 				parseItems(subItems, folderName)
 			} else if item.Request.URL.Raw != "" {
+				method := item.Request.Method
+				if method == "" {
+					method = "GET"
+				}
+
 				// Handle Headers
 				postmanHeaders := item.Request.Header
 				
-				// Postman often stores Content-Type in the body settings rather than explicit headers
-				// If Content-Type is missing but body is JSON, add it
+				// Case-insensitive check for Content-Type
 				hasContentType := false
 				for _, h := range postmanHeaders {
-					if h.Key == "Content-Type" {
+					if strings.EqualFold(h.Key, "Content-Type") {
 						hasContentType = true
 						break
 					}
 				}
 				
-				if !hasContentType && item.Request.Body.Mode == "raw" {
-					// Check if it's likely JSON or other common types
-					// In Postman JSON body, it often has a 'options' field but our simplified struct doesn't have it
-					// We'll just default to application/json if it's raw for now to be helpful
+				// Auto-add Content-Type if missing and likely needed (not GET/HEAD)
+				if !hasContentType && method != "GET" && method != "HEAD" {
 					postmanHeaders = append(postmanHeaders, PostmanHeader{
 						Key:   "Content-Type",
 						Value: "application/json",
@@ -463,11 +465,6 @@ func UploadPostmanCollection(c *fiber.Ctx) error {
 				}
 
 				headersJSON, _ := json.Marshal(postmanHeaders)
-
-				method := item.Request.Method
-				if method == "" {
-					method = "GET"
-				}
 				
 				folderAssign := currentFolder
 				if folderAssign == "" {

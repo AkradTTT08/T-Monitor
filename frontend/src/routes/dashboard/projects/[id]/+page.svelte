@@ -1314,7 +1314,7 @@ if (errorReason && errorReason.includes("401")) {
   }
 
   function getStatusInfo(api: any, currentTime: Date) {
-    let statusObj: any = { status: 'UNKNOWN', detail: 'No data', latency: 0, tls: null, securityScore: 0 };
+    let statusObj: any = { status: 'LIVE', detail: 'Ready for next check', latency: 0, tls: null, securityScore: 0 };
     
     // Evaluate Logs for dynamic real-time data
     if (api.logs && api.logs.length > 0) {
