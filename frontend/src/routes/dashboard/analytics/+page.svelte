@@ -627,6 +627,7 @@ ${summaryPayload}
               </button>
             {/if}
             <button
+              aria-label="Close AI panel"
               onclick={() => { showAIPanel = false; aiAnalysisResult = ""; aiError = ""; }}
               class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-all"
             >
@@ -711,10 +712,10 @@ ${summaryPayload}
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
-  .prose-ai strong {
+  .prose-ai :global(strong) {
     color: #a5b4fc;
   }
-  .prose-ai code {
+  .prose-ai :global(code) {
     background: rgba(99, 102, 241, 0.15);
     border: 1px solid rgba(99, 102, 241, 0.3);
     border-radius: 4px;

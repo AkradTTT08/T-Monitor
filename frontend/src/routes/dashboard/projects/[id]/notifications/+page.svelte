@@ -471,7 +471,7 @@
         class="border rounded-2xl p-5 transition-all cursor-pointer {notifConfig.enable_ticketing
           ? 'bg-purple-950/30 border-purple-500/50 shadow-[0_0_15px_rgba(168,85,247,0.15)]'
           : 'bg-slate-900/50 border-slate-700 hover:border-slate-500'}"
-        on:click={() =>
+        onclick={() =>
           (notifConfig.enable_ticketing = !notifConfig.enable_ticketing)}
       >
         <div class="flex items-center gap-3">
@@ -643,7 +643,7 @@
           CANCEL_&_RETURN
         </a>
         <button
-          on:click={saveNotificationSettings}
+        onclick={saveNotificationSettings}
           disabled={isSavingConfig}
           class="px-8 py-3 font-mono text-xs font-bold tracking-widest uppercase rounded-xl transition-all flex items-center gap-2 bg-amber-950/80 text-amber-400 border border-amber-500/30 hover:bg-amber-900/80 hover:border-amber-400/50 hover:shadow-[0_0_15px_rgba(245,158,11,0.3)] disabled:opacity-50 min-w-[150px] justify-center"
         >
