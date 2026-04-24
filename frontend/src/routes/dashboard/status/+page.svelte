@@ -34,6 +34,13 @@
   let fpStart: any = null;
   let fpEnd: any = null;
 
+  // AI Analysis State
+  let showAIPanel = false;
+  let isAIAnalyzing = false;
+  let aiAnalysisLog: any = null;
+  let aiAnalysisResult = "";
+  let aiError = "";
+
   // Derived state for filtered logs
   $: filteredLogs = logs.filter((log) => {
     // 1. Check Status Filter
@@ -642,6 +649,82 @@
       isGeneratingReport = false;
     }
   }
+
+  // ===== AI Error Analysis =====
+  async function analyzeErrorWithAI(log: any, event: MouseEvent) {
+    event.stopPropagation(); // prevent row click (viewLogDetails)
+    aiAnalysisLog = log;
+    showAIPanel = true;
+    isAIAnalyzing = true;
+    aiAnalysisResult = "";
+    aiError = "";
+
+    const apiName = log.api?.name || `API-${log.api_id}`;
+    const statusCode = log.status_code || "ERR";
+    const errorMsg = log.error_message || "Unknown error";
+    const responseTime = log.response_time || 0;
+    const checkedAt = formatDateTime(log.checked_at);
+    const apiMethod = log.api?.method || "UNKNOWN";
+    const apiUrl = log.api?.url || "N/A";
+
+    const prompt = `คุณคือผู้เชี่ยวชาญด้าน API Debugging และ DevOps วิเคราะห์ Error ต่อไปนี้แล้วให้คำแนะนำวิธีแก้ไข:
+
+=== ข้อมูล Error ===
+- API Name: ${apiName}
+- Method: ${apiMethod}
+- URL: ${apiUrl}
+- HTTP Status Code: ${statusCode}
+- Error Message: ${errorMsg}
+- Response Time: ${responseTime}ms
+- Checked At: ${checkedAt}
+
+กรุณาวิเคราะห์และให้รายงานในรูปแบบต่อไปนี้:
+
+🔍 **Root Cause Analysis**
+- อธิบายสาเหตุที่น่าจะเป็นไปได้
+
+⚠️ **ความเสี่ยงและผลกระทบ**
+- ผลกระทบต่อระบบหากปล่อยไว้
+
+✅ **วิธีแก้ไข (Step by Step)**
+- ขั้นตอนการแก้ไขที่ชัดเจน
+
+💡 **การป้องกันในอนาคต**
+- แนวทาง Best Practice
+
+ตอบเป็นภาษาไทย กระชับ ตรงประเด็น`;
+
+    try {
+      const token = localStorage.getItem("monitor_token");
+      const res = await fetch(`${API_BASE_URL}/api/v1/ai/chat`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ query: prompt, history: [] }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        aiAnalysisResult = data.answer || "ไม่ได้รับผลการวิเคราะห์";
+      } else {
+        aiError = data.error || "เกิดข้อผิดพลาดในการเชื่อมต่อ AI";
+      }
+    } catch (err: any) {
+      aiError = `เกิดข้อผิดพลาด: ${err.message}`;
+    } finally {
+      isAIAnalyzing = false;
+    }
+  }
+
+  function formatAIResult(text: string): string {
+    return text
+      .replace(/\*\*(.+?)\*\*/g, '<strong class="text-red-300">$1</strong>')
+      .replace(/^(🔍|⚠️|✅|💡|📌|🔧|📝)\s+\*\*(.+?)\*\*/gm, '<div class="flex items-center gap-2 mt-5 mb-2"><span class="text-lg">$1</span><strong class="text-sm font-bold text-red-300 uppercase tracking-widest">$2</strong></div>')
+      .replace(/^- (.+)$/gm, '<div class="flex gap-2 text-xs text-slate-400 leading-relaxed py-0.5"><span class="text-red-500 shrink-0 mt-0.5">▸</span><span>$1</span></div>')
+      .replace(/\n\n/g, '<div class="my-2"></div>')
+      .replace(/\n/g, '<br>');
+  }
 </script>
 
 <svelte:head>
@@ -899,12 +982,13 @@
             <th class="p-4">CHECK_TIME</th>
             <th class="p-4">LATENCY</th>
             <th class="p-4">CODE</th>
+            <th class="p-4 text-center">AI</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-800/50 text-sm">
           {#each paginatedLogs as log}
             <tr
-              class="hover:bg-slate-800/50 cursor-pointer"
+              class="hover:bg-slate-800/50 cursor-pointer transition-colors {!log.is_success && aiAnalysisLog?.id === log.id && showAIPanel ? 'bg-red-950/20 border-l-2 border-red-500/50' : ''}"
               onclick={() => viewLogDetails(log)}
             >
               <td class="p-4">
@@ -940,6 +1024,34 @@
                   >{log.status_code || "ERR"}</span
                 ></td
               >
+              <!-- AI Analyze Column -->
+              <td class="p-4 text-center">
+                {#if !log.is_success}
+                  <button
+                    onclick={(e) => analyzeErrorWithAI(log, e)}
+                    title="AI วิเคราะห์สาเหตุและวิธีแก้"
+                    class="group relative inline-flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-200
+                      {aiAnalysisLog?.id === log.id && showAIPanel
+                        ? 'bg-red-500/20 border border-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.3)]'
+                        : 'bg-slate-800/80 border border-slate-700 hover:bg-red-950/40 hover:border-red-500/40 hover:shadow-[0_0_10px_rgba(239,68,68,0.2)]'}
+                      {isAIAnalyzing && aiAnalysisLog?.id === log.id ? 'animate-pulse' : ''}"
+                  >
+                    {#if isAIAnalyzing && aiAnalysisLog?.id === log.id}
+                      <svg class="animate-spin h-3.5 w-3.5 text-red-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                      </svg>
+                    {:else}
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                        class="{aiAnalysisLog?.id === log.id && showAIPanel ? 'text-red-400' : 'text-slate-500 group-hover:text-red-400'} transition-colors">
+                        <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+                      </svg>
+                    {/if}
+                  </button>
+                {:else}
+                  <span class="text-slate-700 text-xs">—</span>
+                {/if}
+              </td>
             </tr>
           {/each}
         </tbody>
@@ -968,6 +1080,111 @@
           >
         </div>
       {/if}
+    </div>
+  {/if}
+
+  <!-- AI Error Analysis Panel -->
+  {#if showAIPanel && aiAnalysisLog}
+    <div class="mt-6 ai-panel-slide">
+      <div class="relative bg-gradient-to-br from-slate-900/98 via-red-950/20 to-slate-900/98 backdrop-blur-xl rounded-3xl border border-red-500/30 overflow-hidden shadow-[0_0_40px_rgba(239,68,68,0.15)]">
+        
+        <!-- Top glow -->
+        <div class="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-red-500 to-transparent"></div>
+
+        <!-- Panel Header -->
+        <div class="flex items-start justify-between px-6 py-4 border-b border-slate-800/60">
+          <div class="flex items-start gap-3">
+            <div class="relative shrink-0 mt-0.5">
+              <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-red-600 to-rose-700 flex items-center justify-center shadow-[0_0_15px_rgba(239,68,68,0.4)]">
+                <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-white">
+                  <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+                </svg>
+              </div>
+              {#if isAIAnalyzing}
+                <span class="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-red-400 animate-ping"></span>
+              {/if}
+            </div>
+            <div class="min-w-0">
+              <h3 class="text-sm font-bold text-red-300 uppercase tracking-widest">AI Error Analysis</h3>
+              <div class="flex items-center gap-2 mt-1 flex-wrap">
+                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400 uppercase font-mono">{aiAnalysisLog.api?.method || 'API'}</span>
+                <span class="text-[11px] font-bold text-cyan-300 font-mono truncate max-w-[300px]">{aiAnalysisLog.api?.name || `API-${aiAnalysisLog.api_id}`}</span>
+                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-950/60 border border-red-500/30 text-red-400 font-mono">{aiAnalysisLog.status_code || 'ERR'}</span>
+              </div>
+              <p class="text-[10px] text-slate-500 mt-1 font-mono">Powered by Ollama (llama3.2)</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 shrink-0 ml-2">
+            {#if !isAIAnalyzing && (aiAnalysisResult || aiError)}
+              <button
+                onclick={(e) => analyzeErrorWithAI(aiAnalysisLog, e)}
+                class="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-red-400 bg-red-950/50 border border-red-500/30 rounded-lg hover:bg-red-900/50 transition-all"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+                Re-analyze
+              </button>
+            {/if}
+            <button
+              onclick={() => { showAIPanel = false; aiAnalysisResult = ""; aiError = ""; aiAnalysisLog = null; }}
+              class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-200 hover:bg-slate-800 transition-all"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Error Context Bar -->
+        {#if aiAnalysisLog.error_message}
+          <div class="px-6 py-3 bg-red-950/20 border-b border-red-500/10">
+            <p class="text-[11px] font-mono text-red-300/70 leading-relaxed">
+              <span class="text-red-500 font-bold mr-1">●</span>{aiAnalysisLog.error_message}
+            </p>
+          </div>
+        {/if}
+
+        <!-- Content -->
+        <div class="px-6 py-5 min-h-[100px]">
+          {#if isAIAnalyzing}
+            <div class="flex flex-col items-center justify-center py-10 gap-4">
+              <div class="relative">
+                <div class="w-14 h-14 rounded-full border-2 border-red-900"></div>
+                <div class="w-14 h-14 rounded-full border-2 border-red-500 border-t-transparent animate-spin absolute inset-0"></div>
+                <div class="absolute inset-0 flex items-center justify-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-red-400 animate-pulse">
+                    <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+                  </svg>
+                </div>
+              </div>
+              <div class="text-center">
+                <p class="text-sm font-bold text-red-300">AI กำลังวิเคราะห์ Error...</p>
+                <p class="text-xs text-slate-500 mt-1 font-mono">Ollama is diagnosing the root cause</p>
+              </div>
+              <div class="flex gap-2">
+                <span class="w-2 h-2 rounded-full bg-red-500 animate-bounce" style="animation-delay: 0ms"></span>
+                <span class="w-2 h-2 rounded-full bg-rose-500 animate-bounce" style="animation-delay: 150ms"></span>
+                <span class="w-2 h-2 rounded-full bg-orange-500 animate-bounce" style="animation-delay: 300ms"></span>
+              </div>
+            </div>
+
+          {:else if aiError}
+            <div class="flex items-start gap-3 p-4 bg-red-950/30 border border-red-500/20 rounded-xl">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-red-400 shrink-0 mt-0.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+              <div>
+                <p class="text-sm font-bold text-red-400">เกิดข้อผิดพลาด</p>
+                <p class="text-xs text-slate-500 mt-1">{aiError}</p>
+              </div>
+            </div>
+
+          {:else if aiAnalysisResult}
+            <div class="prose-ai-error text-sm leading-relaxed">
+              {@html formatAIResult(aiAnalysisResult)}
+            </div>
+          {/if}
+        </div>
+
+        <!-- Bottom glow -->
+        <div class="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-rose-500/50 to-transparent"></div>
+      </div>
     </div>
   {/if}
 </div>
@@ -1281,5 +1498,26 @@
   :global(.flatpickr-prev-month:hover svg),
   :global(.flatpickr-next-month:hover svg) {
     fill: #fff !important;
+  }
+
+  .ai-panel-slide {
+    animation: aiSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  @keyframes aiSlideUp {
+    from { opacity: 0; transform: translateY(16px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .prose-ai-error :global(strong) {
+    color: #fca5a5;
+  }
+  .prose-ai-error :global(code) {
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-size: 11px;
+    color: #fecaca;
+    font-family: monospace;
   }
 </style>

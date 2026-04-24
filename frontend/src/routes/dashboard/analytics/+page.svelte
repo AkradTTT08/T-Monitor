@@ -20,6 +20,12 @@
   let uptimeBarCanvas: HTMLCanvasElement;
   let uptimeBarChart: Chart | null = null;
 
+  // AI Analytic State
+  let showAIPanel = false;
+  let isAIAnalyzing = false;
+  let aiAnalysisResult = "";
+  let aiError = "";
+
   onMount(async () => {
     selectedProjectId =
       $page.url.searchParams.get("project_id") ||
@@ -61,6 +67,94 @@
   async function changePeriod(period: string) {
     selectedPeriod = period;
     await fetchAllData();
+  }
+
+  // ===== AI Analytic =====
+  async function analyzeWithAI() {
+    showAIPanel = true;
+    isAIAnalyzing = true;
+    aiAnalysisResult = "";
+    aiError = "";
+
+    // Build a summary payload of current dashboard data
+    const summaryPayload = buildDashboardSummary();
+
+    const prompt = `คุณคือผู้เชี่ยวชาญด้าน API Monitoring และ DevOps วิเคราะห์ข้อมูล Dashboard ต่อไปนี้แล้วให้รายงานเป็นภาษาไทย:
+
+=== ข้อมูล Dashboard (ช่วง ${selectedPeriod}) ===
+${summaryPayload}
+
+กรุณาวิเคราะห์และให้รายงานในรูปแบบต่อไปนี้:
+
+📊 **สรุปภาพรวมระบบ**
+- สถานะโดยรวมและ Uptime
+
+⚠️ **จุดที่น่าเป็นห่วง**
+- API ที่มีปัญหา, Uptime ต่ำ, Latency สูง
+
+🔍 **การวิเคราะห์ Incident**
+- Pattern ของปัญหาที่พบบ่อย
+
+✅ **คำแนะนำการแก้ไข**
+- แนวทาง actionable ที่ควรดำเนินการ
+
+ตอบเป็นภาษาไทย กระชับ ชัดเจน`;
+
+    try {
+      const token = localStorage.getItem("monitor_token");
+      const res = await fetch(`${API_BASE_URL}/api/v1/ai/chat`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          query: prompt,
+          history: [],
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        aiAnalysisResult = data.answer || "ไม่ได้รับผลการวิเคราะห์";
+      } else {
+        aiError = data.error || "เกิดข้อผิดพลาดในการเชื่อมต่อ AI";
+      }
+    } catch (err: any) {
+      aiError = `เกิดข้อผิดพลาด: ${err.message}`;
+    } finally {
+      isAIAnalyzing = false;
+    }
+  }
+
+  function buildDashboardSummary(): string {
+    let summary = "";
+
+    if (uptimeData) {
+      summary += `**Overall Uptime:** ${uptimeData.overall_uptime || 0}%\n`;
+      summary += `**Total Checks:** ${uptimeData.total_checks || 0}\n`;
+      summary += `**Total Failures:** ${uptimeData.total_failures || 0}\n`;
+      summary += `**Average Latency:** ${avgLatency}ms\n\n`;
+
+      if (uptimeData.apis?.length > 0) {
+        summary += `**API Health Report:**\n`;
+        uptimeData.apis.forEach((api: any) => {
+          summary += `- [${api.method}] ${api.name}: Uptime=${api.uptime_percent}%, Avg=${api.avg_latency}ms, Max=${api.max_latency}ms, Fails=${api.fail_count}/${api.total_checks}\n`;
+        });
+        summary += "\n";
+      }
+    }
+
+    if (incidentData?.incidents?.length > 0) {
+      summary += `**Recent Incidents (${incidentData.incidents.length} events):**\n`;
+      incidentData.incidents.slice(0, 10).forEach((inc: any) => {
+        summary += `- [${inc.api_method}] ${inc.api_name}: Status=${inc.status_code || "ERR"}, Error="${inc.error_message || "Unknown"}"\n`;
+      });
+    } else {
+      summary += "**Recent Incidents:** ไม่พบ Incident ในช่วงนี้\n";
+    }
+
+    return summary;
   }
 
   // Reactively update charts
@@ -240,6 +334,16 @@
     if (hrs < 24) return `${hrs}h ago`;
     return `${Math.floor(hrs / 24)}d ago`;
   }
+
+  // Format AI result markdown-ish to HTML
+  function formatAIResult(text: string): string {
+    return text
+      .replace(/\*\*(.+?)\*\*/g, '<strong class="text-indigo-300">$1</strong>')
+      .replace(/^(📊|⚠️|🔍|✅|📌|🔧|💡|📝)\s+\*\*(.+?)\*\*/gm, '<div class="flex items-center gap-2 mt-5 mb-2"><span class="text-lg">$1</span><strong class="text-sm font-bold text-indigo-300 uppercase tracking-widest">$2</strong></div>')
+      .replace(/^- (.+)$/gm, '<div class="flex gap-2 text-xs text-slate-400 leading-relaxed py-0.5"><span class="text-indigo-500 shrink-0 mt-0.5">▸</span><span>$1</span></div>')
+      .replace(/\n\n/g, '<div class="my-2"></div>')
+      .replace(/\n/g, '<br>');
+  }
 </script>
 
 <div class="fade-in max-w-7xl mx-auto w-full overflow-hidden p-4 md:p-6">
@@ -254,19 +358,49 @@
       </p>
     </div>
 
-    <!-- Period Selector -->
-    <div class="flex items-center gap-2 bg-slate-900/60 backdrop-blur-sm border border-slate-800 rounded-2xl p-1.5">
-      {#each ["24h", "7d", "30d"] as period}
-        <button
-          onclick={() => changePeriod(period)}
-          class="px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-xl transition-all duration-300
-            {selectedPeriod === period
-              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30'
-              : 'text-slate-500 hover:text-indigo-400 hover:bg-slate-800/60'}"
-        >
-          {period}
-        </button>
-      {/each}
+    <div class="flex items-center gap-3">
+      <!-- AI Analyze Button -->
+      <button
+        id="btn-ai-analyze"
+        onclick={analyzeWithAI}
+        disabled={isLoading || isAIAnalyzing || !uptimeData}
+        class="group relative flex items-center gap-2.5 px-5 py-2.5 rounded-2xl font-bold text-xs uppercase tracking-wider transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed
+          bg-gradient-to-r from-indigo-600/80 to-purple-600/80 hover:from-indigo-500 hover:to-purple-500
+          text-white border border-indigo-500/50 hover:border-indigo-400
+          shadow-[0_0_20px_rgba(99,102,241,0.3)] hover:shadow-[0_0_30px_rgba(99,102,241,0.5)]
+          {isAIAnalyzing ? 'animate-pulse' : ''}"
+      >
+        <!-- Icon -->
+        {#if isAIAnalyzing}
+          <svg class="animate-spin h-4 w-4 text-purple-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+          </svg>
+          <span>Analyzing...</span>
+        {:else}
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-purple-300 group-hover:scale-110 transition-transform">
+            <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+          </svg>
+          <span>AI Analyze</span>
+        {/if}
+        <!-- Glow dot -->
+        <span class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.8)] {isAIAnalyzing ? 'animate-ping' : 'animate-pulse'}"></span>
+      </button>
+
+      <!-- Period Selector -->
+      <div class="flex items-center gap-2 bg-slate-900/60 backdrop-blur-sm border border-slate-800 rounded-2xl p-1.5">
+        {#each ["24h", "7d", "30d"] as period}
+          <button
+            onclick={() => changePeriod(period)}
+            class="px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-xl transition-all duration-300
+              {selectedPeriod === period
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30'
+                : 'text-slate-500 hover:text-indigo-400 hover:bg-slate-800/60'}"
+          >
+            {period}
+          </button>
+        {/each}
+      </div>
     </div>
   </div>
 
@@ -455,6 +589,102 @@
       {/if}
     </div>
   {/if}
+
+  <!-- AI Analysis Result Panel -->
+  {#if showAIPanel}
+    <div class="mt-6 animate-slide-up">
+      <div class="relative bg-gradient-to-br from-slate-900/95 via-indigo-950/40 to-slate-900/95 backdrop-blur-xl rounded-3xl border border-indigo-500/30 overflow-hidden shadow-[0_0_40px_rgba(99,102,241,0.2)]">
+        
+        <!-- Glow top border -->
+        <div class="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-indigo-500 to-transparent"></div>
+        
+        <!-- Panel Header -->
+        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-800/60">
+          <div class="flex items-center gap-3">
+            <div class="relative">
+              <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.5)]">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white">
+                  <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+                </svg>
+              </div>
+              {#if isAIAnalyzing}
+                <span class="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-purple-400 animate-ping"></span>
+              {/if}
+            </div>
+            <div>
+              <h3 class="text-sm font-bold text-indigo-300 uppercase tracking-widest">AI Dashboard Analysis</h3>
+              <p class="text-[10px] text-slate-500 font-mono mt-0.5">Powered by Ollama (llama3.2) · Period: {selectedPeriod}</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            {#if !isAIAnalyzing && (aiAnalysisResult || aiError)}
+              <button
+                onclick={analyzeWithAI}
+                class="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-indigo-400 bg-indigo-950/50 border border-indigo-500/30 rounded-lg hover:bg-indigo-900/50 transition-all"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+                Re-analyze
+              </button>
+            {/if}
+            <button
+              onclick={() => { showAIPanel = false; aiAnalysisResult = ""; aiError = ""; }}
+              class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-all"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Content -->
+        <div class="px-6 py-5 min-h-[120px]">
+          {#if isAIAnalyzing}
+            <!-- Loading State -->
+            <div class="flex flex-col items-center justify-center py-12 gap-4">
+              <div class="relative">
+                <div class="w-16 h-16 rounded-full border-2 border-indigo-900"></div>
+                <div class="w-16 h-16 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin absolute inset-0"></div>
+                <div class="absolute inset-0 flex items-center justify-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-indigo-400 animate-pulse">
+                    <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+                  </svg>
+                </div>
+              </div>
+              <div class="text-center">
+                <p class="text-sm font-bold text-indigo-300">AI กำลังวิเคราะห์ Dashboard...</p>
+                <p class="text-xs text-slate-500 mt-1 font-mono">Ollama is processing {uptimeData?.apis?.length || 0} APIs & {incidentData?.incidents?.length || 0} incidents</p>
+              </div>
+              <!-- Animated dots -->
+              <div class="flex gap-2">
+                <span class="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style="animation-delay: 0ms"></span>
+                <span class="w-2 h-2 rounded-full bg-purple-500 animate-bounce" style="animation-delay: 150ms"></span>
+                <span class="w-2 h-2 rounded-full bg-cyan-500 animate-bounce" style="animation-delay: 300ms"></span>
+              </div>
+            </div>
+
+          {:else if aiError}
+            <!-- Error State -->
+            <div class="flex items-start gap-3 p-4 bg-red-950/30 border border-red-500/20 rounded-xl">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-red-400 shrink-0 mt-0.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+              <div>
+                <p class="text-sm font-bold text-red-400">เกิดข้อผิดพลาด</p>
+                <p class="text-xs text-slate-500 mt-1">{aiError}</p>
+              </div>
+            </div>
+
+          {:else if aiAnalysisResult}
+            <!-- Result -->
+            <div class="prose-ai text-sm leading-relaxed">
+              {@html formatAIResult(aiAnalysisResult)}
+            </div>
+          {/if}
+        </div>
+
+        <!-- Bottom glow -->
+        <div class="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-purple-500/50 to-transparent"></div>
+      </div>
+    </div>
+  {/if}
+
 </div>
 
 <style>
@@ -468,10 +698,29 @@
   .animate-fade-in {
     animation: fadeIn 0.4s ease-out both;
   }
+  .animate-slide-up {
+    animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
   .line-clamp-2 {
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
+  }
+  .prose-ai strong {
+    color: #a5b4fc;
+  }
+  .prose-ai code {
+    background: rgba(99, 102, 241, 0.15);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 11px;
+    color: #c7d2fe;
+    font-family: monospace;
   }
 </style>

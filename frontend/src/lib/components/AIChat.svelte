@@ -107,7 +107,7 @@
 					</svg>
 					<div>
 						<h3 class="font-bold leading-none">T-Monitor AI</h3>
-						<span class="text-xs text-blue-100">Powered by Gemini</span>
+						<span class="text-xs text-blue-100">Powered by Ollama (llama3.2)</span>
 					</div>
 				</div>
 				<button

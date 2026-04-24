@@ -7,6 +7,7 @@
   let isLoadingConfig = false;
   let isSavingConfig = false;
   let saveSuccess = false;
+  let copySuccess = false;
 
   let notifConfig = {
     enable_telegram: false,
@@ -577,13 +578,28 @@
                 class="flex-1 bg-slate-950/50 border border-slate-700 text-slate-400 rounded-lg p-2.5 outline-none font-mono text-[10px]"
             />
             <button
-                on:click={() => {
-                  navigator.clipboard.writeText(publicStatusUrl);
-                  // Optional: trigger a success toast here
+                onclick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(publicStatusUrl);
+                    copySuccess = true;
+                    setTimeout(() => (copySuccess = false), 2000);
+                  } catch (err) {
+                    // Fallback for HTTP or unsupported browsers
+                    const el = document.createElement('textarea');
+                    el.value = publicStatusUrl;
+                    el.style.position = 'fixed';
+                    el.style.opacity = '0';
+                    document.body.appendChild(el);
+                    el.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(el);
+                    copySuccess = true;
+                    setTimeout(() => (copySuccess = false), 2000);
+                  }
                 }}
-                class="px-4 py-2 bg-slate-800 text-cyan-400 rounded-lg border border-slate-700 hover:bg-slate-700 transition-colors text-[10px] font-bold font-mono tracking-widest uppercase"
+                class="px-4 py-2 transition-colors text-[10px] font-bold font-mono tracking-widest uppercase rounded-lg border {copySuccess ? 'bg-emerald-900/50 text-emerald-400 border-emerald-500/50' : 'bg-slate-800 text-cyan-400 border-slate-700 hover:bg-slate-700'}"
             >
-                COPY_URL
+                {copySuccess ? 'COPIED! ✓' : 'COPY_URL'}
             </button>
         </div>
         <p class="text-[9px] text-slate-600 mt-2 font-mono tracking-widest uppercase italic">

@@ -890,7 +890,7 @@ if (errorReason && errorReason.includes("401")) {
     
     Swal.fire({
       title: 'AI is analyzing...',
-      text: 'Please wait while Gemini processes the error logs.',
+      text: 'Please wait while Ollama processes the error logs.',
       allowOutsideClick: false,
       background: '#0f172a',
       color: '#f8fafc',
