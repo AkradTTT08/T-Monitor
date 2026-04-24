@@ -66,9 +66,10 @@ func ollamaGenerate(prompt string) (string, error) {
 		return "", fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
 	defer cancel()
 
+	log.Printf("[AI] Calling Ollama (%s) for prompt (len: %d)...", host, len(prompt))
 	req, err := http.NewRequestWithContext(ctx, "POST", host+"/api/generate", bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
@@ -82,6 +83,7 @@ func ollamaGenerate(prompt string) (string, error) {
 	}
 	defer resp.Body.Close()
 
+	log.Printf("[AI] Ollama responded. Reading body...")
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", fmt.Errorf("failed to read response: %w", err)

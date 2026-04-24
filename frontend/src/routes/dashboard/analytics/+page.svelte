@@ -141,17 +141,31 @@ ${summaryPayload}
       summary += `**Total Failures:** ${uptimeData.total_failures || 0}\n`;
       summary += `**Average Latency:** ${avgLatency}ms\n\n`;
 
-      if (uptimeData.apis?.length > 0) {
-        summary += `**API Health Report:**\n`;
-        uptimeData.apis.forEach((api: any) => {
+      const apis = uptimeData.apis || [];
+      if (apis.length > 0) {
+        summary += `**API Health Report (${apis.length} total):**\n`;
+        
+        // If too many APIs, filter for problematic ones to save tokens and time
+        let displayApis = apis;
+        let isFiltered = false;
+        if (apis.length > 15) {
+          displayApis = apis.filter((a: any) => a.uptime_percent < 100 || a.avg_latency > 500);
+          isFiltered = true;
+        }
+
+        displayApis.forEach((api: any) => {
           summary += `- [${api.method}] ${api.name}: Uptime=${api.uptime_percent}%, Avg=${api.avg_latency}ms, Max=${api.max_latency}ms, Fails=${api.fail_count}/${api.total_checks}\n`;
         });
+
+        if (isFiltered && apis.length > displayApis.length) {
+          summary += `\n*Note: Showing only ${displayApis.length} problematic APIs out of ${apis.length} total to optimize analysis performance.*\n`;
+        }
         summary += "\n";
       }
     }
 
     if (incidentData?.incidents?.length > 0) {
-      summary += `**Recent Incidents (${incidentData.incidents.length} events):**\n`;
+      summary += `**Recent Incidents (Showing top 10 of ${incidentData.incidents.length} events):**\n`;
       incidentData.incidents.slice(0, 10).forEach((inc: any) => {
         summary += `- [${inc.api_method}] ${inc.api_name}: Status=${inc.status_code || "ERR"}, Error="${inc.error_message || "Unknown"}"\n`;
       });

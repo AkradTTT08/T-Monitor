@@ -11,6 +11,7 @@
   let selectedCompanyId = "";
   let selectedProjectId = "all";
   let projects: any[] = [];
+  let isProjectDropdownOpen = false;
 
   async function fetchProjects() {
     try {
@@ -85,7 +86,13 @@
   }
 
   function handleFilterChange() {
+    isProjectDropdownOpen = false;
     fetchGlobalPulse();
+  }
+
+  function selectProject(id: string) {
+    selectedProjectId = id;
+    handleFilterChange();
   }
 
   function getStatusColor(isSuccess: boolean) {
@@ -108,19 +115,60 @@
         Live aggregate telemetry across all accessible workspaces
       </p>
       {#if selectedCompanyId}
-        <div class="mt-4 flex items-center gap-3">
-          <label for="project-filter" class="text-cyan-400 font-mono text-xs tracking-widest uppercase">Filter by Project:</label>
-          <select 
-            id="project-filter"
-            bind:value={selectedProjectId} 
-            on:change={handleFilterChange}
-            class="bg-slate-900 border border-slate-700 text-cyan-50 text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block p-2 font-mono shadow-[0_0_10px_rgba(6,182,212,0.1)] outline-none"
-          >
-            <option value="all">All Projects</option>
-            {#each projects as p}
-              <option value={p.id}>{p.name}</option>
-            {/each}
-          </select>
+        <div class="mt-4 flex items-center gap-4">
+          <label for="project-filter" class="text-cyan-400 font-mono text-[10px] tracking-widest uppercase opacity-70">Filter by Project:</label>
+          
+          <div class="relative">
+            <button 
+              id="project-filter"
+              on:click={() => (isProjectDropdownOpen = !isProjectDropdownOpen)}
+              class="flex items-center gap-3 bg-slate-900/60 border border-slate-700/50 rounded-xl px-4 py-2 text-xs text-cyan-400 font-mono hover:border-cyan-500/50 transition-all min-w-[160px] justify-between group shadow-lg shadow-black/20"
+            >
+              <span class="truncate uppercase">
+                {selectedProjectId !== 'all' ? projects.find(p => p.id.toString() === selectedProjectId)?.name || 'All Projects' : 'All Projects'}
+              </span>
+              <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" 
+                class="text-slate-500 group-hover:text-cyan-400 transition-transform {isProjectDropdownOpen ? 'rotate-180' : ''}"
+              >
+                <path d="m6 9 6 6 6-6"/>
+              </svg>
+            </button>
+
+            {#if isProjectDropdownOpen}
+              <div 
+                class="absolute top-full left-0 mt-2 w-full min-w-[200px] bg-slate-900/90 backdrop-blur-xl border border-slate-700/50 rounded-xl overflow-hidden z-[100] shadow-2xl animate-in fade-in zoom-in-95 duration-200"
+              >
+                <div class="max-h-[250px] overflow-y-auto custom-scrollbar p-1">
+                  <button 
+                    on:click={() => selectProject("all")}
+                    class="w-full text-left px-3 py-2 rounded-lg text-[11px] font-mono transition-all hover:bg-cyan-500/10 {selectedProjectId === 'all' ? 'text-cyan-400 bg-cyan-500/5 font-black' : 'text-slate-400'}"
+                  >
+                    ALL PROJECTS
+                  </button>
+                  {#each projects as p}
+                    <button 
+                      on:click={() => selectProject(p.id.toString())}
+                      class="w-full text-left px-3 py-2 rounded-lg text-[11px] font-mono transition-all hover:bg-cyan-500/10 {selectedProjectId === p.id.toString() ? 'text-cyan-400 bg-cyan-500/5 font-black' : 'text-slate-400'}"
+                    >
+                      {p.name.toUpperCase()}
+                    </button>
+                  {/each}
+                </div>
+              </div>
+
+              <!-- Click outside overlay -->
+              <div 
+                class="fixed inset-0 z-[90]" 
+                on:click={() => (isProjectDropdownOpen = false)}
+                on:keydown={(e) => e.key === 'Escape' && (isProjectDropdownOpen = false)}
+                role="button"
+                tabindex="-1"
+                aria-label="Close dropdown"
+              ></div>
+            {/if}
+          </div>
         </div>
       {/if}
     </div>

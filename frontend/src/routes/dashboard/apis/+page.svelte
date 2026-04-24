@@ -17,6 +17,7 @@
   let totalItems = 0;
   let itemsPerPage = 12;
   let searchTimeout: any;
+  let isProjectDropdownOpen = false;
 
   $: totalPages = Math.ceil(totalItems / itemsPerPage);
 
@@ -137,7 +138,13 @@
 
   function handleFilterChange() {
     currentPage = 1;
+    isProjectDropdownOpen = false;
     fetchAPIs();
+  }
+
+  function selectProject(id: string) {
+    selectedProjectId = id;
+    handleFilterChange();
   }
 
   function openTestModal(api: any) {
@@ -313,18 +320,57 @@
             {/if}
           </div>
 
-          <!-- Project Filter -->
-          <select 
-            bind:value={selectedProjectId}
-            on:change={handleFilterChange}
-            aria-label="Filter APIs by project"
-            class="bg-slate-900/60 border border-slate-700/50 rounded-2xl px-4 py-2.5 text-xs text-cyan-400 font-mono focus:outline-none focus:border-cyan-500/50 transition-all cursor-pointer"
-          >
-            <option value="">ALL_PROJECTS</option>
-            {#each projects as project}
-              <option value={project.id}>{project.name.toUpperCase()}</option>
-            {/each}
-          </select>
+          <!-- Custom Project Dropdown -->
+          <div class="relative">
+            <button 
+              on:click={() => (isProjectDropdownOpen = !isProjectDropdownOpen)}
+              class="flex items-center gap-3 bg-slate-900/60 border border-slate-700/50 rounded-2xl px-5 py-2.5 text-xs text-cyan-400 font-mono hover:border-cyan-500/50 transition-all min-w-[180px] justify-between group shadow-lg shadow-black/20"
+            >
+              <span class="truncate uppercase">
+                {selectedProjectId ? projects.find(p => p.id.toString() === selectedProjectId)?.name || 'ALL_PROJECTS' : 'ALL_PROJECTS'}
+              </span>
+              <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" 
+                class="text-slate-500 group-hover:text-cyan-400 transition-transform {isProjectDropdownOpen ? 'rotate-180' : ''}"
+              >
+                <path d="m6 9 6 6 6-6"/>
+              </svg>
+            </button>
+
+            {#if isProjectDropdownOpen}
+              <div 
+                class="absolute top-full left-0 mt-2 w-full min-w-[220px] bg-slate-900/90 backdrop-blur-xl border border-slate-700/50 rounded-2xl overflow-hidden z-[100] shadow-2xl animate-in fade-in zoom-in-95 duration-200"
+              >
+                <div class="max-h-[300px] overflow-y-auto custom-scrollbar p-1.5">
+                  <button 
+                    on:click={() => selectProject("")}
+                    class="w-full text-left px-4 py-2.5 rounded-xl text-xs font-mono transition-all hover:bg-cyan-500/10 {selectedProjectId === '' ? 'text-cyan-400 bg-cyan-500/5 font-black' : 'text-slate-400'}"
+                  >
+                    ALL_PROJECTS
+                  </button>
+                  {#each projects as project}
+                    <button 
+                      on:click={() => selectProject(project.id.toString())}
+                      class="w-full text-left px-4 py-2.5 rounded-xl text-xs font-mono transition-all hover:bg-cyan-500/10 {selectedProjectId === project.id.toString() ? 'text-cyan-400 bg-cyan-500/5 font-black' : 'text-slate-400'}"
+                    >
+                      {project.name.toUpperCase()}
+                    </button>
+                  {/each}
+                </div>
+              </div>
+
+              <!-- Click outside overlay for this specific dropdown -->
+              <div 
+                class="fixed inset-0 z-[90]" 
+                on:click={() => (isProjectDropdownOpen = false)}
+                on:keydown={(e) => e.key === 'Escape' && (isProjectDropdownOpen = false)}
+                role="button"
+                tabindex="-1"
+                aria-label="Close dropdown"
+              ></div>
+            {/if}
+          </div>
        </div>
     </div>
 
