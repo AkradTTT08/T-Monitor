@@ -275,8 +275,10 @@
     const originalFetch = window.fetch;
     window.fetch = async (...args) => {
       const response = await originalFetch(...args);
-      if (response.status === 401 || response.status === 403) {
-        console.warn("Global fetch caught unauthorized response. Logging out.");
+      // 401 = Token expired/invalid → Logout
+      // 403 = Forbidden → Let the component handle it (usually shows an alert)
+      if (response.status === 401) {
+        console.warn("Global fetch caught 401 Unauthorized. Logging out.");
         handleLogout();
       }
       return response;

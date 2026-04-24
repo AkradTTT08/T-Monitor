@@ -177,7 +177,7 @@ func UpdateAPI(c *fiber.Ctx) error {
 	}
 
 	var project models.Project
-	if err := database.DB.Select("user_id").First(&project, "id = ?", api.ProjectID).Error; err != nil {
+	if err := database.DB.First(&project, "id = ?", api.ProjectID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Associated project not found"})
 	}
 
@@ -235,7 +235,7 @@ func DeleteAPI(c *fiber.Ctx) error {
 	}
 
 	var project models.Project
-	if err := database.DB.Select("user_id").First(&project, "id = ?", api.ProjectID).Error; err != nil {
+	if err := database.DB.First(&project, "id = ?", api.ProjectID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Associated project not found"})
 	}
 
@@ -402,6 +402,21 @@ func UploadPostmanCollection(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid Postman JSON structure"})
 	}
 
+	userID := c.Locals("user_id").(uuid.UUID)
+	role := c.Locals("role").(string)
+
+	// Verify project ownership or membership
+	var project models.Project
+	if role == "admin" {
+		if err := database.DB.First(&project, "id = ?", projectID).Error; err != nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Project not found"})
+		}
+	} else {
+		if err := database.DB.Where("id = ? AND (user_id = ? OR id IN (SELECT project_id FROM project_members WHERE user_id = ?))", projectID, userID, userID).First(&project).Error; err != nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Project not found or unauthorized"})
+		}
+	}
+
 	var parsedAPIs []models.API
 
 	// Recursive internal parser
@@ -513,7 +528,7 @@ func PauseAPI(c *fiber.Ctx) error {
 	}
 
 	var project models.Project
-	if err := database.DB.Select("user_id").First(&project, "id = ?", api.ProjectID).Error; err != nil {
+	if err := database.DB.First(&project, "id = ?", api.ProjectID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Associated project not found"})
 	}
 

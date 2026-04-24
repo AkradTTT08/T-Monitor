@@ -51,10 +51,21 @@ func MarkAllNotificationsRead(c *fiber.Ctx) error {
 
 func GetNotificationConfig(c *fiber.Ctx) error {
 	projectID := c.Params("projectId")
+	userID := c.Locals("user_id").(uuid.UUID)
+	role := c.Locals("role").(string)
+
+	// Verify project ownership or membership
+	var project models.Project
+	if role != "admin" {
+		if err := database.DB.Where("id = ? AND (user_id = ? OR id IN (SELECT project_id FROM project_members WHERE user_id = ?))", projectID, userID, userID).First(&project).Error; err != nil {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Unauthorized to view notification config"})
+		}
+	}
+
 	var config models.NotificationConfig
 	if err := database.DB.Where("project_id = ?", projectID).First(&config).Error; err != nil {
 		projectUUID, _ := uuid.Parse(projectID)
-		return c.JSON(models.NotificationConfig{ProjectID: projectUUID}) // Return empty instead of error maybe? 
+		return c.JSON(models.NotificationConfig{ProjectID: projectUUID})
 	}
 	return c.JSON(config)
 }
@@ -63,6 +74,17 @@ func UpsertNotificationConfig(c *fiber.Ctx) error {
 	var input models.NotificationConfig
 	if err := c.BodyParser(&input); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid input"})
+	}
+
+	userID := c.Locals("user_id").(uuid.UUID)
+	role := c.Locals("role").(string)
+
+	// Verify project ownership or membership
+	var project models.Project
+	if role != "admin" {
+		if err := database.DB.Where("id = ? AND (user_id = ? OR id IN (SELECT project_id FROM project_members WHERE user_id = ?))", input.ProjectID, userID, userID).First(&project).Error; err != nil {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Unauthorized to update notification config"})
+		}
 	}
 
 	var existing models.NotificationConfig
