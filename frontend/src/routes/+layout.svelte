@@ -49,7 +49,8 @@
         height: 10rem;
         overflow: visible;
         pointer-events: none;
-        opacity: 0.6;
+        opacity: 0.2;
+        z-index: -10;
     }
 
     .heartbeat-wave {
@@ -64,7 +65,7 @@
         top: 2rem;
         height: 50%;
         animation: scssWave 4s linear infinite;
-        opacity: 0.5;
+        opacity: 0.1;
     }
 
     .wave-path {

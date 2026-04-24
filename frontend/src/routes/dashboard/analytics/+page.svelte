@@ -26,6 +26,11 @@
   let aiAnalysisResult = "";
   let aiError = "";
 
+  // Ranking Filter
+  let uptimeLimit = 10;
+  let uptimeSearch = "";
+  let uptimeSortMode = "lowest"; // lowest | highest
+
   onMount(async () => {
     selectedProjectId =
       $page.url.searchParams.get("project_id") ||
@@ -268,10 +273,38 @@ ${summaryPayload}
   function renderUptimeBarChart() {
     if (!uptimeBarCanvas || !uptimeData?.apis) return;
 
-    const apis = uptimeData.apis.slice(0, 15);
-    const labels = apis.map((a: any) => a.name.length > 18 ? a.name.slice(0, 18) + "…" : a.name);
+    let apis = [...uptimeData.apis];
+    
+    // Filter by search
+    if (uptimeSearch) {
+      apis = apis.filter(a => a.name.toLowerCase().includes(uptimeSearch.toLowerCase()));
+    }
+
+    // Sort
+    if (uptimeSortMode === "lowest") {
+      apis.sort((a, b) => a.uptime_percent - b.uptime_percent);
+    } else {
+      apis.sort((a, b) => b.uptime_percent - a.uptime_percent);
+    }
+
+    // Limit
+    apis = apis.slice(0, uptimeLimit);
+
+    const labels = apis.map((a: any) => a.name.length > 20 ? a.name.slice(0, 20) + "…" : a.name);
     const data = apis.map((a: any) => a.uptime_percent);
-    const colors = data.map((v: number) => v >= 99 ? "rgba(34, 197, 94, 0.7)" : v >= 95 ? "rgba(234, 179, 8, 0.7)" : "rgba(239, 68, 68, 0.7)");
+    
+    // Premium Gradients/Colors
+    const bgColors = data.map((v: number) => {
+      if (v >= 99) return "rgba(52, 211, 153, 0.6)"; // Emerald-400
+      if (v >= 95) return "rgba(251, 191, 36, 0.6)"; // Amber-400
+      return "rgba(248, 113, 113, 0.6)"; // Red-400
+    });
+    
+    const borderColors = data.map((v: number) => {
+      if (v >= 99) return "rgba(52, 211, 153, 1)";
+      if (v >= 95) return "rgba(251, 191, 36, 1)";
+      return "rgba(248, 113, 113, 1)";
+    });
 
     try {
       if (uptimeBarChart) {
@@ -285,9 +318,11 @@ ${summaryPayload}
           datasets: [{
             label: "Uptime %",
             data,
-            backgroundColor: colors,
-            borderRadius: 6,
-            barPercentage: 0.7,
+            backgroundColor: bgColors,
+            borderColor: borderColors,
+            borderWidth: 1,
+            borderRadius: 4,
+            barPercentage: 0.6,
           }],
         },
         options: {
@@ -297,14 +332,26 @@ ${summaryPayload}
           plugins: {
             legend: { display: false },
             tooltip: {
-              backgroundColor: "rgba(15, 23, 42, 0.95)",
+              backgroundColor: "rgba(15, 23, 42, 0.9)",
+              titleFont: { size: 12, family: "'Inter', sans-serif" },
+              bodyFont: { size: 11, family: "'Inter', sans-serif" },
               cornerRadius: 8,
-              callbacks: { label: (ctx) => `${ctx.raw}% uptime` },
+              padding: 10,
+              callbacks: {
+                label: (ctx) => ` ${ctx.raw}% Uptime`
+              }
             },
           },
           scales: {
-            x: { min: 0, max: 100, grid: { color: "rgba(226, 232, 240, 0.05)" }, ticks: { color: "#64748b", callback: (v) => v + "%" } },
-            y: { grid: { display: false }, ticks: { color: "#94a3b8", font: { size: 11 } } },
+            x: { 
+              min: 0, max: 100, 
+              grid: { color: "rgba(226, 232, 240, 0.03)" }, 
+              ticks: { color: "#64748b", font: { size: 9 }, callback: (v) => v + "%" } 
+            },
+            y: { 
+              grid: { display: false }, 
+              ticks: { color: "#94a3b8", font: { size: 10, family: "'Mono', sans-serif" } } 
+            },
           },
         },
       });
@@ -466,12 +513,48 @@ ${summaryPayload}
       </div>
 
       <!-- Uptime Bar Chart (2/5) -->
-      <div class="lg:col-span-2 bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-slate-700/40 p-5">
-        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-emerald-500"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
-          API Uptime Ranking
-        </h3>
-        <div style="height: {Math.max(200, (uptimeData?.apis?.length || 3) * 32)}px">
+      <div class="lg:col-span-2 bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-slate-700/40 p-5 flex flex-col">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-emerald-500"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+            API Uptime Ranking
+          </h3>
+          
+          <div class="flex items-center gap-2">
+             <select 
+               bind:value={uptimeLimit}
+               onchange={renderUptimeBarChart}
+               class="bg-slate-900/80 border border-slate-700 text-[10px] text-slate-400 rounded-lg px-2 py-1 focus:outline-none focus:border-indigo-500 transition-colors"
+             >
+               <option value={5}>Top 5</option>
+               <option value={10}>Top 10</option>
+               <option value={20}>Top 20</option>
+             </select>
+             
+             <select 
+               bind:value={uptimeSortMode}
+               onchange={renderUptimeBarChart}
+               class="bg-slate-900/80 border border-slate-700 text-[10px] text-slate-400 rounded-lg px-2 py-1 focus:outline-none focus:border-indigo-500 transition-colors"
+             >
+               <option value="lowest">Worst</option>
+               <option value="highest">Best</option>
+             </select>
+          </div>
+        </div>
+
+        <!-- Search Filter -->
+        <div class="relative mb-4">
+           <input 
+             type="text"
+             placeholder="Search API..."
+             bind:value={uptimeSearch}
+             oninput={renderUptimeBarChart}
+             class="w-full bg-slate-950/50 border border-slate-800/60 rounded-xl px-8 py-1.5 text-[10px] text-slate-300 focus:outline-none focus:border-indigo-500/50 transition-all"
+           />
+           <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-600"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        </div>
+
+        <div class="flex-1 min-h-[250px] relative">
           <canvas bind:this={uptimeBarCanvas}></canvas>
         </div>
       </div>

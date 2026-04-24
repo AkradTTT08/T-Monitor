@@ -14,6 +14,7 @@ import (
 	"github.com/monitor-api/backend/internal/database"
 	"github.com/monitor-api/backend/internal/models"
 	"gorm.io/gorm"
+	"strconv"
 )
 
 type APIInput struct {
@@ -142,23 +143,59 @@ func ReorderAPIs(c *fiber.Ctx) error {
 
 func GetAPIs(c *fiber.Ctx) error {
 	projectID := c.Query("project_id")
+	search := c.Query("search")
+	pageStr := c.Query("page")
+	limitStr := c.Query("limit")
+	
 	userID := c.Locals("user_id").(uuid.UUID)
 	role := c.Locals("role").(string)
 
 	var apis []models.API
-
-	query := database.DB
+	query := database.DB.Model(&models.API{})
 
 	if projectID != "" {
 		query = query.Where("project_id = ?", projectID)
 	}
 
+	if search != "" {
+		searchTerm := "%" + search + "%"
+		query = query.Where("(name ILIKE ? OR url ILIKE ?)", searchTerm, searchTerm)
+	}
+
 	// Filter by ownership or membership if not Admin
 	if role != "admin" {
 		query = query.Joins("JOIN projects ON projects.id = apis.project_id").
-			Where("projects.user_id = ? OR projects.id IN (SELECT project_id FROM project_members WHERE user_id = ?)", userID, userID)
+			Where("(projects.user_id = ? OR projects.id IN (SELECT project_id FROM project_members WHERE user_id = ?))", userID, userID)
 	}
 
+	// If pagination is requested
+	if pageStr != "" || limitStr != "" {
+		var total int64
+		query.Count(&total)
+
+		page := 1
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			page = p
+		}
+		limit := 12
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+			limit = l
+		}
+		offset := (page - 1) * limit
+
+		query.Preload("Logs", func(db *gorm.DB) *gorm.DB {
+			return db.Select("DISTINCT ON (api_id) *").Order("api_id, checked_at DESC")
+		}).Order("folder ASC, order_index ASC").Limit(limit).Offset(offset).Find(&apis)
+
+		return c.JSON(fiber.Map{
+			"data":  apis,
+			"total": total,
+			"page":  page,
+			"limit": limit,
+		})
+	}
+
+	// Default: return all (legacy compatibility)
 	query.Preload("Logs", func(db *gorm.DB) *gorm.DB {
 		return db.Select("DISTINCT ON (api_id) *").Order("api_id, checked_at DESC")
 	}).Order("folder ASC, order_index ASC").Find(&apis)

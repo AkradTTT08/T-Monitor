@@ -66,7 +66,7 @@ func ollamaGenerate(prompt string) (string, error) {
 		return "", fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, "POST", host+"/api/generate", bytes.NewBuffer(jsonBody))
@@ -144,13 +144,25 @@ func ChatWithAI(c *fiber.Ctx) error {
 	}
 
 	// 1. Ask Ollama to generate SQL
+	// If the query is very long or explicitly asks for analysis, skip SQL and chat directly
+	isAnalysisRequest := len(req.Query) > 300 || strings.Contains(req.Query, "วิเคราะห์") || strings.Contains(req.Query, "Dashboard")
+	
+	if isAnalysisRequest {
+		answer, err := ollamaGenerate(req.Query)
+		if err != nil {
+			log.Printf("[AI] Analysis Error: %v", err)
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "AI Analysis failed: " + err.Error()})
+		}
+		return c.JSON(fiber.Map{"answer": answer})
+	}
+
 	sqlPrompt := fmt.Sprintf("%s\n\n%s\nUser Question: %s\n\nSQL Query:", getDatabaseSchema(), historyContext, req.Query)
 
 	sqlQuery, err := ollamaGenerate(sqlPrompt)
 	if err != nil {
 		log.Printf("[AI] Failed to generate SQL from Ollama: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "AI service is unavailable. Please ensure Ollama is running.",
+			"error": "AI service error: " + err.Error(),
 		})
 	}
 
@@ -161,6 +173,11 @@ func ChatWithAI(c *fiber.Ctx) error {
 	sqlQuery = strings.TrimPrefix(sqlQuery, "```")
 	sqlQuery = strings.TrimSuffix(sqlQuery, "```")
 	sqlQuery = strings.TrimSpace(sqlQuery)
+
+	// If AI says it's general or didn't produce a SELECT, just return the response as answer
+	if !strings.HasPrefix(strings.ToUpper(sqlQuery), "SELECT") {
+		return c.JSON(fiber.Map{"answer": sqlQuery})
+	}
 
 	log.Printf("[AI] Generated SQL: %s", sqlQuery)
 

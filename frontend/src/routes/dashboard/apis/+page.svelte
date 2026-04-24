@@ -11,6 +11,15 @@
   let isLoading = true;
   let selectedProjectId = "";
 
+  // Pagination & Search
+  let searchQuery = "";
+  let currentPage = 1;
+  let totalItems = 0;
+  let itemsPerPage = 12;
+  let searchTimeout: any;
+
+  $: totalPages = Math.ceil(totalItems / itemsPerPage);
+
   // API Test Modal State
   let showApiTestModal = false;
   let selectedApi: any = null;
@@ -83,15 +92,28 @@
     isLoading = true;
     try {
       const token = localStorage.getItem("monitor_token");
-      let url = `${API_BASE_URL}/api/v1/apis`;
+      let url = `${API_BASE_URL}/api/v1/apis?page=${currentPage}&limit=${itemsPerPage}`;
       if (selectedProjectId) {
-        url += `?project_id=${selectedProjectId}`;
+        url += `&project_id=${selectedProjectId}`;
+      }
+      if (searchQuery) {
+        url += `&search=${encodeURIComponent(searchQuery)}`;
       }
 
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) apis = await res.json();
+      if (res.ok) {
+        const result = await res.json();
+        // Handle both structured and legacy array responses
+        if (result.data) {
+          apis = result.data;
+          totalItems = result.total;
+        } else {
+          apis = result;
+          totalItems = result.length;
+        }
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -99,7 +121,22 @@
     }
   }
 
+  function handleSearchInput() {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+      currentPage = 1;
+      fetchAPIs();
+    }, 500);
+  }
+
+  function changePage(page: number) {
+    if (page < 1 || page > totalPages) return;
+    currentPage = page;
+    fetchAPIs();
+  }
+
   function handleFilterChange() {
+    currentPage = 1;
     fetchAPIs();
   }
 
@@ -243,18 +280,50 @@
 
 <div class="fade-in max-w-full overflow-x-hidden">
   <!-- Header -->
-  <div
-    class="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8 relative z-10"
-  >
-    <div>
-      <h1
-        class="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400 tracking-tight font-mono uppercase"
-      >
-        OPEN_APIS
-      </h1>
-      <p class="text-cyan-500/80 mt-2 font-mono text-sm tracking-wide">
-        MANAGE AND MONITOR HEALTH ACROSS ALL REGISTERED API ENDPOINTS.
-      </p>
+    <div class="flex flex-col md:flex-row md:items-center gap-4 w-full">
+       <div class="flex-1">
+          <h1 class="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400 tracking-tight font-mono uppercase">
+            OPEN_APIS
+          </h1>
+          <p class="text-cyan-500/80 mt-1 font-mono text-xs tracking-wide">
+            MANAGE AND MONITOR HEALTH ACROSS ALL REGISTERED API ENDPOINTS.
+          </p>
+       </div>
+
+       <!-- Search & Filter Controls -->
+       <div class="flex flex-wrap items-center gap-3">
+          <!-- Search Input -->
+          <div class="relative min-w-[240px]">
+            <input 
+              type="text" 
+              placeholder="SEARCH_BY_NAME_OR_URL..." 
+              bind:value={searchQuery}
+              oninput={handleSearchInput}
+              class="w-full bg-slate-900/60 border border-slate-700/50 rounded-2xl px-10 py-2.5 text-xs text-cyan-50 font-mono focus:outline-none focus:border-cyan-500/50 focus:ring-4 focus:ring-cyan-500/10 transition-all placeholder:text-slate-600"
+            />
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            {#if searchQuery}
+              <button 
+                onclick={() => { searchQuery = ""; handleSearchInput(); }}
+                class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-cyan-400"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              </button>
+            {/if}
+          </div>
+
+          <!-- Project Filter -->
+          <select 
+            bind:value={selectedProjectId}
+            onchange={handleFilterChange}
+            class="bg-slate-900/60 border border-slate-700/50 rounded-2xl px-4 py-2.5 text-xs text-cyan-400 font-mono focus:outline-none focus:border-cyan-500/50 transition-all cursor-pointer"
+          >
+            <option value="">ALL_PROJECTS</option>
+            {#each projects as project}
+              <option value={project.id}>{project.name.toUpperCase()}</option>
+            {/each}
+          </select>
+       </div>
     </div>
   </div>
 
@@ -428,6 +497,35 @@
         </div>
       {/each}
     </div>
+
+    <!-- Pagination Controls -->
+    {#if totalPages > 1}
+      <div class="flex items-center justify-center gap-4 mt-12 pb-8 relative z-10">
+        <button 
+          onclick={() => changePage(currentPage - 1)}
+          disabled={currentPage === 1}
+          class="flex items-center gap-2 px-4 py-2 bg-slate-900/60 border border-slate-700/50 rounded-xl text-xs font-bold text-slate-400 hover:text-cyan-400 hover:border-cyan-500/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed group"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="group-hover:-translate-x-1 transition-transform"><path d="m15 18-6-6 6-6"/></svg>
+          PREV
+        </button>
+
+        <div class="flex items-center gap-2 font-mono text-xs">
+          <span class="text-cyan-500 font-black">{currentPage}</span>
+          <span class="text-slate-600">/</span>
+          <span class="text-slate-400">{totalPages}</span>
+        </div>
+
+        <button 
+          onclick={() => changePage(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          class="flex items-center gap-2 px-4 py-2 bg-slate-900/60 border border-slate-700/50 rounded-xl text-xs font-bold text-slate-400 hover:text-cyan-400 hover:border-cyan-500/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed group"
+        >
+          NEXT
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="group-hover:translate-x-1 transition-transform"><path d="m9 18 6-6-6-6"/></svg>
+        </button>
+      </div>
+    {/if}
   {/if}
 </div>
 
