@@ -36,14 +36,14 @@ func UploadProjectCover(c *fiber.Ctx) error {
 	role := rawRole.(string)
 
 	var project models.Project
-	query := database.DB
-	if role != "admin" {
-		query = query.Where("user_id = ?", userID)
-	}
-
-	if err := query.First(&project, "id = ?", id).Error; err != nil {
-		fmt.Printf(">>> Project not found: %v\n", err)
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Project not found or unauthorized"})
+	if role == "admin" {
+		if err := database.DB.First(&project, "id = ?", id).Error; err != nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Project not found"})
+		}
+	} else {
+		if err := database.DB.Where("id = ? AND (user_id = ? OR id IN (SELECT project_id FROM project_members WHERE user_id = ?))", id, userID, userID).First(&project).Error; err != nil {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Unauthorized to update project cover"})
+		}
 	}
 	fmt.Println(">>> Project loaded")
 
@@ -194,13 +194,15 @@ func UpdateProject(c *fiber.Ctx) error {
 	}
 
 	var project models.Project
-	query := database.DB
-	if role != "admin" {
-		query = query.Where("user_id = ?", userID)
-	}
-
-	if err := query.First(&project, "id = ?", id).Error; err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Project not found or unauthorized"})
+	if role == "admin" {
+		if err := database.DB.First(&project, "id = ?", id).Error; err != nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Project not found"})
+		}
+	} else {
+		// Verify project ownership or membership
+		if err := database.DB.Where("id = ? AND (user_id = ? OR id IN (SELECT project_id FROM project_members WHERE user_id = ?))", id, userID, userID).First(&project).Error; err != nil {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Unauthorized to update this project"})
+		}
 	}
 
 	// Prepare update data only for fields present in the request
