@@ -1058,9 +1058,9 @@ if (errorReason && errorReason.includes("401")) {
     bodyKV = parseToKVArray(apiForm.body);
     paramsKV = parseToKVArray(apiForm.parameters);
 
-    headerMode = headersKV.length > 0 ? "kv" : "json";
+    headerMode = headersKV.some(h => h.key.trim()) ? "kv" : "json";
     bodyMode = "json";
-    paramMode = "json";
+    paramMode = paramsKV.some(p => p.key.trim()) ? "kv" : "json";
     showEditApiModal = true;
   }
 

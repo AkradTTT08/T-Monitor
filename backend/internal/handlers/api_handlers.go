@@ -361,6 +361,10 @@ func UploadPostmanCollection(c *fiber.Ctx) error {
 				Key   string `json:"key"`
 				Value string `json:"value"`
 			} `json:"query"`
+			Variable []struct {
+				Key   string `json:"key"`
+				Value string `json:"value"`
+			} `json:"variable"`
 		} `json:"url"`
 	}
 
@@ -470,10 +474,22 @@ func UploadPostmanCollection(c *fiber.Ctx) error {
 
 				headersJSON, _ := json.Marshal(postmanHeaders)
 
-				// Handle Query Parameters
+				// Handle Query Parameters and Path Variables
+				type Param struct { Key string `json:"key"`; Value string `json:"value"` }
+				var allParams []Param
+				
+				// Add regular query params
+				for _, q := range item.Request.URL.Query {
+					if q.Key != "" { allParams = append(allParams, Param{Key: q.Key, Value: q.Value}) }
+				}
+				// Add path variables
+				for _, v := range item.Request.URL.Variable {
+					if v.Key != "" { allParams = append(allParams, Param{Key: v.Key, Value: v.Value}) }
+				}
+
 				params := "[]"
-				if len(item.Request.URL.Query) > 0 {
-					pJSON, _ := json.Marshal(item.Request.URL.Query)
+				if len(allParams) > 0 {
+					pJSON, _ := json.Marshal(allParams)
 					params = string(pJSON)
 				}
 				
