@@ -434,10 +434,12 @@
 
     <!-- Sidebar Overlay for Mobile -->
     {#if isMobileMenuOpen}
-      <div
-        class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-30 md:hidden"
+      <button
+        type="button"
+        class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-30 md:hidden w-full h-full border-none p-0 m-0 cursor-default"
         on:click={() => (isMobileMenuOpen = false)}
-      ></div>
+        aria-label="Close mobile menu"
+      ></button>
     {/if}
 
     <!-- Sidebar Area (Single-column layout) -->
