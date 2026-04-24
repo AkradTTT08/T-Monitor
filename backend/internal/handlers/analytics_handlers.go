@@ -49,6 +49,61 @@ func GetUptimeStats(c *fiber.Ctx) error {
 	var apis []models.API
 	database.DB.Where("project_id = ?", projectID).Find(&apis)
 
+	if len(apis) == 0 {
+		return c.JSON(fiber.Map{
+			"apis":           []interface{}{},
+			"overall_uptime": 0,
+			"total_checks":   0,
+			"total_failures": 0,
+			"period":         period,
+		})
+	}
+
+	apiIDs := make([]uuid.UUID, len(apis))
+	for i, api := range apis {
+		apiIDs[i] = api.ID
+	}
+
+	// 1. Get Aggregated Stats (Total, Success, Latency) for all APIs in one go
+	type APIAggregatedStats struct {
+		ApiID         uuid.UUID
+		TotalChecks   int64
+		SuccessChecks int64
+		AvgLatency    float64
+		MaxLatency    int64
+		MinLatency    int64
+	}
+	var aggStats []APIAggregatedStats
+	database.DB.Model(&models.MonitorLog{}).
+		Select("api_id, COUNT(*) as total_checks, COUNT(*) FILTER (WHERE is_success = true) as success_checks, AVG(response_time) as avg_latency, MAX(response_time) as max_latency, MIN(response_time) as min_latency").
+		Where("api_id IN ? AND checked_at >= ?", apiIDs, since).
+		Group("api_id").
+		Scan(&aggStats)
+
+	// Create a map for quick lookup
+	statsMap := make(map[uuid.UUID]APIAggregatedStats)
+	for _, s := range aggStats {
+		statsMap[s.ApiID] = s
+	}
+
+	// 2. Get Last Checked Time for all APIs
+	type LastLog struct {
+		ApiID     uuid.UUID
+		CheckedAt time.Time
+	}
+	var lastLogs []LastLog
+	// Using a subquery/distinct on to get the latest log for each API
+	database.DB.Model(&models.MonitorLog{}).
+		Select("DISTINCT ON (api_id) api_id, checked_at").
+		Where("api_id IN ?", apiIDs).
+		Order("api_id, checked_at DESC").
+		Scan(&lastLogs)
+
+	lastLogMap := make(map[uuid.UUID]time.Time)
+	for _, l := range lastLogs {
+		lastLogMap[l.ApiID] = l.CheckedAt
+	}
+
 	type APIUptime struct {
 		ID            uuid.UUID `json:"id"`
 		Name          string    `json:"name"`
@@ -68,44 +123,33 @@ func GetUptimeStats(c *fiber.Ctx) error {
 	var overallSuccess int64
 
 	for _, api := range apis {
-		var totalChecks int64
-		var successCount int64
-		var failCount int64
-
-		// Count totals
-		database.DB.Model(&models.MonitorLog{}).
-			Where("api_id = ? AND checked_at >= ?", api.ID, since).
-			Count(&totalChecks)
-
-		database.DB.Model(&models.MonitorLog{}).
-			Where("api_id = ? AND checked_at >= ? AND is_success = true", api.ID, since).
-			Count(&successCount)
-
-		failCount = totalChecks - successCount
-
-		// Calculate uptime
-		var uptimePercent float64
-		if totalChecks > 0 {
-			uptimePercent = math.Round((float64(successCount)/float64(totalChecks))*10000) / 100
+		stats, ok := statsMap[api.ID]
+		if !ok {
+			// No logs for this period
+			results = append(results, APIUptime{
+				ID:            api.ID,
+				Name:          api.Name,
+				Method:        api.Method,
+				URL:           api.URL,
+				UptimePercent: 0,
+				AvgLatency:    0,
+				MaxLatency:    0,
+				MinLatency:    0,
+				TotalChecks:   0,
+				FailCount:     0,
+				LastChecked:   nil,
+			})
+			continue
 		}
 
-		// Get avg/max/min latency from successful checks
-		type LatencyStats struct {
-			AvgLatency float64
-			MaxLatency int64
-			MinLatency int64
+		uptimePercent := 0.0
+		if stats.TotalChecks > 0 {
+			uptimePercent = math.Round((float64(stats.SuccessChecks)/float64(stats.TotalChecks))*10000) / 100
 		}
-		var stats LatencyStats
-		database.DB.Model(&models.MonitorLog{}).
-			Select("COALESCE(AVG(response_time), 0) as avg_latency, COALESCE(MAX(response_time), 0) as max_latency, COALESCE(MIN(response_time), 0) as min_latency").
-			Where("api_id = ? AND checked_at >= ? AND is_success = true", api.ID, since).
-			Scan(&stats)
 
-		// Get last checked time
-		var lastLog models.MonitorLog
 		var lastChecked *time.Time
-		if err := database.DB.Where("api_id = ?", api.ID).Order("checked_at DESC").First(&lastLog).Error; err == nil {
-			lastChecked = &lastLog.CheckedAt
+		if t, exists := lastLogMap[api.ID]; exists {
+			lastChecked = &t
 		}
 
 		results = append(results, APIUptime{
@@ -117,13 +161,13 @@ func GetUptimeStats(c *fiber.Ctx) error {
 			AvgLatency:    math.Round(stats.AvgLatency*100) / 100,
 			MaxLatency:    stats.MaxLatency,
 			MinLatency:    stats.MinLatency,
-			TotalChecks:   totalChecks,
-			FailCount:     failCount,
+			TotalChecks:   stats.TotalChecks,
+			FailCount:     stats.TotalChecks - stats.SuccessChecks,
 			LastChecked:   lastChecked,
 		})
 
-		overallTotal += totalChecks
-		overallSuccess += successCount
+		overallTotal += stats.TotalChecks
+		overallSuccess += stats.SuccessChecks
 	}
 
 	var overallUptime float64

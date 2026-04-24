@@ -84,7 +84,7 @@ type ProjectMember struct {
 // API represents a single API endpoint to be monitored
 type API struct {
 	ID                 uuid.UUID      `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
-	ProjectID          uuid.UUID      `gorm:"type:uuid;not null" json:"project_id"`
+	ProjectID          uuid.UUID      `gorm:"type:uuid;not null;index" json:"project_id"`
 	Folder             string         `gorm:"type:varchar(255);default:'Uncategorized'" json:"folder"`
 	Name               string         `gorm:"not null" json:"name"`
 	Method             string         `gorm:"not null" json:"method"`      // GET, POST, PUT, DELETE, etc.
@@ -109,7 +109,7 @@ type API struct {
 // MonitorLog represents a health check result for an API
 type MonitorLog struct {
 	ID           uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
-	ApiID        uuid.UUID `gorm:"type:uuid;not null" json:"api_id"`
+	ApiID        uuid.UUID `gorm:"type:uuid;not null;index" json:"api_id"`
 	StatusCode   int       `json:"status_code"`
 	ResponseTime int64     `json:"response_time"` // in milliseconds
 	IsSuccess    bool      `json:"is_success"`
@@ -118,7 +118,7 @@ type MonitorLog struct {
 	Schedule        string         `gorm:"type:text" json:"schedule"` // Added for historical schedule tracking
 	TlsStatus       string         `gorm:"type:text" json:"tls_status"` // JSON summary of cert expiry
 	SecurityHeaders string         `gorm:"type:text" json:"security_headers"` // JSON mapping of header checks
-	CheckedAt       time.Time      `json:"checked_at"`
+	CheckedAt       time.Time      `gorm:"index" json:"checked_at"`
 	API             *API           `gorm:"foreignKey:ApiID" json:"api,omitempty"`
 	DeletedAt    gorm.DeletedAt `gorm:"index" json:"deleted_at"` // Soft delete
 }
