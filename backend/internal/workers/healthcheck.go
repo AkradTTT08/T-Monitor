@@ -116,31 +116,43 @@ func runPing(api models.API, envVars map[string]string, projectName string) {
 		api.Parameters = replaceEnvVariables(api.Parameters, envVars)
 	}
 
-	// Process URL Parameters
+	// Process URL Parameters and Path Variables
 	if api.Parameters != "" && api.Parameters != "[]" && api.Parameters != "{}" && api.Parameters != "{\n}" {
+		// 1. Parse parameters into a temporary list
+		type Param struct { Key string; Value string }
+		var allParams []Param
+
+		var paramsArray []struct { Key string `json:"key"`; Value string `json:"value"` }
+		if err := json.Unmarshal([]byte(api.Parameters), &paramsArray); err == nil {
+			for _, p := range paramsArray {
+				if p.Key != "" { allParams = append(allParams, Param{Key: strings.TrimSpace(p.Key), Value: p.Value}) }
+			}
+		} else {
+			var paramsMap map[string]interface{}
+			if err := json.Unmarshal([]byte(api.Parameters), &paramsMap); err == nil {
+				for k, v := range paramsMap {
+					if k != "" { allParams = append(allParams, Param{Key: strings.TrimSpace(k), Value: fmt.Sprintf("%v", v)}) }
+				}
+			}
+		}
+
+		// 2. Handle Path Variables substitution (e.g. :project_id)
+		usedAsPath := make(map[int]bool)
+		for i, p := range allParams {
+			placeholder := ":" + p.Key
+			if strings.Contains(api.URL, placeholder) {
+				api.URL = strings.ReplaceAll(api.URL, placeholder, p.Value)
+				usedAsPath[i] = true
+			}
+		}
+
+		// 3. Add remaining (unused) parameters as Query String
 		u, err := url.Parse(api.URL)
 		if err == nil {
 			q := u.Query()
-			// Try to parse as array of objects [{"key": "foo", "value": "bar"}]
-			var paramsArray []struct {
-				Key   string `json:"key"`
-				Value string `json:"value"`
-			}
-			if err := json.Unmarshal([]byte(api.Parameters), &paramsArray); err == nil {
-				for _, p := range paramsArray {
-					if p.Key != "" {
-						q.Add(strings.TrimSpace(p.Key), p.Value)
-					}
-				}
-			} else {
-				// Try to parse as map {"foo": "bar"}
-				var paramsMap map[string]interface{}
-				if err := json.Unmarshal([]byte(api.Parameters), &paramsMap); err == nil {
-					for k, v := range paramsMap {
-						if k != "" {
-							q.Add(strings.TrimSpace(k), fmt.Sprintf("%v", v))
-						}
-					}
+			for i, p := range allParams {
+				if !usedAsPath[i] {
+					q.Add(p.Key, p.Value)
 				}
 			}
 			u.RawQuery = q.Encode()

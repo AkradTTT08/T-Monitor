@@ -21,7 +21,7 @@
   function parseSegments(str: string) {
     if (!str) return [];
     const parts = [];
-    const regex = /\{\{([^}]+)\}\}/g;
+    const regex = /\{\{([^}]+)\}\}|:([a-zA-Z0-9_-]+)/g;
     let lastIndex = 0;
     let match;
 
@@ -29,16 +29,27 @@
       if (match.index > lastIndex) {
         parts.push({ type: "text", text: str.slice(lastIndex, match.index) });
       }
-      const varName = match[1];
-      const hasVar = variables.hasOwnProperty(varName);
 
-      parts.push({
-        type: "variable",
-        text: match[0],
-        name: varName,
-        value: hasVar ? variables[varName] : null,
-        isValid: hasVar,
-      });
+      if (match[1]) {
+        // Double bracket variable {{var}}
+        const varName = match[1];
+        const hasVar = variables.hasOwnProperty(varName);
+        parts.push({
+          type: "variable",
+          text: match[0],
+          name: varName,
+          value: hasVar ? variables[varName] : null,
+          isValid: hasVar,
+        });
+      } else if (match[2]) {
+        // Path variable :var
+        parts.push({
+          type: "path_variable",
+          text: match[0],
+          name: match[2],
+        });
+      }
+      
       lastIndex = regex.lastIndex;
     }
 
@@ -85,6 +96,8 @@
               </div>
             {/if}
           </span>
+        {:else if seg.type === "path_variable"}
+          <span class="text-cyan-400 font-bold">{seg.text}</span>
         {:else}
           <!-- Keep text color transparent, only background/spans are visible for variables -->
           <span class="text-transparent">{seg.text}</span>
@@ -121,7 +134,7 @@
   >
     <div class="flex-1 w-full truncate text-cyan-50">
       {#each segments as seg}
-        {#if seg.type === "variable"}
+        {#if seg.type === "variable" || seg.type === "path_variable"}
           <!-- Invisible text here so the visual overlay layer takes over rendering the variable -->
           <span class="text-transparent">{seg.text}</span>
         {:else}
