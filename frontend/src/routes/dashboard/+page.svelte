@@ -109,10 +109,11 @@
       </p>
       {#if selectedCompanyId}
         <div class="mt-4 flex items-center gap-3">
-          <label class="text-cyan-400 font-mono text-xs tracking-widest uppercase">Filter by Project:</label>
+          <label for="project-filter" class="text-cyan-400 font-mono text-xs tracking-widest uppercase">Filter by Project:</label>
           <select 
+            id="project-filter"
             bind:value={selectedProjectId} 
-            onchange={handleFilterChange}
+            on:change={handleFilterChange}
             class="bg-slate-900 border border-slate-700 text-cyan-50 text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block p-2 font-mono shadow-[0_0_10px_rgba(6,182,212,0.1)] outline-none"
           >
             <option value="all">All Projects</option>

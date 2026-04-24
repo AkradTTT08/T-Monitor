@@ -299,6 +299,7 @@
               placeholder="SEARCH_BY_NAME_OR_URL..." 
               bind:value={searchQuery}
               on:input={handleSearchInput}
+              aria-label="Search APIs by name or URL"
               class="w-full bg-slate-900/60 border border-slate-700/50 rounded-2xl px-10 py-2.5 text-xs text-cyan-50 font-mono focus:outline-none focus:border-cyan-500/50 focus:ring-4 focus:ring-cyan-500/10 transition-all placeholder:text-slate-600"
             />
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
@@ -316,6 +317,7 @@
           <select 
             bind:value={selectedProjectId}
             on:change={handleFilterChange}
+            aria-label="Filter APIs by project"
             class="bg-slate-900/60 border border-slate-700/50 rounded-2xl px-4 py-2.5 text-xs text-cyan-400 font-mono focus:outline-none focus:border-cyan-500/50 transition-all cursor-pointer"
           >
             <option value="">ALL_PROJECTS</option>
@@ -325,7 +327,6 @@
           </select>
        </div>
     </div>
-  </div>
 
   <!-- Content -->
   {#if isLoading}
