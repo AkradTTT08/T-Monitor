@@ -160,7 +160,7 @@ func GetAPIs(c *fiber.Ctx) error {
 	}
 
 	query.Preload("Logs", func(db *gorm.DB) *gorm.DB {
-		return db.Order("checked_at DESC").Limit(1)
+		return db.Select("DISTINCT ON (api_id) *").Order("api_id, checked_at DESC")
 	}).Order("folder ASC, order_index ASC").Find(&apis)
 
 	return c.JSON(apis)
@@ -456,8 +456,8 @@ func UploadPostmanCollection(c *fiber.Ctx) error {
 					}
 				}
 				
-				// Auto-add Content-Type if missing and likely needed (not GET/HEAD)
-				if !hasContentType && method != "GET" && method != "HEAD" {
+				// Auto-add Content-Type if missing
+				if !hasContentType {
 					postmanHeaders = append(postmanHeaders, PostmanHeader{
 						Key:   "Content-Type",
 						Value: "application/json",

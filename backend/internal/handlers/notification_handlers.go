@@ -88,13 +88,27 @@ func UpsertNotificationConfig(c *fiber.Ctx) error {
 	}
 
 	var existing models.NotificationConfig
-	result := database.DB.Where("project_id = ?", input.ProjectID).First(&existing)
+	err := database.DB.Where("project_id = ?", input.ProjectID).First(&existing).Error
 	
-	if result.RowsAffected > 0 {
-		input.ID = existing.ID
-		database.DB.Save(&input)
+	// Create a map from the request body to ensure all fields (including false bools) are updated
+	var updateMap map[string]interface{}
+	if err := c.BodyParser(&updateMap); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON for update"})
+	}
+	// Remove ID from update map to avoid primary key issues
+	delete(updateMap, "id")
+
+	if err == nil {
+		// Update existing using map to catch zero values/false bools
+		if err := database.DB.Model(&existing).Updates(updateMap).Error; err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update notification config"})
+		}
+		input = existing
 	} else {
-		database.DB.Create(&input)
+		// Create new
+		if err := database.DB.Create(&input).Error; err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create notification config"})
+		}
 	}
 
 	return c.JSON(input)
