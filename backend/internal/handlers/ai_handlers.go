@@ -35,7 +35,8 @@ type AIQueryResponse struct {
 func getOllamaHost() string {
 	host := os.Getenv("OLLAMA_HOST")
 	if host == "" {
-		host = "http://ollama:11434"
+		// Default to localhost for easier local development on Windows
+		host = "http://localhost:11434"
 	}
 	return strings.TrimRight(host, "/")
 }
@@ -210,7 +211,13 @@ func AnalyzeIncident(c *fiber.Ctx) error {
 	// Fetch the log with its associated API
 	var logEntry models.MonitorLog
 	if err := database.DB.Preload("API").First(&logEntry, "id = ?", req.LogID).Error; err != nil {
+		log.Printf("[AI] Log not found: %v", req.LogID)
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Monitor log not found"})
+	}
+
+	if logEntry.API == nil {
+		log.Printf("[AI] API record missing for log: %v", req.LogID)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Associated API record not found for this log"})
 	}
 
 	// If log is success, early return
@@ -238,10 +245,14 @@ Use Markdown lists for readability.`,
 
 	rcaAnswer, err := ollamaGenerate(prompt)
 	if err != nil {
-		log.Printf("[AI] Failed to generate RCA from Ollama: %v", err)
+		log.Printf("[AI] Ollama Error: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "AI service is unavailable. Please ensure Ollama is running.",
+			"error": "AI service error: " + err.Error(),
 		})
+	}
+
+	if rcaAnswer == "" {
+		rcaAnswer = "AI ไม่สามารถวิเคราะห์สาเหตุได้ในขณะนี้ โปรดตรวจสอบ Error Message ด้วยตนเองครับ"
 	}
 
 	return c.JSON(fiber.Map{"reason": rcaAnswer})
