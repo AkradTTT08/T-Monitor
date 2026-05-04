@@ -1199,16 +1199,17 @@
       onkeydown={(e) => e.key === "Escape" && (showLogModal = false)}
     ></div>
     <div
-      class="relative bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-lg shadow-2xl"
+      class="relative bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-lg shadow-2xl flex flex-col overflow-hidden"
+      style="max-height: 85vh; max-width: min(512px, calc(100vw - 2rem));"
     >
-      <h3 class="text-lg font-bold text-cyan-400 font-mono mb-4">
+      <h3 class="text-lg font-bold text-cyan-400 font-mono mb-4 shrink-0">
         LOG_DETAILS
       </h3>
-      <div class="space-y-4">
+      <div class="overflow-y-auto overflow-x-hidden flex-1 min-h-0">
         <div
-          class="bg-slate-950 p-4 rounded-xl border border-slate-800 font-mono text-xs"
+          class="bg-slate-950 p-4 rounded-xl border border-slate-800 font-mono text-xs overflow-hidden"
         >
-          <pre class="text-cyan-50/70 whitespace-pre-wrap">{JSON.stringify(
+          <pre class="text-cyan-50/70 whitespace-pre-wrap break-words overflow-x-hidden w-full" style="max-width: 100%;">{JSON.stringify(
               selectedLog,
               null,
               2,
@@ -1217,7 +1218,7 @@
       </div>
       <button
         onclick={() => (showLogModal = false)}
-        class="mt-6 w-full py-2 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold text-slate-300 transition-colors"
+        class="mt-4 shrink-0 w-full py-2 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold text-slate-300 transition-colors"
         >CLOSE</button
       >
     </div>

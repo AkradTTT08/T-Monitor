@@ -375,6 +375,7 @@
     </div>
 
   <!-- Content -->
+  <div class="mt-8">
   {#if isLoading}
     <div class="flex justify-center p-12">
       <svg
@@ -574,6 +575,7 @@
       </div>
     {/if}
   {/if}
+  </div>
 </div>
 
 <!-- API Testing Modal -->
