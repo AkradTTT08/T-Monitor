@@ -119,7 +119,9 @@
       });
       
       if (res.ok) {
-        const data = await res.json();
+        const raw = await res.json();
+        // Backend may return null instead of [] when no notifications exist
+        const data: any[] = Array.isArray(raw) ? raw : [];
         
         // Find truly new notifications to show Toast
         const newOnes = data.filter((n: any) => !unreadNotifications.find((un: any) => un.id === n.id));
