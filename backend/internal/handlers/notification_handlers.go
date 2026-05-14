@@ -1,7 +1,10 @@
 package handlers
 
 import (
+	"log"
+
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/monitor-api/backend/internal/database"
@@ -87,31 +90,53 @@ func UpsertNotificationConfig(c *fiber.Ctx) error {
 		}
 	}
 
-	var existing models.NotificationConfig
-	err := database.DB.Where("project_id = ?", input.ProjectID).First(&existing).Error
-	
-	// Create a map from the request body to ensure all fields (including false bools) are updated
-	var updateMap map[string]interface{}
-	if err := c.BodyParser(&updateMap); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON for update"})
+	// Build an explicit snake_case map so GORM updates all columns correctly,
+	// including boolean fields that are false (zero value).
+	updateMap := map[string]interface{}{
+		"enable_telegram":   input.EnableTelegram,
+		"telegram_bot_token": input.TelegramBotToken,
+		"telegram_chat_id":  input.TelegramChatID,
+		"enable_line":       input.EnableLINE,
+		"line_user_id":      input.LINEUserID,
+		"enable_email":      input.EnableEmail,
+		"email_address":     input.EmailAddress,
+		"smtp_host":         input.SmtpHost,
+		"smtp_port":         input.SmtpPort,
+		"smtp_user":         input.SmtpUser,
+		"smtp_pass":         input.SmtpPass,
+		"enable_webhook":    input.EnableWebhook,
+		"webhook_url":       input.WebhookURL,
+		"webhook_secret":    input.WebhookSecret,
+		"enable_ticketing":  input.EnableTicketing,
 	}
-	// Remove ID from update map to avoid primary key issues
-	delete(updateMap, "id")
 
-	if err == nil {
-		// Update existing using map to catch zero values/false bools
-		if err := database.DB.Model(&existing).Updates(updateMap).Error; err != nil {
+	var existing models.NotificationConfig
+	findErr := database.DB.Where("project_id = ?", input.ProjectID).First(&existing).Error
+
+	var result models.NotificationConfig
+
+	if findErr == nil {
+		// Record exists — update with explicit map (handles false booleans correctly)
+		log.Printf("[NotifConfig] Updating config for project %s: enable_telegram=%v token_len=%d chat_id=%s",
+			input.ProjectID, input.EnableTelegram, len(input.TelegramBotToken), input.TelegramChatID)
+		if dbErr := database.DB.Session(&gorm.Session{}).Model(&existing).Updates(updateMap).Error; dbErr != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update notification config"})
 		}
-		input = existing
+		// Reload the updated record to return fresh data
+		database.DB.Where("project_id = ?", input.ProjectID).First(&result)
 	} else {
-		// Create new
-		if err := database.DB.Create(&input).Error; err != nil {
+		// No existing record — create new
+		log.Printf("[NotifConfig] Creating new config for project %s: enable_telegram=%v", input.ProjectID, input.EnableTelegram)
+		if dbErr := database.DB.Create(&input).Error; dbErr != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create notification config"})
 		}
+		result = input
 	}
 
-	return c.JSON(input)
+	log.Printf("[NotifConfig] Saved — project=%s enable_telegram=%v bot_token_len=%d chat_id=%s",
+		result.ProjectID, result.EnableTelegram, len(result.TelegramBotToken), result.TelegramChatID)
+
+	return c.JSON(result)
 }
 
 // CreateProjectNotification sends a dashboard notification to all project members

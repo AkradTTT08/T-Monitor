@@ -911,45 +911,38 @@ if (errorReason && errorReason.includes("401")) {
     selectedApiIds.length > 0 && selectedApiIds.length < apis.length;
 
   let isAnalyzingRCA = false;
-  async function analyzeIncident(logId: string) {
-    if (isAnalyzingRCA) return;
-    isAnalyzingRCA = true;
-    
+  function analyzeIncident(_logId: string) {
+    // AI feature is coming soon — show a styled modal instead of calling the API
     Swal.fire({
-      title: 'AI is analyzing...',
-      text: 'Please wait while Ollama processes the error logs.',
-      allowOutsideClick: false,
       background: '#0f172a',
       color: '#f8fafc',
-      didOpen: () => { Swal.showLoading(); }
-    });
-
-    try {
-      const token = localStorage.getItem("monitor_token");
-      const res = await fetch(`${API_BASE_URL}/api/v1/ai/analyze-incident`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ log_id: logId })
-      });
-
-      const data = await res.json();
-      if (res.ok) {
-        Swal.fire({
-          title: '<span class="text-indigo-400 font-bold flex items-center justify-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>AI Analysis (RCA)</span>',
-          html: `<pre style="white-space: pre-wrap; font-family: inherit; text-align: left; font-size: 14px; color: #cbd5e1; max-height: 60vh; overflow-y: auto;">${data.reason}</pre>`,
-          width: 800,
-          background: '#0f172a',
-          confirmButtonColor: '#6366f1'
-        });
-      } else {
-        systemAlert.fire('Failed', data.error || 'Failed to analyze incident', 'error');
+      width: 480,
+      html: `
+        <div style="padding: 16px 8px; text-align: center;">
+          <div style="width: 72px; height: 72px; margin: 0 auto 20px; background: linear-gradient(135deg, #312e81, #1e1b4b); border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid rgba(99,102,241,0.4); box-shadow: 0 0 30px rgba(99,102,241,0.3);">
+            <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+            </svg>
+          </div>
+          <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.25em; text-transform: uppercase; color: #6366f1; margin-bottom: 10px; font-family: monospace;">AI Feature</div>
+          <div style="font-size: 26px; font-weight: 900; color: #f1f5f9; margin-bottom: 12px; letter-spacing: -0.5px;">Coming Soon</div>
+          <div style="font-size: 13px; color: #94a3b8; line-height: 1.7; max-width: 320px; margin: 0 auto;">
+            ฟีเจอร์ <span style="color: #a5b4fc; font-weight: 600;">AI Root Cause Analysis</span> กำลังอยู่ในระหว่างการพัฒนา<br>จะเปิดใช้งานเร็วๆ นี้
+          </div>
+          <div style="margin-top: 20px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+            <div style="width: 8px; height: 8px; border-radius: 50%; background: #6366f1; animation: pulse 1.5s ease-in-out infinite;"></div>
+            <div style="width: 8px; height: 8px; border-radius: 50%; background: #6366f1; animation: pulse 1.5s ease-in-out 0.3s infinite;"></div>
+            <div style="width: 8px; height: 8px; border-radius: 50%; background: #6366f1; animation: pulse 1.5s ease-in-out 0.6s infinite;"></div>
+          </div>
+        </div>
+      `,
+      showConfirmButton: true,
+      confirmButtonText: 'รับทราบ',
+      confirmButtonColor: '#4f46e5',
+      customClass: {
+        popup: 'coming-soon-popup',
       }
-    } catch (err) {
-      console.error(err);
-      systemAlert.fire('Error', 'Network error occurred while contacting AI.', 'error');
-    } finally {
-      isAnalyzingRCA = false;
-    }
+    });
   }
 
   function toggleAllSelection() {

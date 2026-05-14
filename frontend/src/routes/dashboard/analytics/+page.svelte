@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from "svelte";
   import { page } from "$app/stores";
   import Chart from "chart.js/auto";
+  import Swal from "sweetalert2";
   import { API_BASE_URL } from "$lib/config";
 
   let isLoading = true;
@@ -20,7 +21,7 @@
   let uptimeBarCanvas: HTMLCanvasElement;
   let uptimeBarChart: Chart | null = null;
 
-  // AI Analytic State
+  // AI Analytic State (Coming Soon)
   let showAIPanel = false;
   let isAIAnalyzing = false;
   let aiAnalysisResult = "";
@@ -75,61 +76,34 @@
   }
 
   // ===== AI Analytic =====
-  async function analyzeWithAI() {
-    showAIPanel = true;
-    isAIAnalyzing = true;
-    aiAnalysisResult = "";
-    aiError = "";
-
-    // Build a summary payload of current dashboard data
-    const summaryPayload = buildDashboardSummary();
-
-    const prompt = `คุณคือผู้เชี่ยวชาญด้าน API Monitoring และ DevOps วิเคราะห์ข้อมูล Dashboard ต่อไปนี้แล้วให้รายงานเป็นภาษาไทย:
-
-=== ข้อมูล Dashboard (ช่วง ${selectedPeriod}) ===
-${summaryPayload}
-
-กรุณาวิเคราะห์และให้รายงานในรูปแบบต่อไปนี้:
-
-📊 **สรุปภาพรวมระบบ**
-- สถานะโดยรวมและ Uptime
-
-⚠️ **จุดที่น่าเป็นห่วง**
-- API ที่มีปัญหา, Uptime ต่ำ, Latency สูง
-
-🔍 **การวิเคราะห์ Incident**
-- Pattern ของปัญหาที่พบบ่อย
-
-✅ **คำแนะนำการแก้ไข**
-- แนวทาง actionable ที่ควรดำเนินการ
-
-ตอบเป็นภาษาไทย กระชับ ชัดเจน`;
-
-    try {
-      const token = localStorage.getItem("monitor_token");
-      const res = await fetch(`${API_BASE_URL}/api/v1/ai/chat`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          query: prompt,
-          history: [],
-        }),
-      });
-
-      const data = await res.json();
-      if (res.ok) {
-        aiAnalysisResult = data.answer || "ไม่ได้รับผลการวิเคราะห์";
-      } else {
-        aiError = data.error || "เกิดข้อผิดพลาดในการเชื่อมต่อ AI";
-      }
-    } catch (err: any) {
-      aiError = `เกิดข้อผิดพลาด: ${err.message}`;
-    } finally {
-      isAIAnalyzing = false;
-    }
+  function analyzeWithAI() {
+    Swal.fire({
+      background: '#0f172a',
+      color: '#f8fafc',
+      width: 480,
+      html: `
+        <div style="padding: 16px 8px; text-align: center;">
+          <div style="width: 72px; height: 72px; margin: 0 auto 20px; background: linear-gradient(135deg, #312e81, #1e1b4b); border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid rgba(99,102,241,0.4); box-shadow: 0 0 30px rgba(99,102,241,0.3);">
+            <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+            </svg>
+          </div>
+          <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.25em; text-transform: uppercase; color: #6366f1; margin-bottom: 10px; font-family: monospace;">AI Feature</div>
+          <div style="font-size: 26px; font-weight: 900; color: #f1f5f9; margin-bottom: 12px; letter-spacing: -0.5px;">Coming Soon</div>
+          <div style="font-size: 13px; color: #94a3b8; line-height: 1.7; max-width: 320px; margin: 0 auto;">
+            ฟีเจอร์ <span style="color: #a5b4fc; font-weight: 600;">AI Dashboard Analysis</span> กำลังอยู่ในระหว่างการพัฒนา<br>จะเปิดใช้งานเร็วๆ นี้
+          </div>
+          <div style="margin-top: 20px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+            <div style="width: 8px; height: 8px; border-radius: 50%; background: #6366f1; animation: pulse 1.5s ease-in-out infinite;"></div>
+            <div style="width: 8px; height: 8px; border-radius: 50%; background: #6366f1; animation: pulse 1.5s ease-in-out 0.3s infinite;"></div>
+            <div style="width: 8px; height: 8px; border-radius: 50%; background: #6366f1; animation: pulse 1.5s ease-in-out 0.6s infinite;"></div>
+          </div>
+        </div>
+      `,
+      showConfirmButton: true,
+      confirmButtonText: 'รับทราบ',
+      confirmButtonColor: '#4f46e5',
+    });
   }
 
   function buildDashboardSummary(): string {

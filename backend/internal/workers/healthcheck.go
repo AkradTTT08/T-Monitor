@@ -72,6 +72,7 @@ func checkAPIs() {
 	database.DB.Find(&projects)
 	envMap := make(map[uuid.UUID]map[string]string)
 	nameMap := make(map[uuid.UUID]string)
+	companyIDMap := make(map[uuid.UUID]*uuid.UUID) // projectID → companyID
 	for _, p := range projects {
 		var vars map[string]string
 		if p.EnvironmentVariables != "" && p.EnvironmentVariables != "{}" {
@@ -79,6 +80,15 @@ func checkAPIs() {
 		}
 		envMap[p.ID] = vars
 		nameMap[p.ID] = p.Name
+		companyIDMap[p.ID] = p.CompanyID
+	}
+
+	// Fetch all companies to build companyName lookup
+	var companies []models.Company
+	database.DB.Find(&companies)
+	companyNameMap := make(map[uuid.UUID]string)
+	for _, c := range companies {
+		companyNameMap[c.ID] = c.Name
 	}
 
 	now := time.Now()
@@ -101,11 +111,15 @@ func checkAPIs() {
 
 		vars := envMap[api.ProjectID]
 		projectName := nameMap[api.ProjectID]
-		go runPing(api, vars, projectName)
+		companyName := ""
+		if cid := companyIDMap[api.ProjectID]; cid != nil {
+			companyName = companyNameMap[*cid]
+		}
+		go runPing(api, vars, projectName, companyName)
 	}
 }
 
-func runPing(api models.API, envVars map[string]string, projectName string) {
+func runPing(api models.API, envVars map[string]string, projectName string, companyName string) {
 	start := time.Now()
 
 	// Replace variables
@@ -171,7 +185,7 @@ func runPing(api models.API, envVars map[string]string, projectName string) {
 	}
 
 	if err != nil {
-		handleResult(api, 0, 0, false, err.Error(), "", projectName, "", "{}")
+		handleResult(api, 0, 0, false, err.Error(), "", projectName, companyName, "", "{}")
 		return
 	}
 
@@ -244,7 +258,7 @@ func runPing(api models.API, envVars map[string]string, projectName string) {
 	// ---------------------------------------
 
 	if err != nil {
-		handleResult(api, 0, duration, false, err.Error(), "", projectName, "", "{}")
+		handleResult(api, 0, duration, false, err.Error(), "", projectName, companyName, "", "{}")
 		return
 	}
 	defer res.Body.Close()
@@ -311,13 +325,13 @@ func runPing(api models.API, envVars map[string]string, projectName string) {
 
 	if res.StatusCode != api.ExpectedStatusCode {
 		errMsg := fmt.Sprintf("Expected %d, got %d. Body: %s", api.ExpectedStatusCode, res.StatusCode, bodyString)
-		handleResult(api, res.StatusCode, duration, false, errMsg, bodyString, projectName, tlsStatusStr, securityHeadersStr)
+		handleResult(api, res.StatusCode, duration, false, errMsg, bodyString, projectName, companyName, tlsStatusStr, securityHeadersStr)
 	} else {
 		// Success! Execute extraction script if present
 		if api.ResponseScript != "" {
 			executeResponseScript(api, bodyString, res.StatusCode, res.Header)
 		}
-		handleResult(api, res.StatusCode, duration, true, "", bodyString, projectName, tlsStatusStr, securityHeadersStr)
+		handleResult(api, res.StatusCode, duration, true, "", bodyString, projectName, companyName, tlsStatusStr, securityHeadersStr)
 	}
 }
 
@@ -413,7 +427,7 @@ func updateProjectEnv(projectID uuid.UUID, key string, value string) {
 	database.DB.Model(&models.Project{}).Where("id = ?", projectID).Update("environment_variables", string(envBytes))
 }
 
-func handleResult(api models.API, statusCode int, duration int64, isSuccess bool, errorMsg string, responseBody string, projectName string, tlsStatus string, secHeaders string) {
+func handleResult(api models.API, statusCode int, duration int64, isSuccess bool, errorMsg string, responseBody string, projectName string, companyName string, tlsStatus string, secHeaders string) {
 	logEntry := models.MonitorLog{
 		ApiID:           api.ID,
 		StatusCode:      statusCode,
@@ -437,18 +451,27 @@ func handleResult(api models.API, statusCode int, duration int64, isSuccess bool
 
 		// If no config is set for this project, skip notification
 		if err != nil {
-			log.Printf("[Notify] No notification config found for project %d, skipping", api.ProjectID)
+			log.Printf("[Notify] No notification config found for project %s, skipping", api.ProjectID)
 			return
 		}
 
+		log.Printf("[Notify] Config found for project %s — Telegram=%v (token_len=%d, chat_id=%s) Email=%v Webhook=%v LINE=%v",
+			api.ProjectID,
+			config.EnableTelegram, len(config.TelegramBotToken), config.TelegramChatID,
+			config.EnableEmail, config.EnableWebhook, config.EnableLINE,
+		)
+
 		// Send Telegram notification directly
 		if config.EnableTelegram && config.TelegramBotToken != "" && config.TelegramChatID != "" {
+			log.Printf("[Notify] 📨 Triggering Telegram for API '%s'", api.Name)
 			go sendTelegramMessage(api, logEntry, &config, projectName)
+		} else if config.EnableTelegram {
+			log.Printf("[Notify] ⚠️  Telegram enabled but missing token or chat_id for project %s", api.ProjectID)
 		}
 
 		// Send Email notification directly
 		if config.EnableEmail && config.EmailAddress != "" {
-			go sendEmailNotification(api, logEntry, &config, projectName)
+			go sendEmailNotification(api, logEntry, &config, projectName, companyName)
 		}
 
 		// Send Webhook notification directly
@@ -610,9 +633,9 @@ func sendTelegramMessage(api models.API, entry models.MonitorLog, config *models
 	}
 }
 
-func sendEmailNotification(api models.API, entry models.MonitorLog, config *models.NotificationConfig, projectName string) {
+func sendEmailNotification(api models.API, entry models.MonitorLog, config *models.NotificationConfig, projectName string, companyName string) {
 	if config.SmtpHost == "" || config.SmtpUser == "" || config.SmtpPass == "" {
-		log.Printf("[Notify] SMTP settings missing for project %d, skipping email", api.ProjectID)
+		log.Printf("[Notify] SMTP settings missing for project %s, skipping email", api.ProjectID)
 		return
 	}
 
@@ -634,14 +657,16 @@ func sendEmailNotification(api models.API, entry models.MonitorLog, config *mode
 		Time        string
 		ProjectId   uuid.UUID
 		ProjectName string
+		CompanyName string
 	}{
-		ApiName:    api.Name,
-		Url:        api.URL,
-		StatusCode: entry.StatusCode,
-		ErrorMsg:   entry.ErrorMessage,
-		Time:       entry.CheckedAt.Format("2006-01-02 15:04:05"),
-		ProjectId:  api.ProjectID,
+		ApiName:     api.Name,
+		Url:         api.URL,
+		StatusCode:  entry.StatusCode,
+		ErrorMsg:    entry.ErrorMessage,
+		Time:        entry.CheckedAt.Format("2006-01-02 15:04:05"),
+		ProjectId:   api.ProjectID,
 		ProjectName: projectName,
+		CompanyName: companyName,
 	}
 
 	tmpl, err := template.New("email").Parse(htmlTemplate)
@@ -679,6 +704,10 @@ const htmlTemplate = `
         .header { background: linear-gradient(135deg, #ef4444 0%, #7f1d1d 100%); padding: 30px; text-align: center; }
         .header h1 { margin: 0; font-size: 24px; letter-spacing: 2px; text-transform: uppercase; color: #fff; }
         .content { padding: 40px; }
+        .context-bar { display: flex; gap: 12px; margin-bottom: 24px; }
+        .context-chip { background-color: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 8px 14px; flex: 1; }
+        .context-chip .chip-label { color: #64748b; font-size: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 3px; }
+        .context-chip .chip-value { color: #e2e8f0; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .alert-box { background-color: #0f172a; border-left: 4px solid #ef4444; padding: 20px; border-radius: 8px; margin-bottom: 30px; }
         .label { color: #94a3b8; font-size: 12px; font-weight: bold; text-transform: uppercase; margin-bottom: 4px; }
         .value { color: #f1f5f9; font-size: 16px; margin-bottom: 16px; font-family: 'Courier New', Courier, monospace; }
@@ -693,6 +722,18 @@ const htmlTemplate = `
         </div>
         <div class="content">
             <p style="font-size: 16px; color: #cbd5e1; margin-top: 0;">An endpoint health check has failed. Action may be required.</p>
+
+            <!-- Company & Project Context -->
+            <div class="context-bar">
+                <div class="context-chip">
+                    <div class="chip-label">🏢 Company</div>
+                    <div class="chip-value">{{if .CompanyName}}{{.CompanyName}}{{else}}—{{end}}</div>
+                </div>
+                <div class="context-chip">
+                    <div class="chip-label">📁 Project</div>
+                    <div class="chip-value">{{if .ProjectName}}{{.ProjectName}}{{else}}—{{end}}</div>
+                </div>
+            </div>
             
             <div class="alert-box">
                 <div class="label">API NAME</div>
@@ -712,7 +753,7 @@ const htmlTemplate = `
             </div>
             
             <div style="text-align: center;">
-                <a href="http://localhost:5173/dashboard/projects/{{.ProjectId}}" class="btn">VIEW IN DASHBOARD</a>
+                <a href="http://203.151.56.27:3001/dashboard/projects/{{.ProjectId}}" class="btn">VIEW IN DASHBOARD</a>
             </div>
         </div>
         <div class="footer">
