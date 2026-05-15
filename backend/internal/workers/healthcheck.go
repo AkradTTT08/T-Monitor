@@ -596,11 +596,13 @@ func sendTelegramMessage(api models.API, entry models.MonitorLog, config *models
 		entry.CheckedAt.Format("2006-01-02 15:04:05"),
 	)
 
-	telegramURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", config.TelegramBotToken)
+	telegramURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", strings.TrimSpace(config.TelegramBotToken))
 
-	dashboardURL := fmt.Sprintf("http://localhost:5173/dashboard/projects/%s", api.ProjectID.String())
+	// Telegram API strictly validates URLs in inline keyboards and rejects "localhost". Use external IP or domain.
+	dashboardURL := fmt.Sprintf("http://203.151.56.27:3001/dashboard/projects/%s", api.ProjectID.String())
+	
 	payload := map[string]interface{}{
-		"chat_id":    config.TelegramChatID,
+		"chat_id":    strings.TrimSpace(config.TelegramChatID),
 		"text":       message,
 		"parse_mode": "HTML",
 		"reply_markup": map[string]interface{}{
