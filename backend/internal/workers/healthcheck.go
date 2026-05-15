@@ -446,8 +446,8 @@ func handleResult(api models.API, statusCode int, duration int64, isSuccess bool
 	// If failed, send notifications
 	if !isSuccess {
 		var config models.NotificationConfig
-		// Use Last() to get the most recently updated config
-		err := database.DB.Where("project_id = ?", api.ProjectID).Last(&config).Error
+		// Use Order("updated_at desc").First() to get the most recently updated config instead of Last() which is broken for UUIDs
+		err := database.DB.Where("project_id = ?", api.ProjectID).Order("updated_at desc").First(&config).Error
 
 		// If no config is set for this project, skip notification
 		if err != nil {
@@ -582,17 +582,17 @@ func formatScheduleString(api models.API) string {
 
 func sendTelegramMessage(api models.API, entry models.MonitorLog, config *models.NotificationConfig, projectName string) {
 	message := fmt.Sprintf(
-		"🚨 *API Alert - Project %s*\n\n"+
-			"*API:* %s\n"+
-			"*URL:* `%s`\n"+
-			"*Status Code:* `%d`\n"+
-			"*Error:* %s\n"+
-			"*Time:* %s",
-		projectName,
-		api.Name,
-		api.URL,
+		"🚨 <b>API Alert - Project %s</b>\n\n"+
+			"<b>API:</b> %s\n"+
+			"<b>URL:</b> <code>%s</code>\n"+
+			"<b>Status Code:</b> <code>%d</code>\n"+
+			"<b>Error:</b> %s\n"+
+			"<b>Time:</b> %s",
+		template.HTMLEscapeString(projectName),
+		template.HTMLEscapeString(api.Name),
+		template.HTMLEscapeString(api.URL),
 		entry.StatusCode,
-		entry.ErrorMessage,
+		template.HTMLEscapeString(entry.ErrorMessage),
 		entry.CheckedAt.Format("2006-01-02 15:04:05"),
 	)
 
@@ -602,7 +602,7 @@ func sendTelegramMessage(api models.API, entry models.MonitorLog, config *models
 	payload := map[string]interface{}{
 		"chat_id":    config.TelegramChatID,
 		"text":       message,
-		"parse_mode": "Markdown",
+		"parse_mode": "HTML",
 		"reply_markup": map[string]interface{}{
 			"inline_keyboard": [][]map[string]interface{}{
 				{
