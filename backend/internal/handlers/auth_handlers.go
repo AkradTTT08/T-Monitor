@@ -7,9 +7,8 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/monitor-api/backend/internal/database"
-	"github.com/monitor-api/backend/internal/middleware"
 	"github.com/monitor-api/backend/internal/models"
-	"golang.org/x/crypto/bcrypt"
+	"github.com/monitor-api/backend/internal/services"
 )
 
 type RegisterInput struct {
@@ -32,7 +31,8 @@ func Register(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
+	authSvc := services.NewAuthService()
+	hash, err := authSvc.HashPassword(input.Password)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to hash password"})
 	}
@@ -74,7 +74,8 @@ func Login(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Password หรือ Username ที่ไม่ถูกต้อง"})
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(input.Password)); err != nil {
+	authSvc := services.NewAuthService()
+	if !authSvc.CheckPasswordHash(input.Password, user.Password) {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Password หรือ Username ที่ไม่ถูกต้อง"})
 	}
 
@@ -86,7 +87,7 @@ func Login(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Your account has been blocked by an administrator"})
 	}
 
-	token, err := middleware.GenerateToken(user)
+	token, err := authSvc.GenerateJWT(user.ID.String(), user.Role)
 	if err != nil {
 		log.Println("Error generating token:", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to generate token"})
@@ -100,12 +101,10 @@ func RefreshToken(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(uuid.UUID)
 	role := c.Locals("role").(string)
 
-	user := models.User{
-		ID:   userID,
-		Role: role,
-	}
+	// User struct instantiation is no longer needed since authSvc.GenerateJWT only takes userID and role
 
-	token, err := middleware.GenerateToken(user)
+	authSvc := services.NewAuthService()
+	token, err := authSvc.GenerateJWT(userID.String(), role)
 	if err != nil {
 		log.Println("Error refreshing token:", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to refresh token"})

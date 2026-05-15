@@ -9,7 +9,7 @@ import (
 
 // Company represents a business entity that groups multiple projects
 type Company struct {
-	ID          uuid.UUID       `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	ID          uuid.UUID       `gorm:"type:uuid;primaryKey" json:"id"`
 	Name        string          `gorm:"not null" json:"name"`
 	Description string          `json:"description"`
 	LogoURL     string          `gorm:"type:text" json:"logo_url"`
@@ -22,9 +22,14 @@ type Company struct {
 	DeletedAt   gorm.DeletedAt  `gorm:"index" json:"deleted_at"` // Soft delete
 }
 
+func (m *Company) BeforeCreate(tx *gorm.DB) (err error) {
+	if m.ID == uuid.Nil { m.ID = uuid.New() }
+	return
+}
+
 // CompanyMember links users to companies they have been invited to
 type CompanyMember struct {
-	ID        uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	ID        uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
 	CompanyID uuid.UUID `gorm:"type:uuid;not null;index" json:"company_id"`
 	UserID    uuid.UUID `gorm:"type:uuid;not null;index" json:"user_id"`
 	Role      string    `gorm:"type:varchar(20);default:'member'" json:"role"` // 'owner' or 'member'
@@ -32,9 +37,14 @@ type CompanyMember struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+func (m *CompanyMember) BeforeCreate(tx *gorm.DB) (err error) {
+	if m.ID == uuid.Nil { m.ID = uuid.New() }
+	return
+}
+
 // User represents an administrator or standard user in the system
 type User struct {
-	ID              uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	ID              uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
 	Email           string    `gorm:"uniqueIndex;not null" json:"email"`
 	Password        string    `gorm:"not null" json:"-"`
 	Name            string    `gorm:"type:varchar(255)" json:"name"`
@@ -51,9 +61,14 @@ type User struct {
 	DeletedAt       gorm.DeletedAt `gorm:"index" json:"deleted_at"` // Added for soft delete
 }
 
+func (m *User) BeforeCreate(tx *gorm.DB) (err error) {
+	if m.ID == uuid.Nil { m.ID = uuid.New() }
+	return
+}
+
 // Project represents a workspace containing configured APIs
 type Project struct {
-	ID                   uuid.UUID            `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	ID                   uuid.UUID            `gorm:"type:uuid;primaryKey" json:"id"`
 	Name                 string               `gorm:"not null" json:"name"`
 	Description          string               `json:"description"`
 	EnvironmentVariables string               `gorm:"type:text;default:'{}'" json:"environment_variables"`
@@ -72,9 +87,14 @@ type Project struct {
 	DeletedAt            gorm.DeletedAt       `gorm:"index" json:"deleted_at"` // Soft delete
 }
 
+func (m *Project) BeforeCreate(tx *gorm.DB) (err error) {
+	if m.ID == uuid.Nil { m.ID = uuid.New() }
+	return
+}
+
 // ProjectMember links users to projects they have been added to
 type ProjectMember struct {
-	ID        uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	ID        uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
 	ProjectID uuid.UUID `gorm:"type:uuid;not null;index" json:"project_id"`
 	UserID    uuid.UUID `gorm:"type:uuid;not null;index" json:"user_id"`
 	Role      string    `gorm:"type:varchar(20);default:'member'" json:"role"` // 'owner' or 'member'
@@ -82,9 +102,14 @@ type ProjectMember struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+func (m *ProjectMember) BeforeCreate(tx *gorm.DB) (err error) {
+	if m.ID == uuid.Nil { m.ID = uuid.New() }
+	return
+}
+
 // API represents a single API endpoint to be monitored
 type API struct {
-	ID                 uuid.UUID      `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	ID                 uuid.UUID      `gorm:"type:uuid;primaryKey" json:"id"`
 	ProjectID          uuid.UUID      `gorm:"type:uuid;not null;index" json:"project_id"`
 	Folder             string         `gorm:"type:varchar(255);default:'Uncategorized'" json:"folder"`
 	Name               string         `gorm:"not null" json:"name"`
@@ -107,9 +132,14 @@ type API struct {
 	DeletedAt          gorm.DeletedAt `gorm:"index" json:"deleted_at"` // Soft delete
 }
 
+func (m *API) BeforeCreate(tx *gorm.DB) (err error) {
+	if m.ID == uuid.Nil { m.ID = uuid.New() }
+	return
+}
+
 // MonitorLog represents a health check result for an API
 type MonitorLog struct {
-	ID           uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	ID           uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
 	ApiID        uuid.UUID `gorm:"type:uuid;not null;index" json:"api_id"`
 	StatusCode   int       `json:"status_code"`
 	ResponseTime int64     `json:"response_time"` // in milliseconds
@@ -124,9 +154,14 @@ type MonitorLog struct {
 	DeletedAt    gorm.DeletedAt `gorm:"index" json:"deleted_at"` // Soft delete
 }
 
+func (m *MonitorLog) BeforeCreate(tx *gorm.DB) (err error) {
+	if m.ID == uuid.Nil { m.ID = uuid.New() }
+	return
+}
+
 // NotificationConfig stores channel preferences for alerting when an API fails
 type NotificationConfig struct {
-	ID               uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	ID               uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
 	ProjectID        uuid.UUID `gorm:"type:uuid;index;not null" json:"project_id"`
 	EnableTelegram   bool      `gorm:"default:false" json:"enable_telegram"`
 	TelegramBotToken string    `json:"telegram_bot_token"`
@@ -148,9 +183,14 @@ type NotificationConfig struct {
 	DeletedAt        gorm.DeletedAt `gorm:"index" json:"deleted_at"` // Soft delete
 }
 
+func (m *NotificationConfig) BeforeCreate(tx *gorm.DB) (err error) {
+	if m.ID == uuid.Nil { m.ID = uuid.New() }
+	return
+}
+
 // RepairTask represents a ticket created when an API monitoring check fails
 type RepairTask struct {
-	ID           uuid.UUID      `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	ID           uuid.UUID      `gorm:"type:uuid;primaryKey" json:"id"`
 	ProjectID    uuid.UUID      `gorm:"type:uuid;index;not null" json:"project_id"`
 	ApiID        uuid.UUID      `gorm:"type:uuid;not null" json:"api_id"`
 	API          *API           `gorm:"foreignKey:ApiID" json:"api,omitempty"`
@@ -171,9 +211,14 @@ type RepairTask struct {
 	DeletedAt    gorm.DeletedAt `gorm:"index" json:"deleted_at"`
 }
 
+func (m *RepairTask) BeforeCreate(tx *gorm.DB) (err error) {
+	if m.ID == uuid.Nil { m.ID = uuid.New() }
+	return
+}
+
 // DashboardNotification represents a popup alert for the UI
 type DashboardNotification struct {
-	ID           uuid.UUID      `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	ID           uuid.UUID      `gorm:"type:uuid;primaryKey" json:"id"`
 	UserID       uuid.UUID      `gorm:"type:uuid;index" json:"user_id"` // UserID = null or missing for system-wide? uuid.Nil
 	ProjectID    uuid.UUID      `gorm:"type:uuid;index" json:"project_id"`
 	InvitationID *uuid.UUID     `gorm:"type:uuid" json:"invitation_id"` // Link to company invitation if type is 'company_invite'
@@ -185,9 +230,14 @@ type DashboardNotification struct {
 	DeletedAt    gorm.DeletedAt `gorm:"index" json:"deleted_at"`
 }
 
+func (m *DashboardNotification) BeforeCreate(tx *gorm.DB) (err error) {
+	if m.ID == uuid.Nil { m.ID = uuid.New() }
+	return
+}
+
 // CompanyInvitation tracks the state of an invitation to join a company
 type CompanyInvitation struct {
-	ID        uuid.UUID      `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	ID        uuid.UUID      `gorm:"type:uuid;primaryKey" json:"id"`
 	CompanyID uuid.UUID      `gorm:"type:uuid;not null;index" json:"company_id"`
 	InviterID uuid.UUID      `gorm:"type:uuid;not null" json:"inviter_id"`
 	InviteeID uuid.UUID      `gorm:"type:uuid;not null;index" json:"invitee_id"`
@@ -200,4 +250,9 @@ type CompanyInvitation struct {
 	Company *Company `gorm:"foreignKey:CompanyID" json:"company,omitempty"`
 	Inviter *User    `gorm:"foreignKey:InviterID" json:"inviter,omitempty"`
 	Invitee *User    `gorm:"foreignKey:InviteeID" json:"invitee,omitempty"`
+}
+
+func (m *CompanyInvitation) BeforeCreate(tx *gorm.DB) (err error) {
+	if m.ID == uuid.Nil { m.ID = uuid.New() }
+	return
 }

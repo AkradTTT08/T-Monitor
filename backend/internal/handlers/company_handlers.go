@@ -11,6 +11,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/monitor-api/backend/internal/database"
 	"github.com/monitor-api/backend/internal/models"
+	"github.com/monitor-api/backend/internal/services"
 )
 
 type CompanyInput struct {
@@ -20,24 +21,11 @@ type CompanyInput struct {
 
 func GetCompanies(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(uuid.UUID)
-	role := c.Locals("role").(string)
 
-	var companies []models.Company
-	db := database.DB.Preload("Projects").Preload("Owner").Preload("Members.User")
-
-	// Strictly enforce visibility: Owners or Members only (even for administrators on this dashboard)
-	if err := db.Where("user_id = ? OR id IN (SELECT company_id FROM company_members WHERE user_id = ?)", userID, userID).Find(&companies).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch companies"})
-	}
-
-	// TRACE LOGGING
-	f, _ := os.OpenFile("companies_access.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if f != nil {
-		defer f.Close()
-		for _, comp := range companies {
-			fmt.Fprintf(f, "[%s] User:%v Role:%s CompID:%v OwnerID:%v OwnerPreloaded:%v Members:%d\n", 
-				time.Now().Format("15:04:05"), userID, role, comp.ID, comp.UserID, comp.Owner != nil, len(comp.Members))
-		}
+	svc := services.NewCompanyService(nil)
+	companies, err := svc.GetCompaniesForUser(userID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	return c.JSON(companies)
@@ -47,14 +35,10 @@ func GetCompany(c *fiber.Ctx) error {
 	id := c.Params("id")
 	userID := c.Locals("user_id").(uuid.UUID)
 
-	var company models.Company
-	db := database.DB.Preload("Projects").Preload("Owner").Preload("Members.User")
-	
-	// Strictly enforce visibility: Owners or invited members only
-	db = db.Where("user_id = ? OR id IN (SELECT company_id FROM company_members WHERE user_id = ?)", userID, userID)
-
-	if err := db.First(&company, "id = ?", id).Error; err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Company not found or unauthorized"})
+	svc := services.NewCompanyService(nil)
+	company, err := svc.GetCompanyByID(id, userID)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	return c.JSON(company)
@@ -68,14 +52,9 @@ func CreateCompany(c *fiber.Ctx) error {
 
 	userID := c.Locals("user_id").(uuid.UUID)
 
-	company := models.Company{
-		Name:        input.Name,
-		Description: input.Description,
-		UserID:      userID,
-	}
-
-	if err := database.DB.Create(&company).Error; err != nil {
-		fmt.Printf(">>> CreateCompany DB Error: %v\n", err)
+	svc := services.NewCompanyService(nil)
+	company, err := svc.CreateCompany(input.Name, input.Description, userID)
+	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create company: " + err.Error()})
 	}
 
@@ -91,23 +70,10 @@ func UpdateCompany(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
 	}
 
-	var company models.Company
-	query := database.DB
-	// Strictly enforce updating rights
-	query = query.Where("user_id = ?", userID)
-
-	if err := query.First(&company, "id = ?", id).Error; err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Company not found or unauthorized"})
-	}
-
-	// Use Updates with a map to avoid overwriting LogoURL
-	updateData := map[string]interface{}{
-		"name":        input.Name,
-		"description": input.Description,
-	}
-
-	if err := database.DB.Model(&company).Updates(updateData).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update company"})
+	svc := services.NewCompanyService(nil)
+	company, err := svc.UpdateCompany(id, input.Name, input.Description, userID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	return c.JSON(company)
@@ -117,19 +83,10 @@ func DeleteCompany(c *fiber.Ctx) error {
 	id := c.Params("id")
 	userID := c.Locals("user_id").(uuid.UUID)
 
-	var company models.Company
-	query := database.DB
-	// Strictly enforce deletion rights
-	query = query.Where("user_id = ?", userID)
-
-	if err := query.First(&company, "id = ?", id).Error; err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Company not found or unauthorized"})
+	svc := services.NewCompanyService(nil)
+	if err := svc.DeleteCompany(id, userID); err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": err.Error()})
 	}
-
-	// Soft-delete projects associated with the company
-	database.DB.Where("company_id = ?", company.ID).Delete(&models.Project{})
-
-	database.DB.Delete(&company)
 
 	return c.JSON(fiber.Map{"message": "Company deleted successfully"})
 }
@@ -160,6 +117,20 @@ func UploadCompanyLogo(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "No file uploaded"})
 	}
 
+	// Check file extension
+	ext := filepath.Ext(file.Filename)
+	validExts := map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".webp": true}
+	if !validExts[ext] {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid file extension. Only jpg, png, and webp are allowed."})
+	}
+
+	// Check MIME type
+	contentType := file.Header.Get("Content-Type")
+	validMimes := map[string]bool{"image/jpeg": true, "image/png": true, "image/webp": true}
+	if !validMimes[contentType] {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid MIME type. Only image files are allowed."})
+	}
+
 	uploadDir, err := filepath.Abs("./uploads/companies")
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Path resolution failed"})
@@ -171,7 +142,6 @@ func UploadCompanyLogo(c *fiber.Ctx) error {
 		}
 	}
 
-	ext := filepath.Ext(file.Filename)
 	filename := fmt.Sprintf("company_%d_%d%s", company.ID, time.Now().Unix(), ext)
 	savePath := filepath.Join(uploadDir, filename)
 

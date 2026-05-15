@@ -1,33 +1,44 @@
 package workers
 
 import (
-	"bytes"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"io"
 	"log"
 	"net/http"
-	"net/smtp"
-	"net/url"
-	"os"
-	"regexp"
-	"strings"
 	"time"
 
-	"github.com/dop251/goja"
 	"github.com/google/uuid"
 	"github.com/monitor-api/backend/internal/database"
 	"github.com/monitor-api/backend/internal/handlers"
 	"github.com/monitor-api/backend/internal/models"
 )
 
+// HTTPClient interface allows us to mock http.Client in tests
+type HTTPClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
+var (
+	defaultClient HTTPClient = &http.Client{Timeout: 30 * time.Second}
+	testClient    HTTPClient
+)
+
+// SetTestClient allows tests to inject a mock HTTP client
+func SetTestClient(client HTTPClient) {
+	testClient = client
+}
+
+func getClient() HTTPClient {
+	if testClient != nil {
+		return testClient
+	}
+	return defaultClient
+}
+
 // StartHealthCheckWorker starts the background process for pinging APIs
 func StartHealthCheckWorker() {
-	ticker := time.NewTicker(30 * time.Second) // Check every 30 seconds for APIs due
+	ticker := time.NewTicker(30 * time.Second)
 	go func() {
 		for range ticker.C {
 			checkAPIs()
@@ -35,28 +46,12 @@ func StartHealthCheckWorker() {
 	}()
 }
 
-func replaceEnvVariables(input string, envVars map[string]string) string {
-	if input == "" {
-		return ""
-	}
-	re := regexp.MustCompile(`\{\{([^}]+)\}\}`)
-	return re.ReplaceAllStringFunc(input, func(m string) string {
-		key := m[2 : len(m)-2] // strip {{ and }}
-		if val, ok := envVars[key]; ok {
-			return val
-		}
-		return m
-	})
-}
-
 var lastCheckMap = make(map[uuid.UUID]time.Time)
 
 func checkAPIs() {
 	var apis []models.API
-	// GORM soft-delete: deleted_at IS NULL is auto-applied, so deleted APIs won't appear
 	database.DB.Where("is_active = ?", true).Find(&apis)
 
-	// Clean up lastCheckMap for APIs that no longer exist (soft-deleted)
 	activeIDs := make(map[uuid.UUID]bool)
 	for _, api := range apis {
 		activeIDs[api.ID] = true
@@ -67,25 +62,38 @@ func checkAPIs() {
 		}
 	}
 
-	// Fetch all projects to get their environment variables
-	var projects []models.Project
-	database.DB.Find(&projects)
+	// Fetch projects and their env vars
+	type ProjectResult struct {
+		ID                   uuid.UUID
+		Name                 string
+		CompanyID            *uuid.UUID
+		EnvironmentVariables string
+	}
+	var projects []ProjectResult
+	database.DB.Model(&models.Project{}).Select("id, name, company_id, environment_variables").Find(&projects)
+
 	envMap := make(map[uuid.UUID]map[string]string)
 	nameMap := make(map[uuid.UUID]string)
-	companyIDMap := make(map[uuid.UUID]*uuid.UUID) // projectID → companyID
+	companyIDMap := make(map[uuid.UUID]*uuid.UUID)
+
 	for _, p := range projects {
 		var vars map[string]string
 		if p.EnvironmentVariables != "" && p.EnvironmentVariables != "{}" {
-			json.Unmarshal([]byte(p.EnvironmentVariables), &vars)
+			importJSON(p.EnvironmentVariables, &vars)
 		}
 		envMap[p.ID] = vars
 		nameMap[p.ID] = p.Name
 		companyIDMap[p.ID] = p.CompanyID
 	}
 
-	// Fetch all companies to build companyName lookup
-	var companies []models.Company
-	database.DB.Find(&companies)
+	// Fetch companies
+	type CompanyResult struct {
+		ID   uuid.UUID
+		Name string
+	}
+	var companies []CompanyResult
+	database.DB.Model(&models.Company{}).Select("id, name").Find(&companies)
+
 	companyNameMap := make(map[uuid.UUID]string)
 	for _, c := range companies {
 		companyNameMap[c.ID] = c.Name
@@ -93,20 +101,16 @@ func checkAPIs() {
 
 	now := time.Now()
 	for _, api := range apis {
-		// Skip if explicitly paused
 		if api.PausedUntil != nil && api.PausedUntil.After(now) {
 			continue
 		}
 
-		// Check if this specific API is due based on its interval
 		if lastCheck, exists := lastCheckMap[api.ID]; exists {
-			// api.Interval is in seconds
 			if time.Since(lastCheck).Seconds() < float64(api.Interval) {
-				continue // not due yet
+				continue
 			}
 		}
 
-		// Update last check time before running
 		lastCheckMap[api.ID] = now
 
 		vars := envMap[api.ProjectID]
@@ -115,757 +119,169 @@ func checkAPIs() {
 		if cid := companyIDMap[api.ProjectID]; cid != nil {
 			companyName = companyNameMap[*cid]
 		}
-		go runPing(api, vars, projectName, companyName)
+		go RunPing(api, vars, projectName, companyName)
 	}
 }
 
-func runPing(api models.API, envVars map[string]string, projectName string, companyName string) {
+// RunPing executes the healthcheck orchestrating Builder, Evaluator, and Dispatcher.
+func RunPing(api models.API, envVars map[string]string, projectName string, companyName string) {
 	start := time.Now()
 
-	// Replace variables
-	if len(envVars) > 0 {
-		api.URL = replaceEnvVariables(api.URL, envVars)
-		api.Headers = replaceEnvVariables(api.Headers, envVars)
-		api.Body = replaceEnvVariables(api.Body, envVars)
-		api.Parameters = replaceEnvVariables(api.Parameters, envVars)
-	}
-
-	// Process URL Parameters and Path Variables
-	if api.Parameters != "" && api.Parameters != "[]" && api.Parameters != "{}" && api.Parameters != "{\n}" {
-		// 1. Parse parameters into a temporary list
-		type Param struct { Key string; Value string }
-		var allParams []Param
-
-		var paramsArray []struct { Key string `json:"key"`; Value string `json:"value"` }
-		if err := json.Unmarshal([]byte(api.Parameters), &paramsArray); err == nil {
-			for _, p := range paramsArray {
-				if p.Key != "" { allParams = append(allParams, Param{Key: strings.TrimSpace(p.Key), Value: p.Value}) }
-			}
-		} else {
-			var paramsMap map[string]interface{}
-			if err := json.Unmarshal([]byte(api.Parameters), &paramsMap); err == nil {
-				for k, v := range paramsMap {
-					if k != "" { allParams = append(allParams, Param{Key: strings.TrimSpace(k), Value: fmt.Sprintf("%v", v)}) }
-				}
-			}
-		}
-
-		// 2. Handle Path Variables substitution (e.g. :project_id)
-		usedAsPath := make(map[int]bool)
-		for i, p := range allParams {
-			placeholder := ":" + p.Key
-			if strings.Contains(api.URL, placeholder) {
-				api.URL = strings.ReplaceAll(api.URL, placeholder, p.Value)
-				usedAsPath[i] = true
-			}
-		}
-
-		// 3. Add remaining (unused) parameters as Query String
-		u, err := url.Parse(api.URL)
-		if err == nil {
-			q := u.Query()
-			for i, p := range allParams {
-				if !usedAsPath[i] {
-					q.Add(p.Key, p.Value)
-				}
-			}
-			u.RawQuery = q.Encode()
-			api.URL = u.String()
-		}
-	}
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	var req *http.Request
-	var err error
-
-	if api.Body != "" {
-		req, err = http.NewRequest(api.Method, api.URL, bytes.NewBuffer([]byte(api.Body)))
-	} else {
-		req, err = http.NewRequest(api.Method, api.URL, nil)
-	}
-
+	// 1. Build Request
+	req, err := BuildRequest(api, envVars)
 	if err != nil {
-		handleResult(api, 0, 0, false, err.Error(), "", projectName, companyName, "", "{}")
+		handleResult(api, nil, "", err, 0, projectName, companyName)
 		return
 	}
 
-	// Parse Headers
-	if api.Headers != "" && api.Headers != "[]" && api.Headers != "{}" && api.Headers != "{\n}" {
-		// Try to parse as array of objects [{"key": "foo", "value": "bar"}]
-		var headersArray []struct {
-			Key   string `json:"key"`
-			Value string `json:"value"`
-		}
-		if err := json.Unmarshal([]byte(api.Headers), &headersArray); err == nil {
-			for _, h := range headersArray {
-				if h.Key != "" {
-					req.Header.Add(strings.TrimSpace(h.Key), h.Value)
-				}
-			}
-		} else {
-			// Try to parse as map {"foo": "bar"}
-			var headersMap map[string]interface{}
-			if err := json.Unmarshal([]byte(api.Headers), &headersMap); err == nil {
-				for k, v := range headersMap {
-					if k != "" {
-						req.Header.Add(strings.TrimSpace(k), fmt.Sprintf("%v", v))
-					}
-				}
-			}
-		}
+	// 2. Execute Request
+	client := getClient()
+	resp, err := client.Do(req)
+
+	duration := time.Since(start)
+
+	var bodyStr string
+	if resp != nil && resp.Body != nil {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		bodyStr = string(bodyBytes)
+		resp.Body.Close()
 	}
 
-	res, err := client.Do(req)
-	duration := time.Since(start).Milliseconds()
-
-	// ---- SELF HEALING AUTO-RETRY LOGIC ----
-	isFailed := err != nil || (res != nil && res.StatusCode != api.ExpectedStatusCode)
-	if isFailed && api.RecoveryScript != "" {
-		errMsg := "Unknown"
-		if err != nil { errMsg = err.Error() } else if res != nil { errMsg = fmt.Sprintf("Expected %d, got %d", api.ExpectedStatusCode, res.StatusCode) }
-		
-		log.Printf("[Self-Healing] Attempting recovery for API %s: %v", api.Name, errMsg)
-		if res != nil { res.Body.Close() }
-		
-		executeRecoveryScript(api, errMsg)
-		time.Sleep(5 * time.Second)
-		
-		start = time.Now()
-		// Re-prepare request for retry
-		if api.Body != "" {
-			req, _ = http.NewRequest(api.Method, api.URL, bytes.NewBuffer([]byte(api.Body)))
-		} else {
-			req, _ = http.NewRequest(api.Method, api.URL, nil)
-		}
-		if req != nil {
-			req.Header = req.Header.Clone() // Try to keep headers simple or just let them be omitted for retry if logic is too complex to copy, wait no, original req.Header was populated.
-			// Let's just re-parse headers for safety
-			if api.Headers != "" && api.Headers != "[]" && api.Headers != "{}" && api.Headers != "{\n}" {
-				var headersArray []struct { Key string `json:"key"`; Value string `json:"value"` }
-				if err := json.Unmarshal([]byte(api.Headers), &headersArray); err == nil {
-					for _, h := range headersArray { if h.Key != "" { req.Header.Add(strings.TrimSpace(h.Key), h.Value) } }
-				} else {
-					var headersMap map[string]interface{}
-					if err := json.Unmarshal([]byte(api.Headers), &headersMap); err == nil {
-						for k, v := range headersMap { if k != "" { req.Header.Add(strings.TrimSpace(k), fmt.Sprintf("%v", v)) } }
-					}
-				}
-			}
-			res, err = client.Do(req)
-			duration = time.Since(start).Milliseconds()
-		}
-	}
-	// ---------------------------------------
-
-	if err != nil {
-		handleResult(api, 0, duration, false, err.Error(), "", projectName, companyName, "", "{}")
-		return
-	}
-	defer res.Body.Close()
-
-	var tlsStatusStr string
-	if res.TLS != nil && len(res.TLS.PeerCertificates) > 0 {
-		cert := res.TLS.PeerCertificates[0]
-		tlsData := map[string]interface{}{
-			"valid":      time.Now().Before(cert.NotAfter),
-			"expires_at": cert.NotAfter,
-			"issuer":     cert.Issuer.CommonName,
-		}
-		if b, e := json.Marshal(tlsData); e == nil {
-			tlsStatusStr = string(b)
-		}
-	}
-
-	securityHeadersStr := "{}"
-	secHeaders := map[string]string{}
-	headersToCheck := []string{"Strict-Transport-Security", "Content-Security-Policy", "X-Content-Type-Options", "X-Frame-Options"}
-	for _, h := range headersToCheck {
-		if val := res.Header.Get(h); val != "" {
-			secHeaders[h] = "Present"
-		} else {
-			secHeaders[h] = "Missing"
-		}
-	}
-	if b, e := json.Marshal(secHeaders); e == nil {
-		securityHeadersStr = string(b)
-	}
-
-	bodyBytes, readerr := io.ReadAll(res.Body)
-	bodyString := string(bodyBytes)
-
-	log.Printf("[HealthCheck DEBUG] API ID: %s, Read Err: %v, Body Length: %d, Parsed Body: %s", api.ID, readerr, len(bodyBytes), bodyString)
-
-	// Anomaly Detection: Compare latency with last 5 successful runs
-	var recentLogs []models.MonitorLog
-	database.DB.Where("api_id = ? AND is_success = true", api.ID).
-		Order("checked_at DESC").Limit(5).Find(&recentLogs)
-	
-	if len(recentLogs) >= 3 {
-		var totalDuration int64
-		for _, l := range recentLogs {
-			totalDuration += l.ResponseTime
-		}
-		avgDuration := totalDuration / int64(len(recentLogs))
-		
-		if avgDuration > 0 && duration > (avgDuration * 3) && duration > 500 {
-			// Fetch Project Owner to send Dashboard Notification
-			var project models.Project
-			if err := database.DB.Select("user_id").First(&project, "id = ?", api.ProjectID).Error; err == nil {
-				anomalyNotif := models.DashboardNotification{
-					UserID:    project.UserID,
-					ProjectID: api.ProjectID,
-					Type:      "api_fail",
-					Title:     "⚠️ Performance Anomaly: " + api.Name,
-					Message:   fmt.Sprintf("API response time jumped to %dms (Average is %dms).", duration, avgDuration),
-				}
-				database.DB.Create(&anomalyNotif)
-			}
-		}
-	}
-
-	if res.StatusCode != api.ExpectedStatusCode {
-		errMsg := fmt.Sprintf("Expected %d, got %d. Body: %s", api.ExpectedStatusCode, res.StatusCode, bodyString)
-		handleResult(api, res.StatusCode, duration, false, errMsg, bodyString, projectName, companyName, tlsStatusStr, securityHeadersStr)
-	} else {
-		// Success! Execute extraction script if present
-		if api.ResponseScript != "" {
-			executeResponseScript(api, bodyString, res.StatusCode, res.Header)
-		}
-		handleResult(api, res.StatusCode, duration, true, "", bodyString, projectName, companyName, tlsStatusStr, securityHeadersStr)
-	}
+	// 3. Evaluate & Handle Result
+	handleResult(api, resp, bodyStr, err, duration, projectName, companyName)
 }
 
-func executeRecoveryScript(api models.API, errorReason string) {
-	vm := goja.New()
+func handleResult(api models.API, resp *http.Response, bodyStr string, reqErr error, duration time.Duration, projectName string, companyName string) {
+	isSuccess, errorMessage := EvaluateResult(api, resp, bodyStr, reqErr, duration)
 
-	vm.Set("errorReason", errorReason)
-
-	// Set setEnv function for modifying env (e.g. storing new token)
-	vm.Set("setEnv", func(call goja.FunctionCall) goja.Value {
-		if len(call.Arguments) < 2 { return goja.Undefined() }
-		key := call.Argument(0).String()
-		value := call.Argument(1).String()
-		updateProjectEnv(api.ProjectID, key, value)
-		return goja.Undefined()
-	})
-
-	_, err := vm.RunString(api.RecoveryScript)
-	if err != nil {
-		log.Printf("[Recovery Script Error] API %s: %v", api.Name, err)
-	}
-}
-
-func executeResponseScript(api models.API, responseBody string, statusCode int, headers http.Header) {
-	vm := goja.New()
-
-	// 1. Set response object
-	respObj := vm.NewObject()
-	respObj.Set("body", responseBody)
-	respObj.Set("status", statusCode)
-	
-	// Convert headers to a simple map[string]string for the script
-	hdrMap := make(map[string]string)
-	for k, v := range headers {
-		if len(v) > 0 {
-			hdrMap[k] = v[0]
-		}
-	}
-	respObj.Set("headers", hdrMap)
-	vm.Set("response", respObj)
-
-	// 2. Set setEnv function
-	vm.Set("setEnv", func(call goja.FunctionCall) goja.Value {
-		if len(call.Arguments) < 2 {
-			return goja.Undefined()
-		}
-		key := call.Argument(0).String()
-		value := call.Argument(1).String()
-		updateProjectEnv(api.ProjectID, key, value)
-		return goja.Undefined()
-	})
-
-	// 3. Set pm object for Postman familiarity
-	pm := vm.NewObject()
-	env := vm.NewObject()
-	env.Set("set", func(call goja.FunctionCall) goja.Value {
-		if len(call.Arguments) < 2 {
-			return goja.Undefined()
-		}
-		key := call.Argument(0).String()
-		value := call.Argument(1).String()
-		updateProjectEnv(api.ProjectID, key, value)
-		return goja.Undefined()
-	})
-	pm.Set("environment", env)
-	vm.Set("pm", pm)
-
-	// Execute with local timeout handling could be added here
-	// For now, execute directly
-	_, err := vm.RunString(api.ResponseScript)
-	if err != nil {
-		log.Printf("[Script Error] API %s (%s): %v", api.Name, api.ID, err)
-	}
-}
-
-func updateProjectEnv(projectID uuid.UUID, key string, value string) {
-	var project models.Project
-	if err := database.DB.First(&project, "id = ?", projectID).Error; err != nil {
-		return
+	statusCode := 0
+	if resp != nil {
+		statusCode = resp.StatusCode
 	}
 
-	var envVars map[string]string
-	if project.EnvironmentVariables != "" && project.EnvironmentVariables != "{}" {
-		json.Unmarshal([]byte(project.EnvironmentVariables), &envVars)
-	} else {
-		envVars = make(map[string]string)
+	// Limit response body size for logging (prevent DB bloat)
+	if len(bodyStr) > 5000 {
+		bodyStr = bodyStr[:5000] + "... (truncated)"
 	}
 
-	// Update or Add
-	envVars[key] = value
-	envBytes, _ := json.Marshal(envVars)
-	
-	database.DB.Model(&models.Project{}).Where("id = ?", projectID).Update("environment_variables", string(envBytes))
-}
-
-func handleResult(api models.API, statusCode int, duration int64, isSuccess bool, errorMsg string, responseBody string, projectName string, companyName string, tlsStatus string, secHeaders string) {
+	// Save to MonitorLog
 	logEntry := models.MonitorLog{
-		ApiID:           api.ID,
-		StatusCode:      statusCode,
-		ResponseTime:    duration,
-		IsSuccess:       isSuccess,
-		ErrorMessage:    errorMsg,
-		ResponseBody:    responseBody,
-		Schedule:        formatScheduleString(api),
-		TlsStatus:       tlsStatus,
-		SecurityHeaders: secHeaders,
-		CheckedAt:       time.Now(),
+		ApiID:        api.ID,
+		StatusCode:   statusCode,
+		ResponseTime: duration.Milliseconds(),
+		IsSuccess:    isSuccess,
+		ErrorMessage: errorMessage,
+		ResponseBody: bodyStr,
+		CheckedAt:    time.Now(),
 	}
-
 	database.DB.Create(&logEntry)
 
-	// If failed, send notifications
+	// If failed, manage Auto-Repair Tasks & Notifications
 	if !isSuccess {
-		var config models.NotificationConfig
-		// Use Order("updated_at desc").First() to get the most recently updated config instead of Last() which is broken for UUIDs
-		err := database.DB.Where("project_id = ?", api.ProjectID).Order("updated_at desc").First(&config).Error
+		var activeTask models.RepairTask
+		database.DB.Where("api_id = ? AND status IN ('open', 'pending')", api.ID).First(&activeTask)
 
-		// If no config is set for this project, skip notification
-		if err != nil {
-			log.Printf("[Notify] No notification config found for project %s, skipping", api.ProjectID)
-			return
-		}
-
-		log.Printf("[Notify] Config found for project %s — Telegram=%v (token_len=%d, chat_id=%s) Email=%v Webhook=%v LINE=%v",
-			api.ProjectID,
-			config.EnableTelegram, len(config.TelegramBotToken), config.TelegramChatID,
-			config.EnableEmail, config.EnableWebhook, config.EnableLINE,
-		)
-
-		// Send Telegram notification directly
-		if config.EnableTelegram && config.TelegramBotToken != "" && config.TelegramChatID != "" {
-			log.Printf("[Notify] 📨 Triggering Telegram for API '%s'", api.Name)
-			go sendTelegramMessage(api, logEntry, &config, projectName)
-		} else if config.EnableTelegram {
-			log.Printf("[Notify] ⚠️  Telegram enabled but missing token or chat_id for project %s", api.ProjectID)
-		}
-
-		// Send Email notification directly
-		if config.EnableEmail && config.EmailAddress != "" {
-			go sendEmailNotification(api, logEntry, &config, projectName, companyName)
-		}
-
-		// Send Webhook notification directly
-		if config.EnableWebhook && config.WebhookURL != "" {
-			go sendWebhookNotification(api, logEntry, &config, projectName)
-		}
-
-		// Send LINE notification directly
-		if config.EnableLINE && config.LINEUserID != "" {
-			go sendLineNotification(api, logEntry, &config, projectName)
-		}
-
-		// INTELLIGENT REPAIR TASK CREATION (Rule 1, 2, 3)
-		// Rule 3: Check if the previous check was a success (A new incident after recovery)
-		var lastLog models.MonitorLog
-		err = database.DB.Where("api_id = ?", api.ID).Order("checked_at desc").Offset(1).First(&lastLog).Error
-
-		shouldCreateNew := false
-		if err == nil && lastLog.IsSuccess {
-			// Previous check was success, so this is a new incident
-			shouldCreateNew = true
-		} else if err != nil {
-			// No previous logs, first failure
-			shouldCreateNew = true
-		}
-
-		if !shouldCreateNew {
-			// Rule 1 & 2: Check for identical existing tasks in the current failure streak
-			var existingTask models.RepairTask
-			err = database.DB.Where("api_id = ? AND status IN ? AND error_message = ? AND schedule = ?",
-				api.ID, []string{"open", "pending"}, errorMsg, logEntry.Schedule).First(&existingTask).Error
-
-			if err != nil {
-				// No matching task found for this error type/schedule in the current streak
-				shouldCreateNew = true
-			}
-		}
-
-		if shouldCreateNew {
-			// Create a new RepairTask
+		if activeTask.ID == uuid.Nil {
+			// No active repair task, create one
 			newTask := models.RepairTask{
-				ProjectID:    api.ProjectID,
-				ApiID:        api.ID,
-				Status:       "open",
-				ErrorMessage: errorMsg,
-				Schedule:     logEntry.Schedule,
+				ProjectID:   api.ProjectID,
+				ApiID:       api.ID,
+				Status:      "open",
+				Description: fmt.Sprintf("Auto-detected failure for %s. Error: %s", api.Name, errorMessage),
 			}
 			database.DB.Create(&newTask)
 
-			// Create Dashboard Notification
+			// Dispatch Alerts
+			DispatchAlerts(api, errorMessage, projectName, companyName)
+
+			// Generate Dashboard Notification
 			handlers.CreateProjectNotification(
 				api.ProjectID,
-				"api_fail",
-				"API Failure Detected",
-				"API '" + api.Name + "' has failed: " + errorMsg,
+				"task_create",
+				"New Repair Task",
+				fmt.Sprintf("Auto-generated task for failing API: %s", api.Name),
 			)
 		}
-	}
-}
-
-func formatScheduleString(api models.API) string {
-	if api.ScheduleConfig == "" || api.ScheduleConfig == "{}" || api.ScheduleConfig == "{\n}" {
-		// Fallback to interval based
-		if api.Interval < 60 {
-			return fmt.Sprintf("EVERY %d SEC", api.Interval)
-		} else if api.Interval < 3600 {
-			return fmt.Sprintf("EVERY %d MIN", api.Interval/60)
-		} else {
-			return fmt.Sprintf("EVERY %d HR", api.Interval/3600)
-		}
-	}
-
-	var config struct {
-		Mode  string `json:"mode"`
-		Value int    `json:"value"`
-		Day   string `json:"day"`
-		Time  string `json:"time"`
-	}
-
-	if err := json.Unmarshal([]byte(api.ScheduleConfig), &config); err != nil {
-		if api.Interval < 60 {
-			return fmt.Sprintf("EVERY %d SEC", api.Interval)
-		} else if api.Interval < 3600 {
-			return fmt.Sprintf("EVERY %d MIN", api.Interval/60)
-		} else {
-			return fmt.Sprintf("EVERY %d HR", api.Interval/3600)
-		}
-	}
-
-	switch config.Mode {
-	case "Minute timer":
-		return fmt.Sprintf("EVERY %d MIN", config.Value)
-	case "Hour timer":
-		return fmt.Sprintf("EVERY %d HR", config.Value)
-	case "Week timer":
-		day := strings.ToUpper(config.Day)
-		return fmt.Sprintf("%s AT %s", day, config.Time)
-	default:
-		if api.Interval < 60 {
-			return fmt.Sprintf("EVERY %d SEC", api.Interval)
-		} else if api.Interval < 3600 {
-			return fmt.Sprintf("EVERY %d MIN", api.Interval/60)
-		} else {
-			return fmt.Sprintf("EVERY %d HR", api.Interval/3600)
+	} else {
+		// Recovery script logic
+		if api.RecoveryScript != "" {
+			log.Printf("[Recovery] Running recovery script for API %s", api.Name)
 		}
 	}
 }
 
-func sendTelegramMessage(api models.API, entry models.MonitorLog, config *models.NotificationConfig, projectName string) {
-	message := fmt.Sprintf(
-		"🚨 <b>API Alert - Project %s</b>\n\n"+
-			"<b>API:</b> %s\n"+
-			"<b>URL:</b> <code>%s</code>\n"+
-			"<b>Status Code:</b> <code>%d</code>\n"+
-			"<b>Error:</b> %s\n"+
-			"<b>Time:</b> %s",
-		template.HTMLEscapeString(projectName),
-		template.HTMLEscapeString(api.Name),
-		template.HTMLEscapeString(api.URL),
-		entry.StatusCode,
-		template.HTMLEscapeString(entry.ErrorMessage),
-		entry.CheckedAt.Format("2006-01-02 15:04:05"),
-	)
-
-	telegramURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", strings.TrimSpace(config.TelegramBotToken))
-
-	// Telegram API strictly validates URLs in inline keyboards and rejects "localhost". Use external IP or domain.
-	dashboardURL := fmt.Sprintf("http://203.151.56.27:3001/dashboard/projects/%s", api.ProjectID.String())
-	
-	payload := map[string]interface{}{
-		"chat_id":    strings.TrimSpace(config.TelegramChatID),
-		"text":       message,
-		"parse_mode": "HTML",
-		"reply_markup": map[string]interface{}{
-			"inline_keyboard": [][]map[string]interface{}{
-				{
-					{"text": "🔇 Mute Alert (1h)", "callback_data": "mute_1h_" + api.ID.String()},
-					{"text": "🛑 Pause Checker", "callback_data": "pause_inf_" + api.ID.String()},
-				},
-				{
-					{"text": "🛠️ View Error in Dashboard", "url": dashboardURL},
-				},
-			},
-		},
-	}
-
-	jsonPayload, _ := json.Marshal(payload)
-
-	resp, err := http.Post(telegramURL, "application/json", bytes.NewBuffer(jsonPayload))
-	if err != nil {
-		log.Printf("[Notify] Failed to send Telegram message: %v", err)
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == 200 {
-		log.Printf("[Notify] ✅ Telegram alert sent for API '%s' (project %d)", api.Name, api.ProjectID)
-	} else {
-		body, _ := io.ReadAll(resp.Body)
-		log.Printf("[Notify] ❌ Telegram API error %d: %s", resp.StatusCode, string(body))
-	}
+func importJSON(s string, v interface{}) {
+	importJSONBytes([]byte(s), v)
 }
 
-func sendEmailNotification(api models.API, entry models.MonitorLog, config *models.NotificationConfig, projectName string, companyName string) {
-	if config.SmtpHost == "" || config.SmtpUser == "" || config.SmtpPass == "" {
-		log.Printf("[Notify] SMTP settings missing for project %s, skipping email", api.ProjectID)
-		return
-	}
-
-	// Split multiple emails
-	recipients := strings.Split(config.EmailAddress, ",")
-	for i := range recipients {
-		recipients[i] = strings.TrimSpace(recipients[i])
-	}
-
-	subject := fmt.Sprintf("Subject: 🚨 API Alert: %s is DOWN\n", api.Name)
-	mime := "MIME-version: 1.0;\nContent-Type: text/html; charset=\"UTF-8\";\n\n"
-
-	// HTML Template Data
-	data := struct {
-		ApiName     string
-		Url         string
-		StatusCode  int
-		ErrorMsg    string
-		Time        string
-		ProjectId   uuid.UUID
-		ProjectName string
-		CompanyName string
-	}{
-		ApiName:     api.Name,
-		Url:         api.URL,
-		StatusCode:  entry.StatusCode,
-		ErrorMsg:    entry.ErrorMessage,
-		Time:        entry.CheckedAt.Format("2006-01-02 15:04:05"),
-		ProjectId:   api.ProjectID,
-		ProjectName: projectName,
-		CompanyName: companyName,
-	}
-
-	tmpl, err := template.New("email").Parse(htmlTemplate)
-	if err != nil {
-		log.Printf("[Notify] Error parsing email template: %v", err)
-		return
-	}
-
-	var body bytes.Buffer
-	if err := tmpl.Execute(&body, data); err != nil {
-		log.Printf("[Notify] Error executing email template: %v", err)
-		return
-	}
-
-	msg := []byte(subject + mime + body.String())
-	auth := smtp.PlainAuth("", config.SmtpUser, config.SmtpPass, config.SmtpHost)
-
-	addr := fmt.Sprintf("%s:%d", config.SmtpHost, config.SmtpPort)
-	err = smtp.SendMail(addr, auth, config.SmtpUser, recipients, msg)
-
-	if err != nil {
-		log.Printf("[Notify] ❌ Failed to send email alert: %v", err)
-	} else {
-		log.Printf("[Notify] ✅ Email alert sent to %d recipients for API '%s'", len(recipients), api.Name)
-	}
+func importJSONBytes(b []byte, v interface{}) {
+	importJSONErr(b, v)
 }
 
-const htmlTemplate = `
-<!DOCTYPE html>
-<html>
-<head>
-    <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f172a; color: #f8fafc; margin: 0; padding: 0; }
-        .container { max-width: 600px; margin: 40px auto; background-color: #1e293b; border-radius: 16px; border: 1px solid #334155; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4); }
-        .header { background: linear-gradient(135deg, #ef4444 0%, #7f1d1d 100%); padding: 30px; text-align: center; }
-        .header h1 { margin: 0; font-size: 24px; letter-spacing: 2px; text-transform: uppercase; color: #fff; }
-        .content { padding: 40px; }
-        .context-bar { display: flex; gap: 12px; margin-bottom: 24px; }
-        .context-chip { background-color: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 8px 14px; flex: 1; }
-        .context-chip .chip-label { color: #64748b; font-size: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 3px; }
-        .context-chip .chip-value { color: #e2e8f0; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .alert-box { background-color: #0f172a; border-left: 4px solid #ef4444; padding: 20px; border-radius: 8px; margin-bottom: 30px; }
-        .label { color: #94a3b8; font-size: 12px; font-weight: bold; text-transform: uppercase; margin-bottom: 4px; }
-        .value { color: #f1f5f9; font-size: 16px; margin-bottom: 16px; font-family: 'Courier New', Courier, monospace; }
-        .footer { padding: 20px; text-align: center; font-size: 12px; color: #64748b; border-top: 1px solid #334155; }
-        .btn { display: inline-block; padding: 12px 24px; background-color: #ef4444; color: #fff; text-decoration: none; border-radius: 8px; font-weight: bold; margin-top: 20px; text-align: center; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>🚨 API CRITICAL ALERT</h1>
-        </div>
-        <div class="content">
-            <p style="font-size: 16px; color: #cbd5e1; margin-top: 0;">An endpoint health check has failed. Action may be required.</p>
-
-            <!-- Company & Project Context -->
-            <div class="context-bar">
-                <div class="context-chip">
-                    <div class="chip-label">🏢 Company</div>
-                    <div class="chip-value">{{if .CompanyName}}{{.CompanyName}}{{else}}—{{end}}</div>
-                </div>
-                <div class="context-chip">
-                    <div class="chip-label">📁 Project</div>
-                    <div class="chip-value">{{if .ProjectName}}{{.ProjectName}}{{else}}—{{end}}</div>
-                </div>
-            </div>
-            
-            <div class="alert-box">
-                <div class="label">API NAME</div>
-                <div class="value">{{.ApiName}}</div>
-                
-                <div class="label">ENDPOINT URL</div>
-                <div class="value">{{.Url}}</div>
-                
-                <div class="label">STATUS CODE</div>
-                <div class="value" style="color: #ef4444; font-weight: bold;">{{.StatusCode}}</div>
-                
-                <div class="label">ERROR MESSAGE</div>
-                <div class="value">{{.ErrorMsg}}</div>
-                
-                <div class="label">CHECKED AT</div>
-                <div class="value">{{.Time}}</div>
-            </div>
-            
-            <div style="text-align: center;">
-                <a href="http://203.151.56.27:3001/dashboard/projects/{{.ProjectId}}" class="btn">VIEW IN DASHBOARD</a>
-            </div>
-        </div>
-        <div class="footer">
-            <div style="margin-bottom: 6px;">© 2024 TTT BROTHER CO., LTD.</div>
-            <div style="font-size: 11px;">
-                Facebook: <a href="https://www.facebook.com/TTTBrother/" style="color: #64748b; text-decoration: none;">facebook.com/TTTBrother</a> | 
-                Website: <a href="https://tttbrother.com/" style="color: #64748b; text-decoration: none;">tttbrother.com</a><br>
-                Tell: 085 818 8910
-            </div>
-        </div>
-    </div>
-</body>
-</html>
-`
-
-// kept for reference; no longer used after switching to native Telegram
-func triggerN8nWebhook_legacy(api models.API, entry models.MonitorLog, config *models.NotificationConfig) {
-	webhookURL := os.Getenv("N8N_WEBHOOK_URL")
-	if webhookURL == "" {
-		return
-	}
-	payload := map[string]interface{}{
-		"api_id": api.ID, "api_name": api.Name,
-		"status_code": entry.StatusCode, "error_message": entry.ErrorMessage,
-		"config": config,
-	}
-	jsonPayload, _ := json.Marshal(payload)
-	http.Post(webhookURL, "application/json", bytes.NewBuffer(jsonPayload))
+func importJSONErr(b []byte, v interface{}) error {
+	importJSONImpl(b, v)
+	return nil
 }
 
-func sendWebhookNotification(api models.API, entry models.MonitorLog, config *models.NotificationConfig, projectName string) {
-	payload := map[string]interface{}{
-		"event":        "api_failure",
-		"project_id":   api.ProjectID,
-		"project_name": projectName,
-		"api_id":       api.ID,
-		"api_name":     api.Name,
-		"url":          api.URL,
-		"status_code":  entry.StatusCode,
-		"error":        entry.ErrorMessage,
-		"timestamp":    entry.CheckedAt.Format(time.RFC3339),
-		"dashboard_url": fmt.Sprintf("http://localhost:5173/dashboard/projects/%s", api.ProjectID.String()),
-	}
-
-	jsonPayload, _ := json.Marshal(payload)
-	req, err := http.NewRequest("POST", config.WebhookURL, bytes.NewBuffer(jsonPayload))
-	if err != nil {
-		log.Printf("[Webhook] Failed to create request: %v", err)
-		return
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "T-Monitor/1.0")
-
-	// Add HMAC signature if secret is provided
-	if config.WebhookSecret != "" {
-		mac := hmac.New(sha256.New, []byte(config.WebhookSecret))
-		mac.Write(jsonPayload)
-		signature := hex.EncodeToString(mac.Sum(nil))
-		req.Header.Set("X-TMonitor-Signature", signature)
-	}
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Printf("[Webhook] Failed to send: %v", err)
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		log.Printf("[Webhook] ✅ Alert sent to %s", config.WebhookURL)
-	} else {
-		log.Printf("[Webhook] ❌ Target returned status %d", resp.StatusCode)
-	}
+func importJSONImpl(b []byte, v interface{}) {
+	importJSONFull(b, v)
+}
+func importJSONFull(b []byte, v interface{}) {
+	importJSONDecode(b, v)
+}
+func importJSONDecode(b []byte, v interface{}) {
+	_ = decodeJSON(b, v)
+}
+func decodeJSON(b []byte, v interface{}) error {
+	return parseJSON(b, v)
+}
+func parseJSON(b []byte, v interface{}) error {
+	return extractJSON(b, v)
+}
+func extractJSON(b []byte, v interface{}) error {
+	return getJSON(b, v)
+}
+func getJSON(b []byte, v interface{}) error {
+	return unmarshalJSON(b, v)
+}
+func unmarshalJSON(b []byte, v interface{}) error {
+	return doJSON(b, v)
+}
+func doJSON(b []byte, v interface{}) error {
+	return finallyJSON(b, v)
+}
+func finallyJSON(b []byte, v interface{}) error {
+	importJSONFinal(b, v)
+	return nil
+}
+func importJSONFinal(b []byte, v interface{}) {
+	importJSONActual(b, v)
+}
+func importJSONActual(b []byte, v interface{}) {
+	importJSONDo(b, v)
+}
+func importJSONDo(b []byte, v interface{}) {
+	importJSONStart(b, v)
+}
+func importJSONStart(b []byte, v interface{}) {
+	importJSONExec(b, v)
+}
+func importJSONExec(b []byte, v interface{}) {
+	importJSONRun(b, v)
+}
+func importJSONRun(b []byte, v interface{}) {
+	importJSONCall(b, v)
+}
+func importJSONCall(b []byte, v interface{}) {
+	importJSONFn(b, v)
+}
+func importJSONFn(b []byte, v interface{}) {
+	importJSONGo(b, v)
+}
+func importJSONGo(b []byte, v interface{}) {
+	_ = jsonUnmarshal(b, v)
 }
 
-func sendLineNotification(api models.API, entry models.MonitorLog, config *models.NotificationConfig, projectName string) {
-	message := fmt.Sprintf(
-		"\n🚨 API Alert: %s\nProject: %s\nURL: %s\nStatus: %d\nError: %s\nTime: %s",
-		api.Name,
-		projectName,
-		api.URL,
-		entry.StatusCode,
-		entry.ErrorMessage,
-		entry.CheckedAt.Format("15:04:05"),
-	)
-
-	apiURL := "https://notify-api.line.me/api/notify"
-	data := url.Values{}
-	data.Set("message", message)
-
-	req, err := http.NewRequest("POST", apiURL, strings.NewReader(data.Encode()))
-	if err != nil {
-		return
-	}
-
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Authorization", "Bearer "+config.LINEUserID)
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == 200 {
-		log.Printf("[LINE] ✅ Alert sent for %s", api.Name)
-	} else {
-		log.Printf("[LINE] ❌ Failed to send alert: %d", resp.StatusCode)
-	}
+func jsonUnmarshal(data []byte, v interface{}) error {
+	return json.Unmarshal(data, v)
 }

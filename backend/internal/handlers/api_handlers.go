@@ -1,37 +1,35 @@
 package handlers
 
 import (
-	"github.com/google/uuid"
-
 	"bytes"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/monitor-api/backend/internal/database"
+	"github.com/google/uuid"
 	"github.com/monitor-api/backend/internal/models"
-	"gorm.io/gorm"
-	"strconv"
+	"github.com/monitor-api/backend/internal/services"
 )
 
 type APIInput struct {
-	ProjectID          uuid.UUID   `json:"project_id"`
-	Folder             string `json:"folder"`
-	Name               string `json:"name"`
-	Method             string `json:"method"`
-	URL                string `json:"url"`
-	Parameters         string `json:"parameters"`
-	Headers            string `json:"headers"`
-	Body               string `json:"body"`
-	ExpectedStatusCode int    `json:"expected_status_code"`
-	Interval           int    `json:"interval"`
-	ScheduleConfig     string      `json:"schedule_config"`
-	ResponseScript     string      `json:"response_script"`
-	RecoveryScript     string      `json:"recovery_script"`
-	OrderIndex         int         `json:"order_index"`
+	ProjectID          uuid.UUID `json:"project_id"`
+	Folder             string    `json:"folder"`
+	Name               string    `json:"name"`
+	Method             string    `json:"method"`
+	URL                string    `json:"url"`
+	Parameters         string    `json:"parameters"`
+	Headers            string    `json:"headers"`
+	Body               string    `json:"body"`
+	ExpectedStatusCode int       `json:"expected_status_code"`
+	Interval           int       `json:"interval"`
+	ScheduleConfig     string    `json:"schedule_config"`
+	ResponseScript     string    `json:"response_script"`
+	RecoveryScript     string    `json:"recovery_script"`
+	OrderIndex         int       `json:"order_index"`
 }
 
 func CreateAPI(c *fiber.Ctx) error {
@@ -44,25 +42,6 @@ func CreateAPI(c *fiber.Ctx) error {
 	role := c.Locals("role").(string)
 	mode := c.Query("mode")
 
-	// Verify project ownership or membership
-	var project models.Project
-	if role == "admin" {
-		if err := database.DB.First(&project, "id = ?", input.ProjectID).Error; err != nil {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Project not found"})
-		}
-	} else {
-		if err := database.DB.Where("id = ? AND (user_id = ? OR id IN (SELECT project_id FROM project_members WHERE user_id = ?))", input.ProjectID, userID, userID).First(&project).Error; err != nil {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Project not found or unauthorized"})
-		}
-	}
-
-	if mode == "replace" {
-		if err := database.DB.Where("project_id = ?", input.ProjectID).Delete(&models.API{}).Error; err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to clear existing APIs"})
-		}
-	}
-
-	indefinite := time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
 	api := models.API{
 		ProjectID:          input.ProjectID,
 		Folder:             input.Folder,
@@ -78,7 +57,6 @@ func CreateAPI(c *fiber.Ctx) error {
 		ResponseScript:     input.ResponseScript,
 		RecoveryScript:     input.RecoveryScript,
 		OrderIndex:         input.OrderIndex,
-		PausedUntil:        &indefinite,
 	}
 
 	if c.Locals("is_dry_run") == true {
@@ -88,8 +66,13 @@ func CreateAPI(c *fiber.Ctx) error {
 		})
 	}
 
-	if err := database.DB.Create(&api).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create API endpoint"})
+	svc := services.NewAPIService(nil)
+	if err := svc.CreateAPI(&api, mode, userID, role); err != nil {
+		status := fiber.StatusInternalServerError
+		if err.Error() == "Project not found" || err.Error() == "Project not found or unauthorized" {
+			status = fiber.StatusNotFound
+		}
+		return c.Status(status).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	return c.Status(fiber.StatusCreated).JSON(api)
@@ -100,22 +83,10 @@ func ReorderAPIs(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(uuid.UUID)
 	role := c.Locals("role").(string)
 
-	// Verify project ownership or membership
-	var project models.Project
-	if role == "admin" {
-		if err := database.DB.First(&project, "id = ?", projectID).Error; err != nil {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Project not found"})
-		}
-	} else {
-		if err := database.DB.Where("id = ? AND (user_id = ? OR id IN (SELECT project_id FROM project_members WHERE user_id = ?))", projectID, userID, userID).First(&project).Error; err != nil {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Project not found or unauthorized"})
-		}
-	}
-
 	type ReorderItem struct {
-		ID         uuid.UUID   `json:"id"`
-		Folder     string `json:"folder"`
-		OrderIndex int    `json:"order_index"`
+		ID         uuid.UUID `json:"id"`
+		Folder     string    `json:"folder"`
+		OrderIndex int       `json:"order_index"`
 	}
 
 	var items []ReorderItem
@@ -123,20 +94,27 @@ func ReorderAPIs(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
 	}
 
-	tx := database.DB.Begin()
+	// Map to the service structure
+	svcItems := make([]struct {
+		ID         uuid.UUID
+		Folder     string
+		OrderIndex int
+	}, len(items))
 
-	for _, item := range items {
-		if err := tx.Model(&models.API{}).Where("id = ? AND project_id = ?", item.ID, projectID).
-			Updates(map[string]interface{}{
-				"folder":      item.Folder,
-				"order_index": item.OrderIndex,
-			}).Error; err != nil {
-			tx.Rollback()
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to reorder APIs"})
-		}
+	for i, item := range items {
+		svcItems[i].ID = item.ID
+		svcItems[i].Folder = item.Folder
+		svcItems[i].OrderIndex = item.OrderIndex
 	}
 
-	tx.Commit()
+	svc := services.NewAPIService(nil)
+	if err := svc.ReorderAPIs(projectID, svcItems, userID, role); err != nil {
+		status := fiber.StatusInternalServerError
+		if err.Error() == "Project not found" || err.Error() == "Project not found or unauthorized" {
+			status = fiber.StatusNotFound
+		}
+		return c.Status(status).JSON(fiber.Map{"error": err.Error()})
+	}
 
 	return c.JSON(fiber.Map{"message": "APIs reordered successfully"})
 }
@@ -146,160 +124,160 @@ func GetAPIs(c *fiber.Ctx) error {
 	search := c.Query("search")
 	pageStr := c.Query("page")
 	limitStr := c.Query("limit")
-	
+
 	userID := c.Locals("user_id").(uuid.UUID)
 	role := c.Locals("role").(string)
 
-	var apis []models.API
-	query := database.DB.Model(&models.API{})
-
-	if projectID != "" {
-		query = query.Where("project_id = ?", projectID)
+	page := 1
+	limit := 50
+	if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+		page = p
+	}
+	if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+		limit = l
 	}
 
-	if search != "" {
-		searchTerm := "%" + search + "%"
-		query = query.Where("(name ILIKE ? OR url ILIKE ?)", searchTerm, searchTerm)
-	}
-
-	// Filter by ownership or membership if not Admin
-	if role != "admin" {
-		query = query.Joins("JOIN projects ON projects.id = apis.project_id").
-			Where("(projects.user_id = ? OR projects.id IN (SELECT project_id FROM project_members WHERE user_id = ?))", userID, userID)
-	}
-
-	// If pagination is requested
-	if pageStr != "" || limitStr != "" {
-		var total int64
-		query.Count(&total)
-
-		page := 1
-		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-			page = p
+	svc := services.NewAPIService(nil)
+	apis, total, err := svc.GetAPIs(projectID, search, page, limit, userID, role)
+	if err != nil {
+		status := fiber.StatusInternalServerError
+		if err.Error() == "Project not found" || err.Error() == "Project not found or unauthorized" {
+			status = fiber.StatusNotFound
 		}
-		limit := 12
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
-			limit = l
-		}
-		offset := (page - 1) * limit
-
-		query.Preload("Logs", func(db *gorm.DB) *gorm.DB {
-			return db.Select("DISTINCT ON (api_id) *").Order("api_id, checked_at DESC")
-		}).Order("folder ASC, order_index ASC").Limit(limit).Offset(offset).Find(&apis)
-
-		return c.JSON(fiber.Map{
-			"data":  apis,
-			"total": total,
-			"page":  page,
-			"limit": limit,
-		})
+		return c.Status(status).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	// Default: return all (legacy compatibility)
-	query.Preload("Logs", func(db *gorm.DB) *gorm.DB {
-		return db.Select("DISTINCT ON (api_id) *").Order("api_id, checked_at DESC")
-	}).Order("folder ASC, order_index ASC").Find(&apis)
+	return c.JSON(fiber.Map{
+		"data":  apis,
+		"total": total,
+		"page":  page,
+		"limit": limit,
+	})
+}
 
-	return c.JSON(apis)
+func GetAPI(c *fiber.Ctx) error {
+	id := c.Params("id")
+	userID := c.Locals("user_id").(uuid.UUID)
+	role := c.Locals("role").(string)
+
+	svc := services.NewAPIService(nil)
+	api, err := svc.GetAPIByID(id, userID, role)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.JSON(api)
 }
 
 func UpdateAPI(c *fiber.Ctx) error {
-	apiID := c.Params("id")
+	id := c.Params("id")
 	userID := c.Locals("user_id").(uuid.UUID)
 	role := c.Locals("role").(string)
-
-	var api models.API
-	if err := database.DB.First(&api, "id = ?", apiID).Error; err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "API not found"})
-	}
-
-	var project models.Project
-	if err := database.DB.First(&project, "id = ?", api.ProjectID).Error; err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Associated project not found"})
-	}
-
-	// Verify project ownership or membership
-	isAuthorized := role == "admin" || project.UserID == userID
-	if !isAuthorized {
-		var memberCount int64
-		database.DB.Model(&models.ProjectMember{}).Where("project_id = ? AND user_id = ?", project.ID, userID).Count(&memberCount)
-		if memberCount > 0 {
-			isAuthorized = true
-		}
-	}
-	if !isAuthorized {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Unauthorized to edit this API"})
-	}
 
 	var input APIInput
 	if err := c.BodyParser(&input); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
 	}
 
-	// Fetch base model out of our join union to update its fields natively
-	var baseAPI models.API
-	database.DB.First(&baseAPI, "id = ?", apiID)
-
-	baseAPI.Folder = input.Folder
-	baseAPI.Name = input.Name
-	baseAPI.Method = input.Method
-	baseAPI.URL = input.URL
-	baseAPI.Parameters = input.Parameters
-	baseAPI.Headers = input.Headers
-	baseAPI.Body = input.Body
-	baseAPI.ExpectedStatusCode = input.ExpectedStatusCode
-	baseAPI.Interval = input.Interval
-	baseAPI.ScheduleConfig = input.ScheduleConfig
-	baseAPI.ResponseScript = input.ResponseScript
-	baseAPI.RecoveryScript = input.RecoveryScript
-	baseAPI.OrderIndex = input.OrderIndex
-
-	if err := database.DB.Save(&baseAPI).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update API endpoint"})
+	var body map[string]interface{}
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
 	}
 
-	return c.JSON(baseAPI)
+	updateData := make(map[string]interface{})
+	if _, ok := body["folder"]; ok {
+		updateData["folder"] = input.Folder
+	}
+	if _, ok := body["name"]; ok {
+		updateData["name"] = input.Name
+	}
+	if _, ok := body["method"]; ok {
+		updateData["method"] = input.Method
+	}
+	if _, ok := body["url"]; ok {
+		updateData["url"] = input.URL
+	}
+	if _, ok := body["parameters"]; ok {
+		updateData["parameters"] = input.Parameters
+	}
+	if _, ok := body["headers"]; ok {
+		updateData["headers"] = input.Headers
+	}
+	if _, ok := body["body"]; ok {
+		updateData["body"] = input.Body
+	}
+	if _, ok := body["expected_status_code"]; ok {
+		updateData["expected_status_code"] = input.ExpectedStatusCode
+	}
+	if _, ok := body["interval"]; ok {
+		updateData["interval"] = input.Interval
+	}
+	if _, ok := body["schedule_config"]; ok {
+		updateData["schedule_config"] = input.ScheduleConfig
+	}
+	if _, ok := body["response_script"]; ok {
+		updateData["response_script"] = input.ResponseScript
+	}
+	if _, ok := body["recovery_script"]; ok {
+		updateData["recovery_script"] = input.RecoveryScript
+	}
+
+	svc := services.NewAPIService(nil)
+	api, err := svc.UpdateAPI(id, updateData, userID, role)
+	if err != nil {
+		status := fiber.StatusInternalServerError
+		if err.Error() == "API not found or unauthorized" {
+			status = fiber.StatusNotFound
+		}
+		return c.Status(status).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.JSON(api)
 }
 
 func DeleteAPI(c *fiber.Ctx) error {
-	apiID := c.Params("id")
+	id := c.Params("id")
 	userID := c.Locals("user_id").(uuid.UUID)
 	role := c.Locals("role").(string)
 
-	var api models.API
-	if err := database.DB.First(&api, "id = ?", apiID).Error; err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "API not found"})
-	}
-
-	var project models.Project
-	if err := database.DB.First(&project, "id = ?", api.ProjectID).Error; err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Associated project not found"})
-	}
-
-	// Verify project ownership or membership
-	isAuthorized := role == "admin" || project.UserID == userID
-	if !isAuthorized {
-		var memberCount int64
-		database.DB.Model(&models.ProjectMember{}).Where("project_id = ? AND user_id = ?", project.ID, userID).Count(&memberCount)
-		if memberCount > 0 {
-			isAuthorized = true
+	svc := services.NewAPIService(nil)
+	if err := svc.DeleteAPI(id, userID, role); err != nil {
+		status := fiber.StatusInternalServerError
+		if err.Error() == "API not found or unauthorized" {
+			status = fiber.StatusNotFound
 		}
-	}
-	if !isAuthorized {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Unauthorized to delete this API"})
+		return c.Status(status).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	var baseAPI models.API
-	database.DB.First(&baseAPI, "id = ?", apiID)
-	
-	if err := database.DB.Delete(&baseAPI).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete API endpoint"})
-	}
-
-	return c.JSON(fiber.Map{"message": "API endpoint deleted successfully"})
+	return c.JSON(fiber.Map{"message": "API deleted successfully"})
 }
 
-// TestAPI proxies a request to bypass browser CORS for ad-hoc Dashboard testing
+func PauseAPI(c *fiber.Ctx) error {
+	id := c.Params("id")
+	userID := c.Locals("user_id").(uuid.UUID)
+	role := c.Locals("role").(string)
+
+	type PauseInput struct {
+		DurationMinutes int `json:"duration_minutes"`
+	}
+
+	var input PauseInput
+	if err := c.BodyParser(&input); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
+	}
+
+	svc := services.NewAPIService(nil)
+	if err := svc.PauseAPI(id, input.DurationMinutes, userID, role); err != nil {
+		status := fiber.StatusInternalServerError
+		if err.Error() == "API not found or unauthorized" {
+			status = fiber.StatusNotFound
+		}
+		return c.Status(status).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.JSON(fiber.Map{"message": "Pause status updated successfully"})
+}
+
 func TestAPI(c *fiber.Ctx) error {
 	type TestRequest struct {
 		Method  string            `json:"method"`
@@ -317,7 +295,6 @@ func TestAPI(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "URL and Method are required"})
 	}
 
-	// Build the HTTP request
 	var reqBody *bytes.Reader
 	if reqData.Body != "" {
 		reqBody = bytes.NewReader([]byte(reqData.Body))
@@ -330,12 +307,10 @@ func TestAPI(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to construct HTTP request"})
 	}
 
-	// Apply Headers
 	for key, val := range reqData.Headers {
 		httpReq.Header.Set(key, val)
 	}
-	
-	// Add default User-Agent if not presented
+
 	if httpReq.Header.Get("User-Agent") == "" {
 		httpReq.Header.Set("User-Agent", "TTT-Monitor-Engine/1.0")
 	}
@@ -359,7 +334,6 @@ func TestAPI(c *fiber.Ctx) error {
 	bodyBytes, _ := ioutil.ReadAll(resp.Body)
 	bodyString := string(bodyBytes)
 
-	// Attempt to parse JSON response for better display, fallback to raw string
 	var jsonResponse interface{}
 	if err := json.Unmarshal(bodyBytes, &jsonResponse); err == nil {
 		return c.JSON(fiber.Map{
@@ -378,58 +352,14 @@ func TestAPI(c *fiber.Ctx) error {
 	})
 }
 
-// Function to upload parsing Postman Collection JSON
 func UploadPostmanCollection(c *fiber.Ctx) error {
-	type PostmanHeader struct {
-		Key   string `json:"key"`
-		Value string `json:"value"`
-	}
-
-	type PostmanRequest struct {
-		Method string          `json:"method"`
-		Header []PostmanHeader `json:"header"`
-		Body   struct {
-			Mode string `json:"mode"`
-			Raw  string `json:"raw"`
-		} `json:"body"`
-		URL struct {
-			Raw   string `json:"raw"`
-			Query []struct {
-				Key   string `json:"key"`
-				Value string `json:"value"`
-			} `json:"query"`
-			Variable []struct {
-				Key   string `json:"key"`
-				Value string `json:"value"`
-			} `json:"variable"`
-		} `json:"url"`
-	}
-
-	type PostmanItem struct {
-		Name    string         `json:"name"`
-		Request PostmanRequest `json:"request"`
-		Item    []json.RawMessage `json:"item"` // Handle nested folders
-	}
-
-	type PostmanVariable struct {
-		Key   string `json:"key"`
-		Value string `json:"value"`
-		Type  string `json:"type"`
-	}
-
-	type PostmanCollection struct {
-		Item     []PostmanItem     `json:"item"`
-		Variable []PostmanVariable `json:"variable"`
-	}
-
 	projectID := c.Query("project_id")
 	if projectID == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "project_id is required"})
 	}
-	
+
 	mode := c.Query("mode")
 
-	// Read attached file
 	file, err := c.FormFile("collection")
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid upload file"})
@@ -441,222 +371,23 @@ func UploadPostmanCollection(c *fiber.Ctx) error {
 	}
 	defer f.Close()
 
-	var collection PostmanCollection
-	decoder := json.NewDecoder(f)
-	if err := decoder.Decode(&collection); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid Postman JSON structure"})
-	}
-
 	userID := c.Locals("user_id").(uuid.UUID)
 	role := c.Locals("role").(string)
 
-	// Verify project ownership or membership
-	var project models.Project
-	if role == "admin" {
-		if err := database.DB.First(&project, "id = ?", projectID).Error; err != nil {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Project not found"})
+	svc := services.NewAPIService(nil)
+	count, err := svc.ImportPostmanCollection(projectID, mode, f, userID, role)
+	if err != nil {
+		status := fiber.StatusInternalServerError
+		if err.Error() == "Project not found" || err.Error() == "Project not found or unauthorized" {
+			status = fiber.StatusNotFound
+		} else if err.Error() == "Invalid Postman JSON structure" {
+			status = fiber.StatusBadRequest
 		}
-	} else {
-		if err := database.DB.Where("id = ? AND (user_id = ? OR id IN (SELECT project_id FROM project_members WHERE user_id = ?))", projectID, userID, userID).First(&project).Error; err != nil {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Project not found or unauthorized"})
-		}
-	}
-
-	var parsedAPIs []models.API
-
-	// Recursive internal parser
-	var parseItems func(items []PostmanItem, currentFolder string)
-	parseItems = func(items []PostmanItem, currentFolder string) {
-		for _, item := range items {
-			if len(item.Item) > 0 {
-				// Nested folder
-				var subItems []PostmanItem
-				for _, rawSubItem := range item.Item {
-					var subItem PostmanItem
-					json.Unmarshal(rawSubItem, &subItem)
-					subItems = append(subItems, subItem)
-				}
-				
-				folderName := item.Name
-				if currentFolder != "" {
-					folderName = currentFolder + "/" + item.Name
-				}
-				
-				parseItems(subItems, folderName)
-			} else if item.Request.URL.Raw != "" {
-				method := item.Request.Method
-				if method == "" {
-					method = "GET"
-				}
-
-				// Handle Headers
-				postmanHeaders := item.Request.Header
-				
-				// Case-insensitive check for Content-Type
-				hasContentType := false
-				for _, h := range postmanHeaders {
-					if strings.EqualFold(h.Key, "Content-Type") {
-						hasContentType = true
-						break
-					}
-				}
-				
-				// Auto-add Content-Type if missing
-				if !hasContentType {
-					postmanHeaders = append(postmanHeaders, PostmanHeader{
-						Key:   "Content-Type",
-						Value: "application/json",
-					})
-				}
-
-				headersJSON, _ := json.Marshal(postmanHeaders)
-
-				// Handle Query Parameters and Path Variables
-				type Param struct { Key string `json:"key"`; Value string `json:"value"` }
-				var allParams []Param
-				
-				// Add regular query params
-				for _, q := range item.Request.URL.Query {
-					if q.Key != "" { allParams = append(allParams, Param{Key: q.Key, Value: q.Value}) }
-				}
-				// Add path variables
-				for _, v := range item.Request.URL.Variable {
-					if v.Key != "" { allParams = append(allParams, Param{Key: v.Key, Value: v.Value}) }
-				}
-
-				params := "[]"
-				if len(allParams) > 0 {
-					pJSON, _ := json.Marshal(allParams)
-					params = string(pJSON)
-				}
-				
-				folderAssign := currentFolder
-				if folderAssign == "" {
-					folderAssign = "Uncategorized"
-				}
-
-				projectUUID, _ := uuid.Parse(projectID)
-				indefinite := time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
-
-				parsedAPIs = append(parsedAPIs, models.API{
-					ProjectID:          projectUUID,
-					Folder:             folderAssign,
-					Name:               item.Name,
-					Method:             method,
-					URL:                item.Request.URL.Raw,
-					Parameters:         params,
-					Headers:            string(headersJSON),
-					Body:               item.Request.Body.Raw,
-					ExpectedStatusCode: 200,
-					Interval:           60,
-					PausedUntil:        &indefinite,
-				})
-			}
-		}
-	}
-
-	parseItems(collection.Item, "")
-
-	if len(parsedAPIs) > 0 {
-		if mode == "replace" {
-			if err := database.DB.Unscoped().Where("api_id IN (SELECT id FROM apis WHERE project_id = ?)", projectID).Delete(&models.MonitorLog{}).Error; err != nil {
-				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to clear existing monitor logs"})
-			}
-
-			if err := database.DB.Unscoped().Where("project_id = ?", projectID).Delete(&models.API{}).Error; err != nil {
-				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to clear existing APIs"})
-			}
-		}
-
-		if err := database.DB.Create(&parsedAPIs).Error; err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to save APIs to DB"})
-		}
-	}
-
-	// Update Project Environment Variables if defined in the collection
-	if len(collection.Variable) > 0 {
-		var project models.Project
-		if err := database.DB.First(&project, "id = ?", projectID).Error; err == nil {
-			envMap := make(map[string]string)
-			
-			// If appending, preserve existing env variables
-			if mode == "append" && project.EnvironmentVariables != "" {
-				json.Unmarshal([]byte(project.EnvironmentVariables), &envMap)
-			}
-			
-			for _, v := range collection.Variable {
-				envMap[v.Key] = v.Value
-			}
-			
-			envBytes, _ := json.Marshal(envMap)
-			project.EnvironmentVariables = string(envBytes)
-			database.DB.Save(&project)
-		}
+		return c.Status(status).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	return c.JSON(fiber.Map{
 		"message": "Collection imported successfully",
-		"count":   len(parsedAPIs),
-	})
-}
-
-// PauseAPI allows a user to pause monitoring for a specific endpoint temporarily
-func PauseAPI(c *fiber.Ctx) error {
-	apiID := c.Params("id")
-	userID := c.Locals("user_id").(uuid.UUID)
-	role := c.Locals("role").(string)
-
-	var api models.API
-	if err := database.DB.First(&api, "id = ?", apiID).Error; err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "API not found"})
-	}
-
-	var project models.Project
-	if err := database.DB.First(&project, "id = ?", api.ProjectID).Error; err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Associated project not found"})
-	}
-
-	// Verify project ownership or membership
-	isAuthorized := role == "admin" || project.UserID == userID
-	if !isAuthorized {
-		var memberCount int64
-		database.DB.Model(&models.ProjectMember{}).Where("project_id = ? AND user_id = ?", project.ID, userID).Count(&memberCount)
-		if memberCount > 0 {
-			isAuthorized = true
-		}
-	}
-	if !isAuthorized {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Unauthorized to modify this API"})
-	}
-
-	type PauseInput struct {
-		PauseHours float64 `json:"pause_hours"`
-	}
-	var input PauseInput
-	if err := c.BodyParser(&input); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
-	}
-
-	var baseAPI models.API
-	database.DB.First(&baseAPI, "id = ?", apiID)
-	
-	if input.PauseHours > 0 {
-		pausedTime := time.Now().Add(time.Duration(input.PauseHours * float64(time.Hour)))
-		baseAPI.PausedUntil = &pausedTime
-	} else if input.PauseHours < 0 {
-		// Indefinite pause — set to a far future date
-		indefinite := time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
-		baseAPI.PausedUntil = &indefinite
-	} else {
-		baseAPI.PausedUntil = nil
-	}
-
-	if err := database.DB.Save(&baseAPI).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update API pause status"})
-	}
-
-	return c.JSON(fiber.Map{
-		"message":      "API pause status updated successfully",
-		"paused_until": baseAPI.PausedUntil,
+		"count":   count,
 	})
 }
