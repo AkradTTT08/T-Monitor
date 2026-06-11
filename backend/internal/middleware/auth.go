@@ -14,9 +14,9 @@ import (
 )
 
 func getJWTSecret() []byte {
-	secret := os.Getenv("JWT_SECRET_KEY")
+	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
-		return []byte("super-secret-monitor-key")
+		return []byte("secret")
 	}
 	return []byte(secret)
 }
