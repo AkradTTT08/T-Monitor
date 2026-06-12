@@ -42,9 +42,9 @@ func (s *authService) GenerateJWT(userID string, role string) (string, error) {
 	claims["role"] = role
 	claims["exp"] = time.Now().Add(time.Hour * 72).Unix() // Token expires in 72 hours
 
-	secret := os.Getenv("JWT_SECRET")
+	secret := os.Getenv("JWT_SECRET_KEY")
 	if secret == "" {
-		secret = "secret" // Fallback for testing environments
+		panic("JWT_SECRET_KEY environment variable is not set")
 	}
 
 	t, err := token.SignedString([]byte(secret))

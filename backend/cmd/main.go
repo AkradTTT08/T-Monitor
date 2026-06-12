@@ -27,6 +27,9 @@ func main() {
 	// Start Monitoring Worker
 	workers.StartHealthCheckWorker()
 
+	// Start Log Cleanup Worker (ลบ log เก่ากว่า 30 วัน ทุกวัน)
+	workers.StartCleanupWorker()
+
 	app := fiber.New(fiber.Config{
 		BodyLimit: 50 * 1024 * 1024, // 50 MB limit for file uploads
 	})
@@ -112,8 +115,8 @@ func setupRoutes(app *fiber.App) {
 	companies.Post("/invitations/:id/decline", handlers.DeclineCompanyInvitation)
 	companies.Delete("/:id/members/:memberId", handlers.RemoveCompanyMember)
 
-	// Debug Routes
-	api.Get("/debug-companies", handlers.DebugCompany)
+	// Debug Routes (protected — requires auth)
+	protected.Get("/debug-companies", handlers.DebugCompany)
 
 	// API Management Routes
 	apis := protected.Group("/apis")

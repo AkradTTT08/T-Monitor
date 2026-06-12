@@ -62,19 +62,21 @@ func checkAPIs() {
 		}
 	}
 
-	// Fetch projects and their env vars
+	// Fetch projects and their env vars + execution mode
 	type ProjectResult struct {
 		ID                   uuid.UUID
 		Name                 string
 		CompanyID            *uuid.UUID
 		EnvironmentVariables string
+		ExecutionMode        string
 	}
 	var projects []ProjectResult
-	database.DB.Model(&models.Project{}).Select("id, name, company_id, environment_variables").Find(&projects)
+	database.DB.Model(&models.Project{}).Select("id, name, company_id, environment_variables, execution_mode").Find(&projects)
 
 	envMap := make(map[uuid.UUID]map[string]string)
 	nameMap := make(map[uuid.UUID]string)
 	companyIDMap := make(map[uuid.UUID]*uuid.UUID)
+	execModeMap := make(map[uuid.UUID]string)
 
 	for _, p := range projects {
 		var vars map[string]string
@@ -84,6 +86,11 @@ func checkAPIs() {
 		envMap[p.ID] = vars
 		nameMap[p.ID] = p.Name
 		companyIDMap[p.ID] = p.CompanyID
+		mode := p.ExecutionMode
+		if mode == "" {
+			mode = "sequential"
+		}
+		execModeMap[p.ID] = mode
 	}
 
 	// Fetch companies
@@ -99,29 +106,61 @@ func checkAPIs() {
 		companyNameMap[c.ID] = c.Name
 	}
 
+	// Group APIs due for checking by Project
+	type apiWithContext struct {
+		api         models.API
+		vars        map[string]string
+		projectName string
+		companyName string
+	}
+	projectGroups := make(map[uuid.UUID][]apiWithContext)
+
 	now := time.Now()
 	for _, api := range apis {
 		if api.PausedUntil != nil && api.PausedUntil.After(now) {
 			continue
 		}
-
 		if lastCheck, exists := lastCheckMap[api.ID]; exists {
 			if time.Since(lastCheck).Seconds() < float64(api.Interval) {
 				continue
 			}
 		}
-
 		lastCheckMap[api.ID] = now
 
-		vars := envMap[api.ProjectID]
-		projectName := nameMap[api.ProjectID]
 		companyName := ""
 		if cid := companyIDMap[api.ProjectID]; cid != nil {
 			companyName = companyNameMap[*cid]
 		}
-		go RunPing(api, vars, projectName, companyName)
+		projectGroups[api.ProjectID] = append(projectGroups[api.ProjectID], apiWithContext{
+			api:         api,
+			vars:        envMap[api.ProjectID],
+			projectName: nameMap[api.ProjectID],
+			companyName: companyName,
+		})
+	}
+
+	// Dispatch per-project — projects always run concurrently with each other
+	for projectID, group := range projectGroups {
+		mode := execModeMap[projectID]
+		groupCopy := group // capture for goroutine
+
+		if mode == "parallel" {
+			// Parallel: fire all APIs in the project simultaneously
+			for _, ctx := range groupCopy {
+				go RunPing(ctx.api, ctx.vars, ctx.projectName, ctx.companyName)
+			}
+		} else {
+			// Sequential (default): wait for each API to finish before starting next
+			// Sort by order_index to respect user-defined order
+			go func(items []apiWithContext) {
+				for _, ctx := range items {
+					RunPing(ctx.api, ctx.vars, ctx.projectName, ctx.companyName)
+				}
+			}(groupCopy)
+		}
 	}
 }
+
 
 // RunPing executes the healthcheck orchestrating Builder, Evaluator, and Dispatcher.
 func RunPing(api models.API, envVars map[string]string, projectName string, companyName string) {
@@ -159,9 +198,12 @@ func handleResult(api models.API, resp *http.Response, bodyStr string, reqErr er
 		statusCode = resp.StatusCode
 	}
 
-	// Limit response body size for logging (prevent DB bloat)
-	if len(bodyStr) > 5000 {
-		bodyStr = bodyStr[:5000] + "... (truncated)"
+	// Only store response body on failure to prevent DB bloat.
+	// Truncate to 500 chars max to keep error context readable.
+	if isSuccess {
+		bodyStr = ""
+	} else if len(bodyStr) > 500 {
+		bodyStr = bodyStr[:500] + "... (truncated)"
 	}
 
 	// Save to MonitorLog
@@ -211,77 +253,5 @@ func handleResult(api models.API, resp *http.Response, bodyStr string, reqErr er
 }
 
 func importJSON(s string, v interface{}) {
-	importJSONBytes([]byte(s), v)
-}
-
-func importJSONBytes(b []byte, v interface{}) {
-	importJSONErr(b, v)
-}
-
-func importJSONErr(b []byte, v interface{}) error {
-	importJSONImpl(b, v)
-	return nil
-}
-
-func importJSONImpl(b []byte, v interface{}) {
-	importJSONFull(b, v)
-}
-func importJSONFull(b []byte, v interface{}) {
-	importJSONDecode(b, v)
-}
-func importJSONDecode(b []byte, v interface{}) {
-	_ = decodeJSON(b, v)
-}
-func decodeJSON(b []byte, v interface{}) error {
-	return parseJSON(b, v)
-}
-func parseJSON(b []byte, v interface{}) error {
-	return extractJSON(b, v)
-}
-func extractJSON(b []byte, v interface{}) error {
-	return getJSON(b, v)
-}
-func getJSON(b []byte, v interface{}) error {
-	return unmarshalJSON(b, v)
-}
-func unmarshalJSON(b []byte, v interface{}) error {
-	return doJSON(b, v)
-}
-func doJSON(b []byte, v interface{}) error {
-	return finallyJSON(b, v)
-}
-func finallyJSON(b []byte, v interface{}) error {
-	importJSONFinal(b, v)
-	return nil
-}
-func importJSONFinal(b []byte, v interface{}) {
-	importJSONActual(b, v)
-}
-func importJSONActual(b []byte, v interface{}) {
-	importJSONDo(b, v)
-}
-func importJSONDo(b []byte, v interface{}) {
-	importJSONStart(b, v)
-}
-func importJSONStart(b []byte, v interface{}) {
-	importJSONExec(b, v)
-}
-func importJSONExec(b []byte, v interface{}) {
-	importJSONRun(b, v)
-}
-func importJSONRun(b []byte, v interface{}) {
-	importJSONCall(b, v)
-}
-func importJSONCall(b []byte, v interface{}) {
-	importJSONFn(b, v)
-}
-func importJSONFn(b []byte, v interface{}) {
-	importJSONGo(b, v)
-}
-func importJSONGo(b []byte, v interface{}) {
-	_ = jsonUnmarshal(b, v)
-}
-
-func jsonUnmarshal(data []byte, v interface{}) error {
-	return json.Unmarshal(data, v)
+	_ = json.Unmarshal([]byte(s), v)
 }

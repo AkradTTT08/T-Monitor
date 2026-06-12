@@ -60,7 +60,15 @@ func Register(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "อีเมลนี้มีผู้ใช้งานแล้ว (Email already exists)"})
 	}
 
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"message": "User registered successfully", "user": user})
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"message": "User registered successfully",
+		"user": fiber.Map{
+			"id":    user.ID,
+			"email": user.Email,
+			"name":  user.Name,
+			"role":  user.Role,
+		},
+	})
 }
 
 func Login(c *fiber.Ctx) error {

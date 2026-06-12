@@ -73,6 +73,7 @@ type Project struct {
 	Description          string               `json:"description"`
 	EnvironmentVariables string               `gorm:"type:text;default:'{}'" json:"environment_variables"`
 	Folders              string               `gorm:"type:text;default:'[]'" json:"folders"`
+	ExecutionMode        string               `gorm:"type:varchar(20);default:'sequential'" json:"execution_mode"` // 'sequential' or 'parallel'
 	CoverImageURL        string               `gorm:"type:text" json:"cover_image_url"`
 	CoverPosition        int                  `gorm:"default:50" json:"cover_position"`
 	UserID               uuid.UUID            `gorm:"type:uuid;not null" json:"user_id"`

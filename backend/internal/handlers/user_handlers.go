@@ -3,7 +3,9 @@ package handlers
 import (
 	"github.com/google/uuid"
 
+	"crypto/rand"
 	"fmt"
+	"math/big"
 	"os"
 	"path/filepath"
 	"time"
@@ -59,7 +61,13 @@ func ApproveUser(c *fiber.Ctx) error {
 	user.IsApproved = true
 	database.DB.Save(&user)
 
-	return c.JSON(fiber.Map{"message": "User approved successfully", "user": user})
+	return c.JSON(fiber.Map{"message": "User approved successfully", "user": fiber.Map{
+		"id":          user.ID,
+		"email":       user.Email,
+		"name":        user.Name,
+		"role":        user.Role,
+		"is_approved": user.IsApproved,
+	}})
 }
 
 func DisapproveUser(c *fiber.Ctx) error {
@@ -75,6 +83,19 @@ func DisapproveUser(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"message": "User disapproved and removed successfully"})
 }
 
+func randomPassword(length int) (string, error) {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$"
+	result := make([]byte, length)
+	for i := range result {
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		if err != nil {
+			return "", err
+		}
+		result[i] = charset[n.Int64()]
+	}
+	return string(result), nil
+}
+
 func ResetPassword(c *fiber.Ctx) error {
 	id := c.Params("id")
 	var user models.User
@@ -82,7 +103,12 @@ func ResetPassword(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte("T@monitor123"), bcrypt.DefaultCost)
+	tempPassword, err := randomPassword(12)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to generate password"})
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(tempPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to reset password"})
 	}
@@ -90,7 +116,10 @@ func ResetPassword(c *fiber.Ctx) error {
 	user.Password = string(hash)
 	database.DB.Save(&user)
 
-	return c.JSON(fiber.Map{"message": "Password reset to default successfully"})
+	return c.JSON(fiber.Map{
+		"message":          "Password reset successfully",
+		"temporary_password": tempPassword, // Admin must share this with the user
+	})
 }
 
 func GetProfile(c *fiber.Ctx) error {
@@ -250,7 +279,17 @@ func UploadProfileImage(c *fiber.Ctx) error {
 	}
 
 	ext := filepath.Ext(file.Filename)
-	filename := fmt.Sprintf("user_%d_%d%s", user.ID, time.Now().Unix(), ext)
+	validExts := map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".webp": true}
+	if !validExts[ext] {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid file type. Only jpg, png, and webp are allowed."})
+	}
+	contentType := file.Header.Get("Content-Type")
+	validMimes := map[string]bool{"image/jpeg": true, "image/png": true, "image/webp": true}
+	if !validMimes[contentType] {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid MIME type. Only image files are allowed."})
+	}
+
+	filename := fmt.Sprintf("user_%s_%d%s", userID, time.Now().Unix(), ext)
 	savePath := filepath.Join(uploadDir, filename)
 
 	if err := c.SaveFile(file, savePath); err != nil {

@@ -793,7 +793,14 @@ if (errorReason && errorReason.includes("401")) {
       }
       if (apisRes.ok) {
         const data = await apisRes.json();
-        apis = Array.isArray(data) ? data : [];
+        // Backend returns { data: [...], total, page, limit }
+        if (Array.isArray(data)) {
+          apis = data;
+        } else if (data && Array.isArray(data.data)) {
+          apis = data.data;
+        } else {
+          apis = [];
+        }
       } else {
         apis = [];
       }
@@ -801,6 +808,35 @@ if (errorReason && errorReason.includes("401")) {
       console.error(err);
     } finally {
       isLoading = false;
+    }
+  }
+
+  // ===== Execution Mode Toggle =====
+  async function toggleExecutionMode() {
+    if (!project) return;
+    const newMode = (project.execution_mode || 'sequential') === 'sequential' ? 'parallel' : 'sequential';
+    try {
+      const token = localStorage.getItem('monitor_token');
+      const res = await fetch(`${API_BASE_URL}/api/v1/projects/${projectId}`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ execution_mode: newMode }),
+      });
+      if (res.ok) {
+        project = { ...project, execution_mode: newMode };
+        systemToast.fire({
+          icon: 'success',
+          title: newMode === 'sequential' ? '⏩ Sequential Mode' : '⚡ Parallel Mode',
+          text: newMode === 'sequential'
+            ? 'APIs จะยิงทีละเส้นตามลำดับ'
+            : 'APIs จะยิงพร้อมกันทั้งหมด',
+        });
+      }
+    } catch (err) {
+      console.error('Failed to toggle execution mode:', err);
     }
   }
 
@@ -1859,6 +1895,45 @@ if (errorReason && errorReason.includes("401")) {
               disabled={isUploading}
             />
           </label>
+
+          <!-- Execution Mode: 2-button radio group -->
+          <div class="flex items-center gap-1 bg-slate-950/80 border border-slate-700/60 rounded-xl p-1 shadow-inner backdrop-blur-sm">
+            <span class="text-xs text-slate-500 font-mono tracking-wide pl-1 pr-2 whitespace-nowrap border-r border-slate-700/60 mr-1">EXEC</span>
+
+            <!-- Sequential button -->
+            <button
+              id="exec-mode-sequential"
+              onclick={() => { if ((project?.execution_mode || 'sequential') !== 'sequential') toggleExecutionMode(); }}
+              title="Sequential — ยิงทีละเส้นตามลำดับ"
+              class="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold font-mono tracking-wide transition-all duration-200 border {
+                (project?.execution_mode || 'sequential') === 'sequential'
+                  ? 'bg-cyan-500/20 border-cyan-400/60 text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.2)] cursor-default'
+                  : 'bg-transparent border-transparent text-slate-500 hover:text-slate-300 hover:bg-slate-800/50 cursor-pointer'
+              }"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+              </svg>
+              SEQ
+            </button>
+
+            <!-- Parallel button -->
+            <button
+              id="exec-mode-parallel"
+              onclick={() => { if ((project?.execution_mode || 'sequential') !== 'parallel') toggleExecutionMode(); }}
+              title="Parallel — ยิงพร้อมกันทั้งหมด"
+              class="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold font-mono tracking-wide transition-all duration-200 border {
+                (project?.execution_mode || 'sequential') === 'parallel'
+                  ? 'bg-violet-500/20 border-violet-400/60 text-violet-300 shadow-[0_0_10px_rgba(139,92,246,0.2)] cursor-default'
+                  : 'bg-transparent border-transparent text-slate-500 hover:text-slate-300 hover:bg-slate-800/50 cursor-pointer'
+              }"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+              </svg>
+              PAR
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -15,13 +15,14 @@ import (
 )
 
 type ProjectInput struct {
-	Name                 string `json:"name"`
-	Description          string `json:"description"`
-	EnvironmentVariables string `json:"environment_variables"`
-	Folders              string `json:"folders"`
-	CoverImageURL        string `json:"cover_image_url"`
-	CoverPosition        int    `json:"cover_position"`
-	CompanyID            *uuid.UUID  `json:"company_id"`
+	Name                 string     `json:"name"`
+	Description          string     `json:"description"`
+	EnvironmentVariables string     `json:"environment_variables"`
+	Folders              string     `json:"folders"`
+	ExecutionMode        string     `json:"execution_mode"`
+	CoverImageURL        string     `json:"cover_image_url"`
+	CoverPosition        int        `json:"cover_position"`
+	CompanyID            *uuid.UUID `json:"company_id"`
 }
 
 func UploadProjectCover(c *fiber.Ctx) error {
@@ -124,11 +125,17 @@ func CreateProject(c *fiber.Ctx) error {
 		input.EnvironmentVariables = "{}"
 	}
 
+	execMode := input.ExecutionMode
+	if execMode == "" {
+		execMode = "sequential"
+	}
+
 	project := models.Project{
 		Name:                 input.Name,
 		Description:          input.Description,
 		EnvironmentVariables: input.EnvironmentVariables,
 		CoverPosition:        input.CoverPosition,
+		ExecutionMode:        execMode,
 		UserID:               userID,
 		CompanyID:            input.CompanyID,
 	}
@@ -217,6 +224,13 @@ func UpdateProject(c *fiber.Ctx) error {
 	}
 	if _, ok := body["company_id"]; ok {
 		updateData["company_id"] = input.CompanyID
+	}
+	if _, ok := body["execution_mode"]; ok {
+		mode := input.ExecutionMode
+		if mode != "sequential" && mode != "parallel" {
+			mode = "sequential"
+		}
+		updateData["execution_mode"] = mode
 	}
 
 	svc := services.NewProjectService(nil)
