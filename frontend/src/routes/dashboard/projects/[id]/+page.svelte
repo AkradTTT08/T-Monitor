@@ -1445,16 +1445,16 @@ if (errorReason && errorReason.includes("401")) {
 
   async function handlePauseApiSubmit() {
     showPauseApiModal = false;
-    let pause_hours = 0;
+    let duration_minutes = 0;
     let label = '';
     if (pauseType === 'indefinite') {
-      pause_hours = -1;
+      duration_minutes = -1;  // Backend: -1 = indefinite pause
       label = 'Monitor paused indefinitely.';
     } else if (pauseType === 'duration') {
-      pause_hours = pauseMinutes / 60;
+      duration_minutes = pauseMinutes;  // Backend: >0 = pause for N minutes
       label = `Monitor paused for ${pauseMinutes} minute(s).`;
     } else {
-      pause_hours = 0;
+      duration_minutes = 0;  // Backend: 0 = resume
       label = 'Monitor resumed.';
     }
     try {
@@ -1467,7 +1467,7 @@ if (errorReason && errorReason.includes("401")) {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ pause_hours }),
+          body: JSON.stringify({ duration_minutes }),
         },
       );
 
@@ -1477,7 +1477,7 @@ if (errorReason && errorReason.includes("401")) {
         await fetchProjectDetails();
         systemToast.fire({
           icon: "success",
-          title: pause_hours !== 0 ? "Monitor Paused" : "Monitor Resumed",
+          title: duration_minutes !== 0 ? "Monitor Paused" : "Monitor Resumed",
           text: label,
         });
       } else {

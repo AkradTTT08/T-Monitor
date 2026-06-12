@@ -77,9 +77,7 @@ func (s *apiService) CreateAPI(api *models.API, mode string, userID uuid.UUID, r
 		}
 	}
 
-	indefinite := time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
-	api.PausedUntil = &indefinite
-
+	// New APIs start active (no PausedUntil set)
 	if err := s.db.Create(api).Error; err != nil {
 		return errors.New("Failed to create API endpoint")
 	}
@@ -157,14 +155,16 @@ func (s *apiService) PauseAPI(apiID string, durationMinutes int, userID uuid.UUI
 
 	var pausedUntil *time.Time
 	if durationMinutes > 0 {
+		// Pause for specific duration
 		t := time.Now().Add(time.Duration(durationMinutes) * time.Minute)
 		pausedUntil = &t
-	} else if durationMinutes == 0 {
+	} else if durationMinutes == -1 {
+		// Pause indefinitely
 		t := time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
 		pausedUntil = &t
 	} else {
-		// Resume
-		t := time.Now()
+		// durationMinutes == 0 → Resume (set to past time)
+		t := time.Now().Add(-1 * time.Second)
 		pausedUntil = &t
 	}
 
