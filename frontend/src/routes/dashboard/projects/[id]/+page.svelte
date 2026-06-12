@@ -1370,11 +1370,12 @@ if (errorReason && errorReason.includes("401")) {
   }
 
   function getStatusInfo(api: any, currentTime: Date) {
-    let statusObj: any = { status: 'LIVE', detail: 'Ready for next check', latency: 0, tls: null, securityScore: 0 };
+    let statusObj: any = { status: 'LIVE', detail: 'ready for next check', latency: 0, tls: null, securityScore: 0 };
     
     // Evaluate Logs for dynamic real-time data
-    if (api.logs && api.logs.length > 0) {
-      const latestLog = api.logs[0];
+    const logs = api.logs;
+    if (logs && Array.isArray(logs) && logs.length > 0) {
+      const latestLog = logs[0];
       statusObj.status = latestLog.is_success ? 'ONLINE' : 'DOWN';
       statusObj.latency = latestLog.response_time;
       statusObj.detail = latestLog.is_success ? 'Healthy' : 'Failing';
@@ -2043,7 +2044,7 @@ if (errorReason && errorReason.includes("401")) {
                               : info.status === 'PAUSED'
                                 ? 'bg-amber-950/40 border-amber-500/30 text-amber-400'
                                 : info.status === 'LIVE'
-                                  ? 'bg-cyan-950/40 border-cyan-500/30 text-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.1)]'
+                                  ? 'bg-slate-800/60 border-slate-600/40 text-slate-400'
                                   : 'bg-slate-800/40 border-slate-600/30 text-slate-400'}"
                         >
                           {#if info.status === 'ONLINE'}

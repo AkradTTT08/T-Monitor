@@ -109,8 +109,37 @@ func (s *apiService) GetAPIs(projectID string, search string, page int, limit in
 	query.Count(&total)
 
 	offset := (page - 1) * limit
-	if err := query.Order("order_index ASC").Order("created_at DESC").Offset(offset).Limit(limit).Find(&apis).Error; err != nil {
+	if err := query.
+		Order("order_index ASC").Order("created_at DESC").
+		Offset(offset).Limit(limit).Find(&apis).Error; err != nil {
 		return nil, 0, errors.New("Failed to fetch APIs")
+	}
+
+	// Manually load latest log per API (GORM Preload with Limit(1) applies globally, not per record)
+	if len(apis) > 0 {
+		apiIDs := make([]interface{}, len(apis))
+		for i, a := range apis {
+			apiIDs[i] = a.ID
+		}
+		var latestLogs []models.MonitorLog
+		s.db.Raw(`
+			SELECT DISTINCT ON (api_id) *
+			FROM monitor_logs
+			WHERE api_id IN (?)
+			  AND deleted_at IS NULL
+			ORDER BY api_id, checked_at DESC
+		`, apiIDs).Scan(&latestLogs)
+
+		// Map logs back to APIs
+		logMap := make(map[string]models.MonitorLog)
+		for _, log := range latestLogs {
+			logMap[log.ApiID.String()] = log
+		}
+		for i, a := range apis {
+			if log, ok := logMap[a.ID.String()]; ok {
+				apis[i].Logs = []models.MonitorLog{log}
+			}
+		}
 	}
 
 	return apis, total, nil

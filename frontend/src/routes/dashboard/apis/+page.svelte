@@ -1,9 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { page } from "$app/stores";
-  import Modal from "$lib/components/Modal.svelte";
   import InputWithVariables from "$lib/components/InputWithVariables.svelte";
-  import TextareaWithVariables from "$lib/components/TextareaWithVariables.svelte";
   import { API_BASE_URL } from "$lib/config";
 
   let apis: any[] = [];
@@ -11,19 +9,67 @@
   let isLoading = true;
   let selectedProjectId = "";
 
+  // Doc layout state
+  let selectedDocApi: any = null;
+  let expandedFolders: Record<string, boolean> = {};
+  let isSidebarOpen = true;
+
   // Pagination & Search
   let searchQuery = "";
   let currentPage = 1;
   let totalItems = 0;
-  let itemsPerPage = 12;
+  let itemsPerPage = 100;
   let searchTimeout: any;
   let isProjectDropdownOpen = false;
 
   $: totalPages = Math.ceil(totalItems / itemsPerPage);
 
-  // API Test Modal State
-  let showApiTestModal = false;
-  let selectedApi: any = null;
+  // Group APIs by folder
+  $: groupedByFolder = (() => {
+    const groups: Record<string, any[]> = {};
+    apis.forEach(api => {
+      const folder = api.folder || 'Uncategorized';
+      if (!groups[folder]) { groups[folder] = []; expandedFolders[folder] = true; }
+      groups[folder].push(api);
+    });
+    return groups;
+  })();
+
+  function selectDocApi(api: any) {
+    selectedDocApi = api;
+    reqUrl = api.url;
+    reqMethod = api.method;
+    try { reqHeaders = api.headers && api.headers !== '{}' ? JSON.stringify(JSON.parse(api.headers), null, 2) : '{\n}'; } catch { reqHeaders = api.headers || '{\n}'; }
+    reqBody = api.body || '';
+    try { reqParams = api.parameters && api.parameters !== '{}' ? JSON.stringify(JSON.parse(api.parameters), null, 2) : '{\n}'; } catch { reqParams = api.parameters || '{\n}'; }
+    testResult = null;
+  }
+
+  function generateCurl(api: any, envVars: any): string {
+    if (!api) return '';
+    const url = replaceVariables(api.url, envVars);
+    let cmd = `curl -X ${api.method} '${url}'`;
+    try {
+      const hdrs = JSON.parse(api.headers || '[]');
+      const list = Array.isArray(hdrs) ? hdrs : Object.entries(hdrs).map(([k,v]) => ({key:k,value:v}));
+      list.forEach((h: any) => { if (h.key) cmd += ` \\\n  -H '${h.key}: ${replaceVariables(String(h.value||''), envVars)}'`; });
+    } catch {}
+    if (api.method !== 'GET' && api.body) {
+      const b = replaceVariables(api.body, envVars);
+      cmd += ` \\\n  -d '${b}'`;
+    }
+    return cmd;
+  }
+
+  function methodColor(m: string) {
+    if (m === 'GET') return 'bg-emerald-950 border-emerald-500/40 text-emerald-400';
+    if (m === 'POST') return 'bg-blue-950 border-blue-500/40 text-blue-400';
+    if (m === 'PUT') return 'bg-amber-950 border-amber-500/40 text-amber-400';
+    if (m === 'DELETE') return 'bg-red-950 border-red-500/40 text-red-400';
+    return 'bg-slate-800 border-slate-600 text-slate-300';
+  }
+
+  // Inline test state
   let isTestingApi = false;
   let testResult: any = null;
 
@@ -51,8 +97,8 @@
   }
 
   $: activeProjectEnvVars = (() => {
-    if (!selectedApi || !projects.length) return {};
-    const activeProject = projects.find((p) => p.id === selectedApi.project_id);
+    if (!selectedDocApi || !projects.length) return {};
+    const activeProject = projects.find((p) => p.id === selectedDocApi.project_id);
     if (
       activeProject &&
       activeProject.environment_variables &&
@@ -66,7 +112,6 @@
   })();
 
   onMount(async () => {
-    // Read project_id from URL query param, or fall back to localStorage
     selectedProjectId =
       $page.url.searchParams.get("project_id") ||
       localStorage.getItem("monitor_selected_project") ||
@@ -106,7 +151,6 @@
       });
       if (res.ok) {
         const result = await res.json();
-        // Handle both structured and legacy array responses
         if (result.data) {
           apis = result.data;
           totalItems = result.total;
@@ -114,6 +158,8 @@
           apis = result;
           totalItems = result.length;
         }
+        // Auto-select first API
+        if (apis.length > 0 && !selectedDocApi) selectDocApi(apis[0]);
       }
     } catch (err) {
       console.error(err);
@@ -147,35 +193,6 @@
     handleFilterChange();
   }
 
-  function openTestModal(api: any) {
-    selectedApi = api;
-    reqUrl = api.url;
-    reqMethod = api.method;
-
-    try {
-      reqHeaders =
-        api.headers && api.headers !== "{}"
-          ? JSON.stringify(JSON.parse(api.headers), null, 2)
-          : "{\n}";
-    } catch (e) {
-      reqHeaders = api.headers || "{\n}";
-    }
-
-    reqBody = api.body || "";
-
-    try {
-      reqParams =
-        api.parameters && api.parameters !== "{}"
-          ? JSON.stringify(JSON.parse(api.parameters), null, 2)
-          : "{\n}";
-    } catch (e) {
-      reqParams = api.parameters || "{\n}";
-    }
-
-    testResult = null;
-    showApiTestModal = true;
-  }
-
   function replaceVariables(input: string, envVars: any): string {
     if (!input) return "";
     return input.replace(/\{\{([^}]+)\}\}/g, (match, key) => {
@@ -185,12 +202,11 @@
   }
 
   async function executeApiTest() {
-    if (!selectedApi) return;
+    if (!selectedDocApi) return;
 
     isTestingApi = true;
     testResult = null;
 
-    // Get project env vars
     const envVars = activeProjectEnvVars;
 
     // Apply regex replacement
@@ -285,28 +301,304 @@
   }
 </script>
 
-<div class="fade-in max-w-full overflow-x-hidden">
-  <!-- Header -->
-    <div class="flex flex-col md:flex-row md:items-center gap-4 w-full">
-       <div class="flex-1">
-          <h1 class="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400 tracking-tight font-mono uppercase">
-            OPEN_APIS
-          </h1>
-          <p class="text-cyan-500/80 mt-1 font-mono text-xs tracking-wide">
-            MANAGE AND MONITOR HEALTH ACROSS ALL REGISTERED API ENDPOINTS.
-          </p>
-       </div>
+<!-- ========== 3-COLUMN API DOC LAYOUT ========== -->
+<div class="fade-in flex flex-col" style="height: calc(100vh - 64px); overflow: hidden;">
 
-       <!-- Search & Filter Controls -->
-       <div class="flex flex-wrap items-center gap-3">
-          <!-- Search Input -->
-          <div class="relative min-w-[240px]">
-            <input 
-              type="text" 
-              placeholder="SEARCH_BY_NAME_OR_URL..." 
-              bind:value={searchQuery}
-              on:input={handleSearchInput}
-              aria-label="Search APIs by name or URL"
+  <!-- ── TOP BAR ── -->
+  <div class="flex items-center gap-3 px-4 py-3 border-b border-slate-800 shrink-0 bg-slate-950/60 backdrop-blur">
+    <div class="flex-1 flex items-center gap-2">
+      <h1 class="text-lg font-black font-mono text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400 tracking-tight uppercase">API_DOCS</h1>
+      {#if selectedDocApi}
+        <span class="text-slate-600 font-mono text-xs">/</span>
+        <span class="text-slate-400 font-mono text-xs truncate max-w-[200px]">{selectedDocApi.name}</span>
+      {/if}
+    </div>
+    <!-- Search -->
+    <div class="relative">
+      <input type="text" placeholder="ค้นหา API..." bind:value={searchQuery}
+        on:input={handleSearchInput}
+        class="bg-slate-900 border border-slate-700 rounded-lg px-8 py-1.5 text-xs text-slate-300 font-mono focus:outline-none focus:border-cyan-500/50 w-52 placeholder:text-slate-600"/>
+      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+    </div>
+    <!-- Project selector -->
+    <div class="relative">
+      <button on:click={() => (isProjectDropdownOpen = !isProjectDropdownOpen)}
+        class="flex items-center gap-2 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-cyan-400 font-mono hover:border-cyan-500/40 transition-all min-w-[160px] justify-between">
+        <span class="truncate">{selectedProjectId ? (projects.find(p => p.id === selectedProjectId)?.name || 'All Projects') : 'All Projects'}</span>
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="{isProjectDropdownOpen ? 'rotate-180' : ''} transition-transform"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+      {#if isProjectDropdownOpen}
+        <div class="absolute top-full left-0 mt-1 w-full min-w-[200px] bg-slate-900 border border-slate-700 rounded-xl z-50 shadow-2xl overflow-hidden">
+          <div class="max-h-[280px] overflow-y-auto p-1">
+            <button on:click={() => { selectedProjectId=''; handleFilterChange(); }}
+              class="w-full text-left px-3 py-2 rounded-lg text-xs font-mono hover:bg-slate-800 {selectedProjectId==='' ? 'text-cyan-400 font-black' : 'text-slate-400'}">All Projects</button>
+            {#each projects as p}
+              <button on:click={() => { selectedProjectId = p.id; handleFilterChange(); }}
+                class="w-full text-left px-3 py-2 rounded-lg text-xs font-mono hover:bg-slate-800 {selectedProjectId===p.id ? 'text-cyan-400 font-black' : 'text-slate-400'}">{p.name}</button>
+            {/each}
+          </div>
+        </div>
+        <div class="fixed inset-0 z-40" role="button" tabindex="-1" aria-label="close" on:click={() => (isProjectDropdownOpen=false)} on:keydown={(e) => e.key==='Escape' && (isProjectDropdownOpen=false)}></div>
+      {/if}
+    </div>
+  </div>
+
+  <!-- ── MAIN 3-COLUMN AREA ── -->
+  <div class="flex flex-1 overflow-hidden">
+
+    <!-- ── LEFT SIDEBAR ── -->
+    <div class="w-60 shrink-0 border-r border-slate-800 bg-slate-950/40 flex flex-col overflow-hidden">
+      <div class="flex-1 overflow-y-auto py-2 custom-scrollbar">
+        {#if isLoading}
+          <div class="flex justify-center py-8"><svg class="animate-spin h-5 w-5 text-cyan-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg></div>
+        {:else}
+          {#each Object.entries(groupedByFolder) as [folder, folderApis]}
+            <div class="mb-1">
+              <!-- Folder header -->
+              <button on:click={() => (expandedFolders[folder] = !expandedFolders[folder])}
+                class="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-slate-800/50 transition-colors group">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-500 {expandedFolders[folder] ? 'rotate-90' : ''} transition-transform shrink-0"><path d="m9 18 6-6-6-6"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-cyan-600 shrink-0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wide truncate">{folder}</span>
+                <span class="ml-auto text-[10px] text-slate-600 shrink-0">{folderApis.length}</span>
+              </button>
+              <!-- API list -->
+              {#if expandedFolders[folder]}
+                {#each folderApis as api}
+                  <button on:click={() => selectDocApi(api)}
+                    class="w-full flex items-center gap-2 px-3 py-2 pl-7 text-left transition-all hover:bg-slate-800/60
+                      {selectedDocApi?.id === api.id ? 'bg-slate-800/80 border-r-2 border-cyan-500' : ''}">
+                    <span class="text-[9px] font-black px-1.5 py-0.5 rounded border shrink-0 {methodColor(api.method)}">{api.method}</span>
+                    <span class="text-[11px] font-mono text-slate-300 truncate {selectedDocApi?.id === api.id ? 'text-cyan-300' : ''}">{api.name}</span>
+                  </button>
+                {/each}
+              {/if}
+            </div>
+          {/each}
+          {#if Object.keys(groupedByFolder).length === 0}
+            <p class="text-center text-slate-600 text-xs font-mono py-8">No APIs found</p>
+          {/if}
+        {/if}
+      </div>
+    </div>
+
+    <!-- ── CENTER: DOC PANEL ── -->
+    <div class="flex-1 overflow-y-auto custom-scrollbar bg-slate-950/20">
+      {#if selectedDocApi}
+        <div class="max-w-2xl mx-auto px-8 py-8 space-y-8">
+
+          <!-- Title -->
+          <div>
+            <div class="flex items-center gap-3 mb-3">
+              <span class="px-2.5 py-1 rounded border text-xs font-black {methodColor(selectedDocApi.method)}">{selectedDocApi.method}</span>
+              <h1 class="text-2xl font-black text-slate-100">{selectedDocApi.name}</h1>
+            </div>
+            <div class="bg-slate-900 border border-slate-700/60 rounded-lg px-4 py-2.5 font-mono text-xs text-cyan-300/80 break-all">{selectedDocApi.url}</div>
+          </div>
+
+          <hr class="border-slate-800"/>
+
+          <!-- Authentication -->
+          {#if (() => { try { const h = JSON.parse(selectedDocApi.headers||'[]'); const list = Array.isArray(h)?h:Object.entries(h).map(([k,v])=>({key:k,value:v})); return list.some((x:any)=>x.key?.toLowerCase().includes('auth')||x.key?.toLowerCase().includes('token')); } catch { return false; } })()}
+          <div>
+            <h2 class="text-base font-black text-slate-200 mb-4">Authentication</h2>
+            {#each (() => { try { const h = JSON.parse(selectedDocApi.headers||'[]'); return Array.isArray(h)?h:Object.entries(h).map(([k,v])=>({key:k,value:v})); } catch { return []; } })() as hdr}
+              {#if hdr.key?.toLowerCase().includes('auth') || hdr.key?.toLowerCase().includes('token')}
+                <div class="border-t border-slate-800 py-4">
+                  <div class="flex items-center gap-3 mb-1">
+                    <span class="font-black text-slate-200 text-sm">{hdr.key}</span>
+                    <span class="text-slate-500 text-xs font-mono">{typeof hdr.value === 'string' && hdr.value.toLowerCase().includes('bearer') ? 'Bearer Token' : 'string'}</span>
+                  </div>
+                  <code class="text-cyan-400 text-xs font-mono">{hdr.value || ''}</code>
+                </div>
+              {/if}
+            {/each}
+          </div>
+          <hr class="border-slate-800"/>
+          {/if}
+
+          <!-- Request Headers -->
+          {#if selectedDocApi.headers && selectedDocApi.headers !== '[]' && selectedDocApi.headers !== '{}'}
+          <div>
+            <h2 class="text-base font-black text-slate-200 mb-4">Request Headers</h2>
+            {#each (() => { try { const h = JSON.parse(selectedDocApi.headers); return Array.isArray(h)?h:Object.entries(h).map(([k,v])=>({key:k,value:v})); } catch { return []; } })() as hdr}
+              {#if hdr.key}
+              <div class="border-t border-slate-800 py-3 flex items-start gap-4">
+                <code class="font-black text-slate-300 text-sm w-48 shrink-0">{hdr.key}</code>
+                <span class="text-slate-500 text-xs font-mono mt-0.5">string</span>
+                <code class="text-slate-400 text-xs font-mono ml-auto truncate max-w-[200px]" title={String(hdr.value||'')}>{String(hdr.value||'')}</code>
+              </div>
+              {/if}
+            {/each}
+          </div>
+          <hr class="border-slate-800"/>
+          {/if}
+
+          <!-- Request Body -->
+          {#if selectedDocApi.method !== 'GET' && selectedDocApi.body && selectedDocApi.body !== '{}'}
+          <div>
+            <h2 class="text-base font-black text-slate-200 mb-2">Request Body</h2>
+            <p class="text-slate-500 text-sm mb-4">application/json</p>
+            {#each (() => { try { const b = JSON.parse(selectedDocApi.body); return Object.entries(b).map(([k,v])=>({key:k,value:v})); } catch { return []; } })() as field}
+              <div class="border-t border-slate-800 py-3">
+                <div class="flex items-center gap-3">
+                  <code class="font-black text-slate-200 text-sm">{field.key}</code>
+                  <span class="text-slate-500 text-xs font-mono">{typeof field.value}</span>
+                </div>
+                {#if typeof field.value === 'string'}
+                  <code class="text-cyan-400/70 text-xs font-mono mt-1 block">{field.value}</code>
+                {/if}
+              </div>
+            {/each}
+          </div>
+          <hr class="border-slate-800"/>
+          {/if}
+
+          <!-- Response -->
+          <div>
+            <h2 class="text-base font-black text-slate-200 mb-4">Response</h2>
+            <div class="border-t border-slate-800 py-4 flex items-center gap-4">
+              <span class="px-2 py-0.5 text-xs font-black rounded border bg-emerald-950 border-emerald-500/40 text-emerald-400">{selectedDocApi.expected_status_code}</span>
+              <span class="text-slate-400 text-sm">OK — ระบบตอบสนองสำเร็จ</span>
+            </div>
+            {#if testResult && !testResult.error}
+              {#if testResult.is_json && testResult.response}
+                {#each Object.entries(testResult.response) as [key, val]}
+                  <div class="border-t border-slate-800/60 py-3">
+                    <div class="flex items-center gap-3">
+                      <code class="font-black text-slate-300 text-sm">{key}</code>
+                      <span class="text-slate-600 text-xs font-mono">{Array.isArray(val) ? 'list of objects' : typeof val}</span>
+                    </div>
+                  </div>
+                {/each}
+              {/if}
+            {:else}
+              <div class="border-t border-slate-800/60 py-3">
+                <p class="text-slate-600 text-sm font-mono italic">กด Send Request เพื่อดู Response fields</p>
+              </div>
+            {/if}
+          </div>
+
+        </div>
+      {:else}
+        <div class="flex items-center justify-center h-full text-slate-700 flex-col gap-3">
+          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="opacity-30"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          <p class="font-mono text-sm">เลือก API จาก sidebar</p>
+        </div>
+      {/if}
+    </div>
+
+    <!-- ── RIGHT: CODE + TEST PANEL ── -->
+    <div class="w-96 shrink-0 border-l border-slate-800 bg-slate-950/60 flex flex-col overflow-hidden">
+      {#if selectedDocApi}
+        <!-- cURL block -->
+        <div class="border-b border-slate-800 shrink-0">
+          <div class="flex items-center justify-between px-4 py-2 bg-slate-900/60">
+            <div class="flex items-center gap-2">
+              <span class="px-1.5 py-0.5 text-[10px] font-black rounded border {methodColor(selectedDocApi.method)}">{selectedDocApi.method}</span>
+              <span class="text-slate-500 font-mono text-[10px] truncate max-w-[200px]">{selectedDocApi.url.replace(/\{\{[^}]+\}\}/g, '...')}</span>
+            </div>
+            <button on:click={() => copyToClipboard(generateCurl(selectedDocApi, activeProjectEnvVars), 'curl')}
+              class="text-slate-500 hover:text-cyan-400 transition-colors p-1" title="Copy cURL">
+              {#if copyFeedback['curl']}
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-emerald-400"><polyline points="20 6 9 17 4 12"/></svg>
+              {:else}
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              {/if}
+            </button>
+          </div>
+          <div class="bg-[#0b1120] px-4 py-3 overflow-x-auto" style="max-height:160px">
+            <pre class="text-[11px] font-mono text-slate-300 whitespace-pre">{generateCurl(selectedDocApi, activeProjectEnvVars)}</pre>
+          </div>
+        </div>
+
+        <!-- Test controls -->
+        <div class="px-4 py-3 border-b border-slate-800 shrink-0 space-y-2">
+          <!-- URL override -->
+          <InputWithVariables bind:value={reqUrl} variables={activeProjectEnvVars} placeholder="URL"/>
+          <!-- Method selector row -->
+          <div class="flex items-center gap-2">
+            <select bind:value={reqMethod} class="bg-slate-900 border border-slate-700 rounded text-xs font-mono text-slate-300 px-2 py-1 focus:outline-none focus:border-cyan-500/40">
+              {#each ['GET','POST','PUT','PATCH','DELETE'] as m}
+                <option value={m}>{m}</option>
+              {/each}
+            </select>
+            <button on:click={executeApiTest} disabled={isTestingApi}
+              class="flex-1 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all
+                {isTestingApi ? 'bg-slate-700 text-slate-500' : 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-[0_0_12px_rgba(6,182,212,0.3)]'}">
+              {#if isTestingApi}
+                <svg class="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                Sending...
+              {:else}
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                Send Request
+              {/if}
+            </button>
+          </div>
+        </div>
+
+        <!-- Response result -->
+        <div class="flex-1 overflow-y-auto custom-scrollbar">
+          {#if testResult}
+            <!-- Status bar -->
+            <div class="flex items-center gap-2 px-4 py-2 border-b border-slate-800 shrink-0 bg-slate-900/40">
+              {#if testResult.status}
+                <span class="text-[10px] font-black font-mono px-2 py-0.5 rounded border
+                  {testResult.status>=200&&testResult.status<300 ? 'bg-emerald-950 border-emerald-500/40 text-emerald-400'
+                  : testResult.status>=400 ? 'bg-red-950 border-red-500/40 text-red-400'
+                  : 'bg-slate-800 border-slate-600 text-slate-400'}">
+                  {testResult.status}
+                </span>
+              {/if}
+              {#if testResult.latency}
+                <span class="text-[10px] font-mono text-slate-500">{testResult.latency}ms</span>
+              {/if}
+              {#if testResult.error}
+                <span class="text-[10px] font-black text-red-400">FAILED</span>
+              {/if}
+              <button on:click={() => copyToClipboard(testResult.error || (testResult.is_json ? JSON.stringify(testResult.response,null,2) : testResult.response||''), 'response')}
+                class="ml-auto text-slate-500 hover:text-cyan-400 transition-colors p-1">
+                {#if copyFeedback['response']}
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-emerald-400"><polyline points="20 6 9 17 4 12"/></svg>
+                {:else}
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                {/if}
+              </button>
+            </div>
+            <!-- Body -->
+            <div class="p-4">
+              {#if testResult.error}
+                <pre class="text-red-400 font-mono text-[11px] whitespace-pre-wrap break-words">{testResult.error}</pre>
+              {:else if testResult.is_json}
+                <pre class="text-emerald-400 font-mono text-[11px] whitespace-pre-wrap break-words leading-relaxed">{JSON.stringify(testResult.response,null,2)}</pre>
+              {:else}
+                <pre class="text-slate-300 font-mono text-[11px] whitespace-pre-wrap break-words">{testResult.response||'Empty response'}</pre>
+              {/if}
+            </div>
+          {:else}
+            <div class="flex flex-col items-center justify-center h-full gap-3 text-slate-700 py-12">
+              <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="opacity-30"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+              <p class="text-xs font-mono">กด Send Request เพื่อดู Response</p>
+            </div>
+          {/if}
+        </div>
+      {:else}
+        <div class="flex items-center justify-center h-full text-slate-700 flex-col gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="opacity-20"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          <p class="text-xs font-mono">เลือก API เพื่อทดสอบ</p>
+        </div>
+      {/if}
+    </div>
+  </div>
+</div>
+
+<style>
+  .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+  .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+  .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(71,85,105,0.4); border-radius: 4px; }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(6,182,212,0.3); }
+</style>
+
               class="w-full bg-slate-900/60 border border-slate-700/50 rounded-2xl px-10 py-2.5 text-xs text-cyan-50 font-mono focus:outline-none focus:border-cyan-500/50 focus:ring-4 focus:ring-cyan-500/10 transition-all placeholder:text-slate-600"
             />
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
@@ -577,48 +869,9 @@
   {/if}
   </div>
 </div>
-
-<!-- API Testing Modal -->
-<Modal
-  bind:open={showApiTestModal}
-  title="API Details & Testing"
-  size="2xl"
->
-  {#if selectedApi}
-    <!-- 2-column split layout -->
-    <div class="api-test-layout">
-
-      <!-- ===== LEFT: Request Panel ===== -->
-      <div class="api-test-left">
-
-        <!-- URL Bar -->
-        <div class="bg-slate-900/60 border border-slate-700/60 rounded-xl p-3 flex items-center gap-3 shadow-[inset_0_0_30px_rgba(0,0,0,0.3)]">
-          <span
-            class="px-3 py-1.5 rounded text-sm font-black whitespace-nowrap
-             {selectedApi.method === 'GET'
-              ? 'bg-green-950/60 text-green-400 border border-green-500/30'
-              : selectedApi.method === 'POST'
-                ? 'bg-cyan-950/60 text-cyan-400 border border-cyan-500/30'
-                : selectedApi.method === 'PUT'
-                  ? 'bg-amber-950/60 text-amber-400 border border-amber-500/30'
-                  : selectedApi.method === 'DELETE'
-                    ? 'bg-red-950/60 text-red-400 border border-red-500/30'
-                    : 'bg-slate-800 text-slate-400 border border-slate-600'}"
-          >
-            {selectedApi.method}
-          </span>
-          <div class="flex-1 overflow-hidden flex items-center gap-2 group/copy">
-            <div class="flex-1">
-              <InputWithVariables
-                bind:value={reqUrl}
-                variables={activeProjectEnvVars}
-                placeholder="https://api.example.com/v1/resource"
               />
             </div>
             <button
-              on:click={() => copyToClipboard(reqUrl, "url")}
-              class="opacity-0 group-hover/copy:opacity-100 transition-opacity p-2 bg-slate-800 border border-slate-700 rounded-md text-slate-400 hover:text-cyan-400 hover:border-cyan-500/40 cursor-pointer shrink-0"
-              title="Copy URL"
             >
               {#if copyFeedback["url"]}
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-green-400"><polyline points="20 6 9 17 4 12"></polyline></svg>
@@ -629,7 +882,6 @@
           </div>
         </div>
 
-        <!-- Headers + Params side by side -->
         <div class="grid grid-cols-2 gap-3">
           <!-- Headers Editor -->
           <div class="border border-slate-700/60 rounded-xl overflow-hidden flex flex-col bg-slate-950/30" style="height:180px">
@@ -711,13 +963,6 @@
             disabled={isTestingApi}
             class="px-5 py-2 bg-cyan-600 text-cyan-50 rounded-xl hover:bg-cyan-700 font-bold transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] text-xs flex items-center gap-2 outline-none focus:ring-4 focus:ring-cyan-500/30 disabled:opacity-75"
           >
-            {#if isTestingApi}
-              <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-              Firing Engine...
-            {:else}
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
-              Send Request
-            {/if}
           </button>
         </div>
       </div>
@@ -791,73 +1036,4 @@
               </div>
             </div>
           </div>
-        {:else}
-          <!-- Empty state -->
-          <div class="h-full flex flex-col items-center justify-center text-slate-600 select-none gap-4">
-            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="opacity-30"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-            <div class="text-center">
-              <p class="text-xs font-mono uppercase tracking-widest text-slate-600">Awaiting Request</p>
-              <p class="text-[10px] text-slate-700 mt-1">Hit "Send Request" to see the response here</p>
-            </div>
-          </div>
-        {/if}
-      </div>
 
-    </div>
-  {/if}
-</Modal>
-
-<style>
-  /* 2-column split layout for API test modal */
-  .api-test-layout {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1.25rem;
-    height: calc(85vh - 120px);
-    min-height: 400px;
-    max-height: 680px;
-  }
-
-  .api-test-left {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    overflow-y: auto;
-    padding-right: 4px;
-    min-width: 0;
-  }
-
-  .api-test-right {
-    display: flex;
-    flex-direction: column;
-    border-left: 1px solid rgba(71, 85, 105, 0.4);
-    padding-left: 1.25rem;
-    min-width: 0;
-  }
-
-  .animate-fade-in {
-    animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  }
-  @keyframes slideInRight {
-    from {
-      opacity: 0;
-      transform: translateX(8px);
-    }
-    to {
-      opacity: 1;
-      transform: translateX(0);
-    }
-  }
-
-  /* thin scrollbar for left panel */
-  .api-test-left::-webkit-scrollbar {
-    width: 4px;
-  }
-  .api-test-left::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  .api-test-left::-webkit-scrollbar-thumb {
-    background: rgba(71, 85, 105, 0.4);
-    border-radius: 4px;
-  }
-</style>

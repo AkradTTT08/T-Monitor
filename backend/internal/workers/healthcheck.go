@@ -207,6 +207,11 @@ func handleResult(api models.API, resp *http.Response, bodyStr string, reqErr er
 	}
 
 	// Save to MonitorLog
+	// Clear error message if the check ultimately succeeded
+	if isSuccess {
+		errorMessage = ""
+	}
+
 	logEntry := models.MonitorLog{
 		ApiID:        api.ID,
 		StatusCode:   statusCode,

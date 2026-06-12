@@ -41,6 +41,38 @@
   let aiAnalysisResult = "";
   let aiError = "";
 
+  // --- Modal Helper Functions ---
+  function statusBadge(code: number) {
+    if (!code) return { bg: 'bg-slate-800/60', border: 'border-slate-600/50', text: 'text-slate-400' };
+    if (code >= 200 && code < 300) return { bg: 'bg-emerald-950/60', border: 'border-emerald-500/40', text: 'text-emerald-300' };
+    if (code >= 300 && code < 400) return { bg: 'bg-blue-950/60', border: 'border-blue-500/40', text: 'text-blue-300' };
+    if (code >= 400 && code < 500) return { bg: 'bg-amber-950/60', border: 'border-amber-500/40', text: 'text-amber-300' };
+    return { bg: 'bg-red-950/60', border: 'border-red-500/40', text: 'text-red-300' };
+  }
+  function latencyColor(ms: number) {
+    if (ms < 300) return 'text-emerald-400';
+    if (ms < 1000) return 'text-amber-400';
+    return 'text-red-400';
+  }
+  function scheduleText(interval: number | undefined) {
+    if (!interval) return '—';
+    if (interval < 60) return `${interval}s`;
+    if (interval < 3600) return `${Math.round(interval / 60)} นาที`;
+    return `${Math.round(interval / 3600)} ชั่วโมง`;
+  }
+  function prettyBody(raw: string) {
+    try { return JSON.stringify(JSON.parse(raw), null, 2); }
+    catch { return raw; }
+  }
+  function methodColor(m: string) {
+    if (m === 'GET') return 'text-emerald-300 bg-emerald-950/50 border-emerald-500/30';
+    if (m === 'POST') return 'text-blue-300 bg-blue-950/50 border-blue-500/30';
+    if (m === 'PUT') return 'text-amber-300 bg-amber-950/50 border-amber-500/30';
+    if (m === 'DELETE') return 'text-red-300 bg-red-950/50 border-red-500/30';
+    if (m === 'PATCH') return 'text-purple-300 bg-purple-950/50 border-purple-500/30';
+    return 'text-slate-300 bg-slate-800 border-slate-600';
+  }
+
   // Derived state for filtered logs
   $: filteredLogs = logs.filter((log) => {
     // 1. Check Status Filter
@@ -1016,10 +1048,17 @@
                   <span class="text-slate-600">—</span>
                 {/if}
               </td>
-              <td class="p-4 font-mono text-xs text-red-300/80 truncate max-w-xs"
-                title={log.error_message || "-"}
-                >{log.error_message || "-"}</td
+              <td class="p-4 font-mono text-xs truncate max-w-xs"
+                title={!log.is_success ? (log.error_message || '-') : ''}
               >
+                {#if !log.is_success && log.error_message}
+                  <span class="text-red-300/80">{log.error_message}</span>
+                {:else if !log.is_success}
+                  <span class="text-slate-600">—</span>
+                {:else}
+                  <span class="text-emerald-600/50">—</span>
+                {/if}
+              </td>
               <td class="p-4 font-mono text-xs text-slate-300"
                 >{formatDateTime(log.checked_at)}</td
               >
@@ -1199,136 +1238,194 @@
   {/if}
 </div>
 
-<!-- Modal -->
+<!-- ========================= LOG DETAIL MODAL ========================= -->
 {#if showLogModal && selectedLog}
-  {@const isOk = selectedLog.is_success}
-  {@const statusCode = selectedLog.status_code}
-  {@const getStatusColor = (code: number) => {
-    if (!code) return { bg: 'bg-slate-800', border: 'border-slate-600', text: 'text-slate-400', glow: '' };
-    if (code >= 200 && code < 300) return { bg: 'bg-emerald-950/60', border: 'border-emerald-500/50', text: 'text-emerald-300', glow: 'shadow-[0_0_20px_rgba(16,185,129,0.2)]' };
-    if (code >= 300 && code < 400) return { bg: 'bg-blue-950/60', border: 'border-blue-500/50', text: 'text-blue-300', glow: 'shadow-[0_0_20px_rgba(59,130,246,0.2)]' };
-    if (code >= 400 && code < 500) return { bg: 'bg-amber-950/60', border: 'border-amber-500/50', text: 'text-amber-300', glow: 'shadow-[0_0_20px_rgba(245,158,11,0.2)]' };
-    return { bg: 'bg-red-950/60', border: 'border-red-500/50', text: 'text-red-300', glow: 'shadow-[0_0_20px_rgba(239,68,68,0.2)]' };
-  }}
-  {@const sc = getStatusColor(statusCode)}
-  {@const latency = selectedLog.response_time}
-  {@const getLatencyColor = (ms: number) => ms < 300 ? 'text-emerald-400' : ms < 1000 ? 'text-amber-400' : 'text-red-400'}
-  {@const apiInterval = selectedLog.api?.interval}
-  {@const scheduleLabel = !apiInterval ? '—' : apiInterval < 60 ? `${apiInterval}s` : apiInterval < 3600 ? `${Math.round(apiInterval/60)}m` : `${Math.round(apiInterval/3600)}h`}
+<div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+  <!-- Backdrop -->
+  <div role="presentation" class="absolute inset-0 bg-slate-950/85 backdrop-blur-sm"
+    onclick={() => (showLogModal = false)}
+    onkeydown={(e) => e.key === 'Escape' && (showLogModal = false)}
+  ></div>
 
-  <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
-    <div
-      role="presentation"
-      class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
-      onclick={() => (showLogModal = false)}
-      onkeydown={(e) => e.key === 'Escape' && (showLogModal = false)}
-    ></div>
+  <!-- Modal Card -->
+  <div class="relative w-full bg-slate-900 rounded-2xl shadow-2xl flex flex-col overflow-hidden
+    border {selectedLog.is_success ? 'border-emerald-500/25' : 'border-red-500/25'}"
+    style="max-height: 90vh; max-width: min(540px, calc(100vw - 2rem));">
 
-    <div class="relative w-full shadow-2xl flex flex-col overflow-hidden rounded-2xl border {isOk ? 'border-emerald-500/30' : 'border-red-500/30'} bg-slate-900"
-      style="max-height: 88vh; max-width: min(520px, calc(100vw - 2rem));">
+    <!-- Top glow bar -->
+    <div class="h-[3px] w-full shrink-0
+      {selectedLog.is_success
+        ? 'bg-gradient-to-r from-transparent via-emerald-400 to-transparent'
+        : 'bg-gradient-to-r from-transparent via-red-500 to-transparent'}">
+    </div>
 
-      <!-- Top accent line -->
-      <div class="h-0.5 w-full {isOk ? 'bg-gradient-to-r from-transparent via-emerald-500 to-transparent' : 'bg-gradient-to-r from-transparent via-red-500 to-transparent'}"></div>
-
-      <!-- Header -->
-      <div class="flex items-center justify-between px-5 pt-4 pb-3 border-b border-slate-800 shrink-0">
-        <div class="flex items-center gap-2.5">
-          <div class="w-2 h-2 rounded-full {isOk ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]' : 'bg-red-400 shadow-[0_0_6px_rgba(248,113,113,0.8)]'} animate-pulse"></div>
-          <span class="font-black font-mono text-sm tracking-widest text-slate-200 uppercase">
+    <!-- ── HEADER ── -->
+    <div class="flex items-center justify-between px-5 py-3.5 border-b border-slate-800 shrink-0">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-base
+          {selectedLog.is_success ? 'bg-emerald-950/60 border border-emerald-500/30' : 'bg-red-950/60 border border-red-500/30'}">
+          {selectedLog.is_success ? '✅' : '❌'}
+        </div>
+        <div class="min-w-0">
+          <p class="font-black font-mono text-sm text-slate-100 uppercase tracking-wide truncate">
             {selectedLog.api?.name || 'API Log'}
-          </span>
+          </p>
+          <p class="text-[10px] font-mono text-slate-500 uppercase tracking-widest">
+            {selectedLog.is_success ? 'ผ่าน — ระบบตอบสนองปกติ' : 'ไม่ผ่าน — พบปัญหา'}
+          </p>
         </div>
-        <button onclick={() => (showLogModal = false)} class="text-slate-500 hover:text-slate-200 transition-colors">
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
       </div>
+      <button onclick={() => (showLogModal = false)}
+        class="shrink-0 text-slate-600 hover:text-slate-200 transition-colors p-1">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+          fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
 
-      <!-- Scrollable Content -->
-      <div class="overflow-y-auto flex-1 min-h-0 px-5 py-4 space-y-3">
+    <!-- ── SCROLLABLE BODY ── -->
+    <div class="overflow-y-auto flex-1 min-h-0 px-5 py-4 space-y-4">
 
-        <!-- STATUS + CODE + LATENCY row -->
-        <div class="grid grid-cols-3 gap-3">
-          <!-- Overall Status -->
-          <div class="col-span-1 flex flex-col items-center justify-center rounded-xl py-3 border {isOk ? 'bg-emerald-950/40 border-emerald-500/30' : 'bg-red-950/40 border-red-500/30'}">
-            <span class="text-2xl">{isOk ? '✅' : '❌'}</span>
-            <span class="text-[10px] font-bold font-mono mt-1 {isOk ? 'text-emerald-400' : 'text-red-400'} uppercase tracking-widest">{isOk ? 'SUCCESS' : 'FAILED'}</span>
+      <!-- ── SECTION 1: สรุปผลการตรวจ ── -->
+      <div>
+        <p class="text-[10px] font-black font-mono text-slate-500 uppercase tracking-[0.15em] mb-2 flex items-center gap-2">
+          <span class="h-px flex-1 bg-slate-800"></span>
+          📊 สรุปผลการตรวจ
+          <span class="h-px flex-1 bg-slate-800"></span>
+        </p>
+        <div class="grid grid-cols-3 gap-2">
+          <!-- Status -->
+          <div class="flex flex-col items-center justify-center gap-1 rounded-xl py-4 border
+            {selectedLog.is_success ? 'bg-emerald-950/40 border-emerald-500/25' : 'bg-red-950/40 border-red-500/25'}">
+            <span class="text-xl">{selectedLog.is_success ? '✅' : '❌'}</span>
+            <span class="text-[10px] font-black font-mono uppercase tracking-widest
+              {selectedLog.is_success ? 'text-emerald-400' : 'text-red-400'}">
+              {selectedLog.is_success ? 'SUCCESS' : 'FAILED'}
+            </span>
           </div>
-
-          <!-- HTTP Status Code -->
-          <div class="flex flex-col items-center justify-center rounded-xl py-3 border {sc.bg} {sc.border} {sc.glow}">
-            <span class="text-2xl font-black font-mono {sc.text}">{statusCode || 'ERR'}</span>
-            <span class="text-[10px] font-bold font-mono mt-1 text-slate-500 uppercase tracking-widest">HTTP CODE</span>
+          <!-- HTTP Code -->
+          <div class="flex flex-col items-center justify-center gap-1 rounded-xl py-4 border
+            {statusBadge(selectedLog.status_code).bg} {statusBadge(selectedLog.status_code).border}">
+            <span class="text-2xl font-black font-mono {statusBadge(selectedLog.status_code).text}">
+              {selectedLog.status_code || 'ERR'}
+            </span>
+            <span class="text-[10px] font-bold font-mono text-slate-500 uppercase tracking-widest">HTTP</span>
           </div>
-
           <!-- Latency -->
-          <div class="flex flex-col items-center justify-center rounded-xl py-3 border bg-slate-800/50 border-slate-700/50">
-            <span class="text-xl font-black font-mono {getLatencyColor(latency)}">{latency}<span class="text-xs font-normal text-slate-500 ml-0.5">ms</span></span>
-            <span class="text-[10px] font-bold font-mono mt-1 text-slate-500 uppercase tracking-widest">LATENCY</span>
+          <div class="flex flex-col items-center justify-center gap-1 rounded-xl py-4 border bg-slate-800/40 border-slate-700/40">
+            <span class="text-xl font-black font-mono {latencyColor(selectedLog.response_time)}">
+              {selectedLog.response_time}<span class="text-xs font-normal text-slate-500">ms</span>
+            </span>
+            <span class="text-[10px] font-bold font-mono text-slate-500 uppercase tracking-widest">
+              {selectedLog.response_time < 300 ? '⚡ เร็ว' : selectedLog.response_time < 1000 ? '🐢 ปานกลาง' : '🔴 ช้า'}
+            </span>
           </div>
         </div>
+      </div>
 
-        <!-- API Info -->
-        <div class="rounded-xl border border-slate-700/50 bg-slate-800/30 divide-y divide-slate-700/40">
+      <!-- ── SECTION 2: ข้อมูล API ── -->
+      <div>
+        <p class="text-[10px] font-black font-mono text-slate-500 uppercase tracking-[0.15em] mb-2 flex items-center gap-2">
+          <span class="h-px flex-1 bg-slate-800"></span>
+          🔌 ข้อมูล API
+          <span class="h-px flex-1 bg-slate-800"></span>
+        </p>
+        <div class="rounded-xl border border-slate-700/40 bg-slate-800/20 overflow-hidden divide-y divide-slate-700/30">
+          <!-- Method -->
           <div class="flex items-center gap-3 px-4 py-2.5">
-            <span class="text-[10px] font-bold font-mono text-slate-500 uppercase tracking-widest w-20 shrink-0">METHOD</span>
-            <span class="text-xs font-black font-mono px-2 py-0.5 rounded border {
-              selectedLog.api?.method === 'GET' ? 'text-emerald-300 border-emerald-500/30 bg-emerald-950/40' :
-              selectedLog.api?.method === 'POST' ? 'text-blue-300 border-blue-500/30 bg-blue-950/40' :
-              selectedLog.api?.method === 'PUT' ? 'text-amber-300 border-amber-500/30 bg-amber-950/40' :
-              selectedLog.api?.method === 'DELETE' ? 'text-red-300 border-red-500/30 bg-red-950/40' :
-              'text-slate-300 border-slate-600 bg-slate-800'
-            }">{selectedLog.api?.method || '—'}</span>
+            <span class="w-5 text-slate-600 shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
+            </span>
+            <span class="text-[11px] font-bold text-slate-500 w-20 shrink-0">วิธีเรียก</span>
+            <span class="text-xs font-black font-mono px-2.5 py-0.5 rounded-md border {methodColor(selectedLog.api?.method || '')}">
+              {selectedLog.api?.method || '—'}
+            </span>
           </div>
+          <!-- URL -->
           <div class="flex items-start gap-3 px-4 py-2.5">
-            <span class="text-[10px] font-bold font-mono text-slate-500 uppercase tracking-widest w-20 shrink-0 mt-0.5">URL</span>
-            <span class="text-xs font-mono text-cyan-300/80 break-all leading-relaxed">{selectedLog.api?.url || '—'}</span>
+            <span class="w-5 text-slate-600 shrink-0 mt-0.5">
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            </span>
+            <span class="text-[11px] font-bold text-slate-500 w-20 shrink-0 mt-0.5">URL</span>
+            <span class="text-[11px] font-mono text-cyan-300/80 break-all leading-relaxed">{selectedLog.api?.url || '—'}</span>
+          </div>
+          <!-- Folder -->
+          {#if selectedLog.api?.folder}
+          <div class="flex items-center gap-3 px-4 py-2.5">
+            <span class="w-5 text-slate-600 shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            </span>
+            <span class="text-[11px] font-bold text-slate-500 w-20 shrink-0">Folder</span>
+            <span class="text-[11px] font-mono text-indigo-300">{selectedLog.api.folder}</span>
+          </div>
+          {/if}
+        </div>
+      </div>
+
+      <!-- ── SECTION 3: ตารางเวลา ── -->
+      <div>
+        <p class="text-[10px] font-black font-mono text-slate-500 uppercase tracking-[0.15em] mb-2 flex items-center gap-2">
+          <span class="h-px flex-1 bg-slate-800"></span>
+          🕐 ตารางเวลา
+          <span class="h-px flex-1 bg-slate-800"></span>
+        </p>
+        <div class="rounded-xl border border-slate-700/40 bg-slate-800/20 overflow-hidden divide-y divide-slate-700/30">
+          <div class="flex items-center gap-3 px-4 py-2.5">
+            <span class="text-[11px] font-bold text-slate-500 w-28 shrink-0">ตรวจสอบเมื่อ</span>
+            <span class="text-[11px] font-mono text-slate-200">{formatDateTime(selectedLog.checked_at)}</span>
           </div>
           <div class="flex items-center gap-3 px-4 py-2.5">
-            <span class="text-[10px] font-bold font-mono text-slate-500 uppercase tracking-widest w-20 shrink-0">SCHEDULE</span>
-            <span class="text-xs font-mono text-violet-300">{scheduleLabel}</span>
-          </div>
-          <div class="flex items-center gap-3 px-4 py-2.5">
-            <span class="text-[10px] font-bold font-mono text-slate-500 uppercase tracking-widest w-20 shrink-0">CHECKED</span>
-            <span class="text-xs font-mono text-slate-300">{formatDateTime(selectedLog.checked_at)}</span>
+            <span class="text-[11px] font-bold text-slate-500 w-28 shrink-0">ความถี่</span>
+            <span class="text-[11px] font-mono text-violet-300">{scheduleText(selectedLog.api?.interval)}</span>
           </div>
         </div>
-
-        <!-- Error Message (only if failed) -->
-        {#if !isOk && selectedLog.error_message}
-          <div class="rounded-xl border border-red-500/30 bg-red-950/20 px-4 py-3">
-            <div class="flex items-center gap-2 mb-1.5">
-              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-red-400 shrink-0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              <span class="text-[10px] font-black font-mono text-red-400 uppercase tracking-widest">Error Detail</span>
-            </div>
-            <p class="text-xs text-red-300/90 font-mono leading-relaxed break-words">{selectedLog.error_message}</p>
-          </div>
-        {/if}
-
-        <!-- Response Body (if any) -->
-        {#if selectedLog.response_body}
-          {@const parsed = (() => { try { return JSON.stringify(JSON.parse(selectedLog.response_body), null, 2); } catch { return selectedLog.response_body; } })()}
-          <div class="rounded-xl border border-slate-700/50 bg-slate-950/50">
-            <div class="flex items-center gap-2 px-4 py-2 border-b border-slate-700/50">
-              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-cyan-500"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-              <span class="text-[10px] font-black font-mono text-cyan-500 uppercase tracking-widest">Response Body</span>
-            </div>
-            <pre class="text-[11px] font-mono text-slate-300/80 px-4 py-3 whitespace-pre-wrap break-words overflow-x-hidden leading-relaxed" style="max-height: 180px; overflow-y: auto;">{parsed}</pre>
-          </div>
-        {/if}
-
       </div>
 
-      <!-- Footer -->
-      <div class="px-5 pb-4 pt-3 border-t border-slate-800 shrink-0">
-        <button
-          onclick={() => (showLogModal = false)}
-          class="w-full py-2.5 rounded-xl font-bold font-mono text-xs uppercase tracking-widest transition-all
-            {isOk ? 'bg-emerald-950/40 hover:bg-emerald-900/50 border border-emerald-500/30 text-emerald-400' : 'bg-red-950/40 hover:bg-red-900/50 border border-red-500/30 text-red-400'}"
-        >CLOSE</button>
+      <!-- ── SECTION 4: รายละเอียด Error (เฉพาะเมื่อ failed) ── -->
+      {#if !selectedLog.is_success && selectedLog.error_message}
+      <div>
+        <p class="text-[10px] font-black font-mono text-slate-500 uppercase tracking-[0.15em] mb-2 flex items-center gap-2">
+          <span class="h-px flex-1 bg-red-900/40"></span>
+          ⚠️ สาเหตุที่ผิดพลาด
+          <span class="h-px flex-1 bg-red-900/40"></span>
+        </p>
+        <div class="rounded-xl border border-red-500/25 bg-red-950/20 px-4 py-3">
+          <p class="text-xs font-mono text-red-200/90 leading-relaxed break-words">{selectedLog.error_message}</p>
+        </div>
       </div>
+      {/if}
+
+      <!-- ── SECTION 5: Response Body (เฉพาะเมื่อมีข้อมูล) ── -->
+      {#if selectedLog.response_body}
+      <div>
+        <p class="text-[10px] font-black font-mono text-slate-500 uppercase tracking-[0.15em] mb-2 flex items-center gap-2">
+          <span class="h-px flex-1 bg-slate-800"></span>
+          📄 ข้อมูลที่ได้รับ (Response)
+          <span class="h-px flex-1 bg-slate-800"></span>
+        </p>
+        <div class="rounded-xl border border-slate-700/40 bg-slate-950/60 overflow-hidden">
+          <pre class="text-[11px] font-mono text-slate-300/80 px-4 py-3 whitespace-pre-wrap break-words leading-relaxed"
+            style="max-height: 160px; overflow-y: auto;">{prettyBody(selectedLog.response_body)}</pre>
+        </div>
+      </div>
+      {/if}
 
     </div>
+
+    <!-- ── FOOTER ── -->
+    <div class="px-5 pt-3 pb-4 border-t border-slate-800/80 shrink-0">
+      <button onclick={() => (showLogModal = false)}
+        class="w-full py-2.5 rounded-xl font-bold font-mono text-xs uppercase tracking-widest transition-all
+          {selectedLog.is_success
+            ? 'bg-emerald-950/40 hover:bg-emerald-900/50 border border-emerald-500/25 text-emerald-400'
+            : 'bg-red-950/40 hover:bg-red-900/50 border border-red-500/25 text-red-400'}">
+        ปิด
+      </button>
+    </div>
+
   </div>
+</div>
 {/if}
 
 
