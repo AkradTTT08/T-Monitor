@@ -1679,262 +1679,105 @@ if (errorReason && errorReason.includes("401")) {
     </div>
   {:else if project}
     <!-- Header -->
-    <div
-      class="bg-slate-800/40 backdrop-blur-xl p-6 md:p-8 rounded-3xl border border-slate-700/50 shadow-[0_8px_30px_rgb(0,0,0,0.5)] mb-8 relative overflow-hidden break-words group/header"
-    >
+    <div class="bg-slate-800/40 backdrop-blur-xl p-6 md:p-8 rounded-3xl border border-slate-700/50 shadow-[0_8px_30px_rgb(0,0,0,0.5)] mb-8 relative overflow-hidden group/header">
       <!-- Decor -->
-      <div
-        class="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-cyan-900/20 to-transparent rounded-bl-[100px] -z-10 group-hover/header:opacity-70 transition-opacity duration-500"
-      ></div>
+      <div class="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-cyan-900/20 to-transparent rounded-bl-[100px] -z-10 group-hover/header:opacity-70 transition-opacity duration-500"></div>
 
-      <div
-        class="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10"
-      >
+      <!-- Row 1: Project Info -->
+      <div class="flex items-start gap-4 mb-5">
+        <a href={backUrl} class="text-cyan-500/70 hover:text-cyan-400 transition-colors shrink-0 mt-1">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+        </a>
         <div class="min-w-0">
-          <div class="flex items-center gap-3 mb-2">
-            <a
-              href={backUrl}
-              class="text-cyan-500/80 hover:text-cyan-400 transition-colors shrink-0"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                ><line x1="19" y1="12" x2="5" y2="12"></line><polyline
-                  points="12 19 5 12 12 5"
-                ></polyline></svg
-              >
-            </a>
-            <h1
-              class="text-2xl md:text-3xl font-bold text-cyan-50 tracking-tight truncate font-mono"
-            >
-              {project.name}
-            </h1>
-          </div>
-          <p
-            class="text-cyan-500/80 max-w-2xl text-sm md:text-base font-mono tracking-wide"
-          >
-            {project.description}
-          </p>
+          <h1 class="text-2xl md:text-3xl font-bold text-cyan-50 tracking-tight font-mono truncate">{project.name}</h1>
+          {#if project.description}
+            <p class="text-cyan-500/60 text-sm font-mono mt-1 truncate max-w-xl">{project.description}</p>
+          {/if}
         </div>
+      </div>
 
-        <div class="flex items-center gap-3 shrink-0 flex-wrap lg:flex-nowrap">
-          <button
-            onclick={openMembersModal}
-            class="bg-blue-950/30 border border-blue-500/40 text-blue-400 hover:bg-blue-900/50 hover:border-blue-400 font-bold py-2 px-4 rounded-lg shadow-[0_0_10px_rgba(59,130,246,0.15)] transition-all flex items-center gap-2 text-sm w-full md:w-auto justify-center font-mono tracking-wide"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              ><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle
-                cx="9"
-                cy="7"
-                r="4"
-              ></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path
-                d="M16 3.13a4 4 0 0 1 0 7.75"
-              ></path></svg
-            >
+      <!-- Row 2: Action Toolbar -->
+      <div class="flex flex-wrap items-center gap-2">
+
+        <!-- Group 1: People & Config -->
+        <div class="flex items-center gap-2">
+          <button onclick={openMembersModal}
+            class="flex items-center gap-1.5 bg-blue-950/40 border border-blue-500/30 text-blue-400 hover:bg-blue-900/50 hover:border-blue-400 font-bold py-1.5 px-3 rounded-lg text-xs font-mono tracking-wide transition-all shadow-[0_0_8px_rgba(59,130,246,0.1)]">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
             MEMBERS
           </button>
-          <button
-            onclick={openEnvVarsModal}
-            class="bg-emerald-950/30 border border-emerald-500/40 text-emerald-400 hover:bg-emerald-900/50 hover:border-emerald-400 font-bold py-2 px-4 rounded-lg shadow-[0_0_10px_rgba(16,185,129,0.15)] transition-all flex items-center gap-2 text-sm w-full md:w-auto justify-center font-mono tracking-wide"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              ><path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2-2v4"
-              ></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path
-                d="M10.4 12.6a2 2 0 1 1 3 3L8 21l-4 1 1.5-4.5L10.4 12.6z"
-              ></path></svg
-            >
-            ENV_VARS {"{x}"}
+          <button onclick={openEnvVarsModal}
+            class="flex items-center gap-1.5 bg-emerald-950/40 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-900/50 hover:border-emerald-400 font-bold py-1.5 px-3 rounded-lg text-xs font-mono tracking-wide transition-all shadow-[0_0_8px_rgba(16,185,129,0.1)]">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M10.4 12.6a2 2 0 1 1 3 3L8 21l-4 1 1.5-4.5L10.4 12.6z"></path></svg>
+            ENV_VARS
           </button>
-          <a
-            href="/dashboard/projects/{projectId}/notifications"
-            class="bg-amber-950/30 border border-amber-500/40 text-amber-400 hover:bg-amber-900/50 hover:border-amber-400 font-bold py-2 px-4 rounded-lg shadow-[0_0_10px_rgba(245,158,11,0.15)] transition-all flex items-center gap-2 text-sm w-full md:w-auto justify-center font-mono tracking-wide"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              ><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline
-                points="22 4 12 14.01 9 11.01"
-              ></polyline></svg
-            >
+          <a href="/dashboard/projects/{projectId}/notifications"
+            class="flex items-center gap-1.5 bg-amber-950/40 border border-amber-500/30 text-amber-400 hover:bg-amber-900/50 hover:border-amber-400 font-bold py-1.5 px-3 rounded-lg text-xs font-mono tracking-wide transition-all shadow-[0_0_8px_rgba(245,158,11,0.1)]">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
             CHANNELS
           </a>
-          <button
-            onclick={() => (showFolderModal = true)}
-            class="bg-indigo-950/30 border border-indigo-500/40 text-indigo-400 hover:bg-indigo-900/50 hover:border-indigo-400 font-bold py-2 px-4 rounded-lg shadow-[0_0_10px_rgba(99,102,241,0.15)] transition-all flex items-center gap-2 text-sm w-full md:w-auto justify-center font-mono tracking-wide"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              ><path
-                d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
-              ></path><line x1="12" y1="11" x2="12" y2="17"></line><line
-                x1="9"
-                y1="14"
-                x2="15"
-                y2="14"
-              ></line></svg
-            >
+        </div>
+
+        <!-- Divider -->
+        <div class="h-6 w-px bg-slate-700/60 hidden sm:block"></div>
+
+        <!-- Group 2: Manage APIs -->
+        <div class="flex items-center gap-2">
+          <button onclick={() => (showFolderModal = true)}
+            class="flex items-center gap-1.5 bg-indigo-950/40 border border-indigo-500/30 text-indigo-400 hover:bg-indigo-900/50 hover:border-indigo-400 font-bold py-1.5 px-3 rounded-lg text-xs font-mono tracking-wide transition-all shadow-[0_0_8px_rgba(99,102,241,0.1)]">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path><line x1="12" y1="11" x2="12" y2="17"></line><line x1="9" y1="14" x2="15" y2="14"></line></svg>
             +FOLDER
           </button>
-          <button
-            onclick={openAddApiModal}
-            class="bg-cyan-950 border border-cyan-500/50 text-cyan-400 hover:bg-cyan-900 hover:border-cyan-400 hover:text-cyan-300 font-bold py-2 px-4 rounded-lg shadow-[0_0_15px_rgba(6,182,212,0.3)] transition-all flex items-center gap-2 text-sm w-full md:w-auto justify-center font-mono tracking-wide relative overflow-hidden group"
-          >
-            <div
-              class="absolute inset-0 w-full h-full bg-cyan-400/10 -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] skew-x-12"
-            ></div>
-            <span class="relative z-10 flex items-center gap-2">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                ><line x1="12" y1="5" x2="12" y2="19"></line><line
-                  x1="5"
-                  y1="12"
-                  x2="19"
-                  y2="12"
-                ></line></svg
-              >
-              ADD_API
-            </span>
+          <button onclick={openAddApiModal}
+            class="flex items-center gap-1.5 bg-cyan-950 border border-cyan-500/50 text-cyan-400 hover:bg-cyan-900 hover:border-cyan-400 hover:text-cyan-300 font-bold py-1.5 px-4 rounded-lg text-xs font-mono tracking-wide transition-all shadow-[0_0_12px_rgba(6,182,212,0.25)] relative overflow-hidden group">
+            <div class="absolute inset-0 bg-cyan-400/5 -translate-x-full group-hover:translate-x-0 transition-transform duration-300"></div>
+            <svg class="relative z-10" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            <span class="relative z-10">ADD_API</span>
           </button>
-          <label
-            class="cursor-pointer bg-slate-900 border border-slate-700 text-slate-500 hover:bg-slate-800 hover:text-cyan-400 hover:border-cyan-500/50 font-bold py-2 px-4 rounded-lg shadow-sm transition-all flex items-center gap-2 text-sm w-full md:w-auto justify-center font-mono tracking-wide"
-          >
+          <label class="cursor-pointer flex items-center gap-1.5 bg-slate-900/60 border border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-cyan-400 hover:border-cyan-500/40 font-bold py-1.5 px-3 rounded-lg text-xs font-mono tracking-wide transition-all">
             {#if isUploading}
-              <svg
-                class="animate-spin h-4 w-4 text-cyan-400"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                ><circle
-                  class="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  stroke-width="4"
-                ></circle><path
-                  class="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                ></path></svg
-              >
+              <svg class="animate-spin h-3 w-3 text-cyan-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
               Importing...
             {:else}
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                ><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
-                ></path><polyline points="17 8 12 3 7 8"></polyline><line
-                  x1="12"
-                  y1="3"
-                  x2="12"
-                  y2="15"
-                ></line></svg
-              >
-              Upload Collection
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+              Import
             {/if}
-            <input
-              type="file"
-              accept=".json"
-              class="hidden"
-              onchange={handleFileSelect}
-              disabled={isUploading}
-            />
+            <input type="file" accept=".json" class="hidden" onchange={handleFileSelect} disabled={isUploading} />
           </label>
-
-          <!-- Execution Mode: 2-button radio group -->
-          <div class="flex items-center gap-1 bg-slate-950/80 border border-slate-700/60 rounded-xl p-1 shadow-inner backdrop-blur-sm">
-            <span class="text-xs text-slate-500 font-mono tracking-wide pl-1 pr-2 whitespace-nowrap border-r border-slate-700/60 mr-1">EXEC</span>
-
-            <!-- Sequential button -->
-            <button
-              id="exec-mode-sequential"
-              onclick={() => { if ((project?.execution_mode || 'sequential') !== 'sequential') toggleExecutionMode(); }}
-              title="Sequential — ยิงทีละเส้นตามลำดับ"
-              class="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold font-mono tracking-wide transition-all duration-200 border {
-                (project?.execution_mode || 'sequential') === 'sequential'
-                  ? 'bg-cyan-500/20 border-cyan-400/60 text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.2)] cursor-default'
-                  : 'bg-transparent border-transparent text-slate-500 hover:text-slate-300 hover:bg-slate-800/50 cursor-pointer'
-              }"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
-              </svg>
-              SEQ
-            </button>
-
-            <!-- Parallel button -->
-            <button
-              id="exec-mode-parallel"
-              onclick={() => { if ((project?.execution_mode || 'sequential') !== 'parallel') toggleExecutionMode(); }}
-              title="Parallel — ยิงพร้อมกันทั้งหมด"
-              class="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold font-mono tracking-wide transition-all duration-200 border {
-                (project?.execution_mode || 'sequential') === 'parallel'
-                  ? 'bg-violet-500/20 border-violet-400/60 text-violet-300 shadow-[0_0_10px_rgba(139,92,246,0.2)] cursor-default'
-                  : 'bg-transparent border-transparent text-slate-500 hover:text-slate-300 hover:bg-slate-800/50 cursor-pointer'
-              }"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-              </svg>
-              PAR
-            </button>
-          </div>
         </div>
+
+        <!-- Divider -->
+        <div class="h-6 w-px bg-slate-700/60 hidden sm:block"></div>
+
+        <!-- Group 3: Execution Mode -->
+        <div class="flex items-center gap-1.5 bg-slate-900/70 border border-slate-700/50 rounded-xl px-1 py-1">
+          <span class="text-[10px] text-slate-500 font-mono tracking-widest px-2 uppercase">Exec</span>
+          <button
+            id="exec-mode-sequential"
+            onclick={() => { if ((project?.execution_mode || 'sequential') !== 'sequential') toggleExecutionMode(); }}
+            title="Sequential — ยิงทีละเส้นตามลำดับ"
+            class="flex items-center gap-1 px-3 py-1 rounded-lg text-[11px] font-bold font-mono tracking-wide transition-all duration-200 border {
+              (project?.execution_mode || 'sequential') === 'sequential'
+                ? 'bg-cyan-500/20 border-cyan-400/50 text-cyan-300 shadow-[0_0_8px_rgba(6,182,212,0.2)] cursor-default'
+                : 'bg-transparent border-transparent text-slate-500 hover:text-slate-300 hover:bg-slate-800/50 cursor-pointer'
+            }">
+            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+            SEQ
+          </button>
+          <button
+            id="exec-mode-parallel"
+            onclick={() => { if ((project?.execution_mode || 'sequential') !== 'parallel') toggleExecutionMode(); }}
+            title="Parallel — ยิงพร้อมกันทั้งหมด"
+            class="flex items-center gap-1 px-3 py-1 rounded-lg text-[11px] font-bold font-mono tracking-wide transition-all duration-200 border {
+              (project?.execution_mode || 'sequential') === 'parallel'
+                ? 'bg-violet-500/20 border-violet-400/50 text-violet-300 shadow-[0_0_8px_rgba(139,92,246,0.2)] cursor-default'
+                : 'bg-transparent border-transparent text-slate-500 hover:text-slate-300 hover:bg-slate-800/50 cursor-pointer'
+            }">
+            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            PAR
+          </button>
+        </div>
+
       </div>
     </div>
 
