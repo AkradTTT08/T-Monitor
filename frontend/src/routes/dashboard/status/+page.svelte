@@ -1003,9 +1003,19 @@
               <td class="p-4 text-cyan-50 font-mono font-bold"
                 >{log.api?.name || `API-${log.api_id}`}</td
               >
-              <td class="p-4 font-mono text-xs text-slate-300"
-                >{log.schedule || "N/A"}</td
-              >
+              <td class="p-4 font-mono text-xs text-slate-300">
+                {#if log.api?.interval}
+                  {#if log.api.interval < 60}
+                    {log.api.interval}s
+                  {:else if log.api.interval < 3600}
+                    {Math.round(log.api.interval / 60)}m
+                  {:else}
+                    {Math.round(log.api.interval / 3600)}h
+                  {/if}
+                {:else}
+                  <span class="text-slate-600">—</span>
+                {/if}
+              </td>
               <td class="p-4 font-mono text-xs text-red-300/80 truncate max-w-xs"
                 title={log.error_message || "-"}
                 >{log.error_message || "-"}</td
@@ -1191,39 +1201,136 @@
 
 <!-- Modal -->
 {#if showLogModal && selectedLog}
+  {@const isOk = selectedLog.is_success}
+  {@const statusCode = selectedLog.status_code}
+  {@const getStatusColor = (code: number) => {
+    if (!code) return { bg: 'bg-slate-800', border: 'border-slate-600', text: 'text-slate-400', glow: '' };
+    if (code >= 200 && code < 300) return { bg: 'bg-emerald-950/60', border: 'border-emerald-500/50', text: 'text-emerald-300', glow: 'shadow-[0_0_20px_rgba(16,185,129,0.2)]' };
+    if (code >= 300 && code < 400) return { bg: 'bg-blue-950/60', border: 'border-blue-500/50', text: 'text-blue-300', glow: 'shadow-[0_0_20px_rgba(59,130,246,0.2)]' };
+    if (code >= 400 && code < 500) return { bg: 'bg-amber-950/60', border: 'border-amber-500/50', text: 'text-amber-300', glow: 'shadow-[0_0_20px_rgba(245,158,11,0.2)]' };
+    return { bg: 'bg-red-950/60', border: 'border-red-500/50', text: 'text-red-300', glow: 'shadow-[0_0_20px_rgba(239,68,68,0.2)]' };
+  }}
+  {@const sc = getStatusColor(statusCode)}
+  {@const latency = selectedLog.response_time}
+  {@const getLatencyColor = (ms: number) => ms < 300 ? 'text-emerald-400' : ms < 1000 ? 'text-amber-400' : 'text-red-400'}
+  {@const apiInterval = selectedLog.api?.interval}
+  {@const scheduleLabel = !apiInterval ? '—' : apiInterval < 60 ? `${apiInterval}s` : apiInterval < 3600 ? `${Math.round(apiInterval/60)}m` : `${Math.round(apiInterval/3600)}h`}
+
   <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
     <div
       role="presentation"
       class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
       onclick={() => (showLogModal = false)}
-      onkeydown={(e) => e.key === "Escape" && (showLogModal = false)}
+      onkeydown={(e) => e.key === 'Escape' && (showLogModal = false)}
     ></div>
-    <div
-      class="relative bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-lg shadow-2xl flex flex-col overflow-hidden"
-      style="max-height: 85vh; max-width: min(512px, calc(100vw - 2rem));"
-    >
-      <h3 class="text-lg font-bold text-cyan-400 font-mono mb-4 shrink-0">
-        LOG_DETAILS
-      </h3>
-      <div class="overflow-y-auto overflow-x-hidden flex-1 min-h-0">
-        <div
-          class="bg-slate-950 p-4 rounded-xl border border-slate-800 font-mono text-xs overflow-hidden"
-        >
-          <pre class="text-cyan-50/70 whitespace-pre-wrap break-words overflow-x-hidden w-full" style="max-width: 100%;">{JSON.stringify(
-              selectedLog,
-              null,
-              2,
-            )}</pre>
+
+    <div class="relative w-full shadow-2xl flex flex-col overflow-hidden rounded-2xl border {isOk ? 'border-emerald-500/30' : 'border-red-500/30'} bg-slate-900"
+      style="max-height: 88vh; max-width: min(520px, calc(100vw - 2rem));">
+
+      <!-- Top accent line -->
+      <div class="h-0.5 w-full {isOk ? 'bg-gradient-to-r from-transparent via-emerald-500 to-transparent' : 'bg-gradient-to-r from-transparent via-red-500 to-transparent'}"></div>
+
+      <!-- Header -->
+      <div class="flex items-center justify-between px-5 pt-4 pb-3 border-b border-slate-800 shrink-0">
+        <div class="flex items-center gap-2.5">
+          <div class="w-2 h-2 rounded-full {isOk ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]' : 'bg-red-400 shadow-[0_0_6px_rgba(248,113,113,0.8)]'} animate-pulse"></div>
+          <span class="font-black font-mono text-sm tracking-widest text-slate-200 uppercase">
+            {selectedLog.api?.name || 'API Log'}
+          </span>
         </div>
+        <button onclick={() => (showLogModal = false)} class="text-slate-500 hover:text-slate-200 transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
       </div>
-      <button
-        onclick={() => (showLogModal = false)}
-        class="mt-4 shrink-0 w-full py-2 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold text-slate-300 transition-colors"
-        >CLOSE</button
-      >
+
+      <!-- Scrollable Content -->
+      <div class="overflow-y-auto flex-1 min-h-0 px-5 py-4 space-y-3">
+
+        <!-- STATUS + CODE + LATENCY row -->
+        <div class="grid grid-cols-3 gap-3">
+          <!-- Overall Status -->
+          <div class="col-span-1 flex flex-col items-center justify-center rounded-xl py-3 border {isOk ? 'bg-emerald-950/40 border-emerald-500/30' : 'bg-red-950/40 border-red-500/30'}">
+            <span class="text-2xl">{isOk ? '✅' : '❌'}</span>
+            <span class="text-[10px] font-bold font-mono mt-1 {isOk ? 'text-emerald-400' : 'text-red-400'} uppercase tracking-widest">{isOk ? 'SUCCESS' : 'FAILED'}</span>
+          </div>
+
+          <!-- HTTP Status Code -->
+          <div class="flex flex-col items-center justify-center rounded-xl py-3 border {sc.bg} {sc.border} {sc.glow}">
+            <span class="text-2xl font-black font-mono {sc.text}">{statusCode || 'ERR'}</span>
+            <span class="text-[10px] font-bold font-mono mt-1 text-slate-500 uppercase tracking-widest">HTTP CODE</span>
+          </div>
+
+          <!-- Latency -->
+          <div class="flex flex-col items-center justify-center rounded-xl py-3 border bg-slate-800/50 border-slate-700/50">
+            <span class="text-xl font-black font-mono {getLatencyColor(latency)}">{latency}<span class="text-xs font-normal text-slate-500 ml-0.5">ms</span></span>
+            <span class="text-[10px] font-bold font-mono mt-1 text-slate-500 uppercase tracking-widest">LATENCY</span>
+          </div>
+        </div>
+
+        <!-- API Info -->
+        <div class="rounded-xl border border-slate-700/50 bg-slate-800/30 divide-y divide-slate-700/40">
+          <div class="flex items-center gap-3 px-4 py-2.5">
+            <span class="text-[10px] font-bold font-mono text-slate-500 uppercase tracking-widest w-20 shrink-0">METHOD</span>
+            <span class="text-xs font-black font-mono px-2 py-0.5 rounded border {
+              selectedLog.api?.method === 'GET' ? 'text-emerald-300 border-emerald-500/30 bg-emerald-950/40' :
+              selectedLog.api?.method === 'POST' ? 'text-blue-300 border-blue-500/30 bg-blue-950/40' :
+              selectedLog.api?.method === 'PUT' ? 'text-amber-300 border-amber-500/30 bg-amber-950/40' :
+              selectedLog.api?.method === 'DELETE' ? 'text-red-300 border-red-500/30 bg-red-950/40' :
+              'text-slate-300 border-slate-600 bg-slate-800'
+            }">{selectedLog.api?.method || '—'}</span>
+          </div>
+          <div class="flex items-start gap-3 px-4 py-2.5">
+            <span class="text-[10px] font-bold font-mono text-slate-500 uppercase tracking-widest w-20 shrink-0 mt-0.5">URL</span>
+            <span class="text-xs font-mono text-cyan-300/80 break-all leading-relaxed">{selectedLog.api?.url || '—'}</span>
+          </div>
+          <div class="flex items-center gap-3 px-4 py-2.5">
+            <span class="text-[10px] font-bold font-mono text-slate-500 uppercase tracking-widest w-20 shrink-0">SCHEDULE</span>
+            <span class="text-xs font-mono text-violet-300">{scheduleLabel}</span>
+          </div>
+          <div class="flex items-center gap-3 px-4 py-2.5">
+            <span class="text-[10px] font-bold font-mono text-slate-500 uppercase tracking-widest w-20 shrink-0">CHECKED</span>
+            <span class="text-xs font-mono text-slate-300">{formatDateTime(selectedLog.checked_at)}</span>
+          </div>
+        </div>
+
+        <!-- Error Message (only if failed) -->
+        {#if !isOk && selectedLog.error_message}
+          <div class="rounded-xl border border-red-500/30 bg-red-950/20 px-4 py-3">
+            <div class="flex items-center gap-2 mb-1.5">
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-red-400 shrink-0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <span class="text-[10px] font-black font-mono text-red-400 uppercase tracking-widest">Error Detail</span>
+            </div>
+            <p class="text-xs text-red-300/90 font-mono leading-relaxed break-words">{selectedLog.error_message}</p>
+          </div>
+        {/if}
+
+        <!-- Response Body (if any) -->
+        {#if selectedLog.response_body}
+          {@const parsed = (() => { try { return JSON.stringify(JSON.parse(selectedLog.response_body), null, 2); } catch { return selectedLog.response_body; } })()}
+          <div class="rounded-xl border border-slate-700/50 bg-slate-950/50">
+            <div class="flex items-center gap-2 px-4 py-2 border-b border-slate-700/50">
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-cyan-500"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              <span class="text-[10px] font-black font-mono text-cyan-500 uppercase tracking-widest">Response Body</span>
+            </div>
+            <pre class="text-[11px] font-mono text-slate-300/80 px-4 py-3 whitespace-pre-wrap break-words overflow-x-hidden leading-relaxed" style="max-height: 180px; overflow-y: auto;">{parsed}</pre>
+          </div>
+        {/if}
+
+      </div>
+
+      <!-- Footer -->
+      <div class="px-5 pb-4 pt-3 border-t border-slate-800 shrink-0">
+        <button
+          onclick={() => (showLogModal = false)}
+          class="w-full py-2.5 rounded-xl font-bold font-mono text-xs uppercase tracking-widest transition-all
+            {isOk ? 'bg-emerald-950/40 hover:bg-emerald-900/50 border border-emerald-500/30 text-emerald-400' : 'bg-red-950/40 hover:bg-red-900/50 border border-red-500/30 text-red-400'}"
+        >CLOSE</button>
+      </div>
+
     </div>
   </div>
 {/if}
+
 
 <!-- Report Template -->
 <div

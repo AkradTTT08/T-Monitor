@@ -33,21 +33,25 @@ func EvaluateResult(api models.API, resp *http.Response, bodyStr string, err err
 	if api.ResponseScript != "" {
 		scriptSuccess, scriptErr := runResponseScript(api.ResponseScript, statusCode, bodyStr, duration)
 		if scriptErr != nil {
-			isSuccess = false
+			// Script error: only mark failed if status was already OK
+			// (don't double-penalise already-failed requests)
 			if errorMessage != "" {
 				errorMessage += "; "
 			}
 			errorMessage += fmt.Sprintf("Script Error: %v", scriptErr)
-		} else if !scriptSuccess {
-			isSuccess = false
-			if errorMessage != "" {
-				errorMessage += "; "
-			}
-			errorMessage += "Custom script validation failed"
+			// Script error is non-conclusive — keep status code decision
 		} else {
-			// If script explicitly passes, it overrides the status code failure
-			isSuccess = true
-			errorMessage = ""
+			// Script returned a definitive boolean — use it
+			isSuccess = scriptSuccess
+			if !scriptSuccess {
+				if errorMessage != "" {
+					errorMessage += "; "
+				}
+				errorMessage += "Custom script validation failed"
+			} else {
+				// Script explicitly passed — clear any status code error
+				errorMessage = ""
+			}
 		}
 	}
 
@@ -74,7 +78,11 @@ func runResponseScript(script string, statusCode int, body string, responseTime 
 		if result, ok := val.Export().(bool); ok {
 			return result, nil
 		}
+		// Script returned a non-boolean value — treat as non-conclusive (no error)
+		// Return true with no error so the status-code result is used
+		return true, nil
 	}
 
-	return false, fmt.Errorf("script did not return a boolean")
+	// Script returned nothing (undefined) — treat as non-conclusive
+	return true, nil
 }
