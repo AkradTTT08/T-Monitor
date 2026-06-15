@@ -1,13 +1,12 @@
 <script lang="ts">
-  import { page } from "$app/stores";
+  import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { onMount } from "svelte";
 
-  $: companyId = $page.params.companyId;
-  $: projectId = $page.params.id;
-
   // Redirect to the project page with a back URL encoded so the back arrow works correctly
   onMount(() => {
+    const companyId = page.params.companyId;
+    const projectId = page.params.id;
     const backUrl = encodeURIComponent(`/dashboard/companies/${companyId}`);
     goto(`/dashboard/projects/${projectId}?back=${backUrl}`, { replaceState: true });
   });

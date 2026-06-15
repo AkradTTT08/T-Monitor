@@ -1,16 +1,17 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { page } from "$app/stores";
+  import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import Modal from "$lib/components/Modal.svelte";
   import { API_BASE_URL } from "$lib/config";
   import Swal from "sweetalert2";
 
-  $: companyId = $page.params.id;
+  let companyId = $derived(page.params.id);
+  let user: any = $state(null);
 
-  let company: any = null;
-  let projects: any[] = [];
-  let isLoading = true;
+  let company: any = $state(null);
+  let projects: any[] = $state([]);
+  let isLoading = $state(true);
 
   const systemAlert = Swal.mixin({
     customClass: {
@@ -33,33 +34,33 @@
   });
 
   // Create project modal
-  let showCreateModal = false;
-  let newProjectName = "";
-  let newProjectDesc = "";
-  let coverFile: File | null = null;
+  let showCreateModal = $state(false);
+  let newProjectName = $state("");
+  let newProjectDesc = $state("");
+  let coverFile: File | null = $state(null);
 
   // Edit project modal
-  let showEditModal = false;
-  let editingProjectId = "";
-  let editProjectName = "";
-  let editProjectDesc = "";
-  let editProjectEnvVars = "{}";
-  let editCoverFile: File | null = null;
-  let editProjectCoverPos = 50;
+  let showEditModal = $state(false);
+  let editingProjectId = $state("");
+  let editProjectName = $state("");
+  let editProjectDesc = $state("");
+  let editProjectEnvVars = $state("{}");
+  let editCoverFile: File | null = $state(null);
+  let editProjectCoverPos = $state(50);
 
   // Delete project modal
-  let showDeleteModal = false;
-  let deletingProjectId = "";
-  let deletingProjectName = "";
+  let showDeleteModal = $state(false);
+  let deletingProjectId = $state("");
+  let deletingProjectName = $state("");
 
-  let activeDropdownId: string | null = null;
+  let activeDropdownId: string | null = $state(null);
   
   // Project Members State
-  let showMembersModal = false;
-  let activeProject: any = null;
-  let projectMembers: any[] = [];
-  let isAddingMember = false;
-  let selectedMemberId: string | null = null;
+  let showMembersModal = $state(false);
+  let activeProject: any = $state(null);
+  let projectMembers: any[] = $state([]);
+  let isAddingMember = $state(false);
+  let selectedMemberId: string | null = $state(null);
 
   function toggleDropdown(id: string, e: Event) {
     e.stopPropagation();
@@ -67,31 +68,42 @@
   }
 
   onMount(async () => {
+    const userData = localStorage.getItem("monitor_user");
+    if (userData) user = JSON.parse(userData);
     await fetchData();
   });
 
   async function fetchData() {
+    const currentCompanyId = page.params.id;
     isLoading = true;
     try {
       const token = localStorage.getItem("monitor_token");
-      // Fetch company info
-      const companyRes = await fetch(`${API_BASE_URL}/api/v1/companies`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      // Fetch company info and projects in parallel
+      const [companyRes, projRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/v1/companies`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch(`${API_BASE_URL}/api/v1/projects`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      ]);
+
+      if (companyRes.status === 401) {
+        localStorage.removeItem("monitor_token");
+        window.location.href = "/login";
+        return;
+      }
+
       if (companyRes.ok) {
         const companies = await companyRes.json();
-        company = companies.find((c: any) => c.id.toString() === companyId);
+        company = companies.find((c: any) => c.id === currentCompanyId || c.id.toString() === currentCompanyId);
       }
-      // Fetch all projects and filter by company
-      const projRes = await fetch(`${API_BASE_URL}/api/v1/projects`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
       if (projRes.ok) {
         const allProjects = await projRes.json();
-        projects = allProjects.filter((p: any) => p.company_id?.toString() === companyId);
+        projects = allProjects.filter((p: any) => p.company_id === currentCompanyId || p.company_id?.toString() === currentCompanyId);
       }
     } catch (err) {
-      console.error(err);
+      console.error("fetchData error:", err);
     } finally {
       isLoading = false;
     }
@@ -258,12 +270,7 @@
     }
   }
 
-  let user: any = null;
-  onMount(async () => {
-    const userData = localStorage.getItem("monitor_user");
-    if (userData) user = JSON.parse(userData);
-    await fetchData();
-  });
+
 </script>
 
 <svelte:window onclick={() => (activeDropdownId = null)} />

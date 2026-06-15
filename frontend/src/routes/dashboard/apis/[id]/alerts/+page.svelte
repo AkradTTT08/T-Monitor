@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { page } from "$app/stores";
+  import { page } from "$app/state";
   import { onMount } from "svelte";
   import { API_BASE_URL } from "$lib/config";
 
-  let apiId = $page.params.id;
+  let apiId = page.params.id;
 
   let isSaving = false;
   let saveSuccess = false;

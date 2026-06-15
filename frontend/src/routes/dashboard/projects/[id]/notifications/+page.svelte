@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { page } from "$app/stores";
+  import { page } from "$app/state";
   import { API_BASE_URL } from "$lib/config";
 
-  let projectId = $page.params.id;
+  let projectId = page.params.id;
   let isLoadingConfig = false;
   let isSavingConfig = false;
   let saveSuccess = false;

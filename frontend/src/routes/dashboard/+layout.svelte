@@ -15,16 +15,16 @@
 
   // Listen to page changes to auto-select the right project/company ID
   $: {
-    if ($page.params.id) {
+    if (page.params.id) {
       // Company route: /dashboard/companies/[id]
       if (currentPath.startsWith("/dashboard/companies/")) {
-        selectedCompanyId = $page.params.id;
+        selectedCompanyId = page.params.id;
         if (typeof window !== "undefined") {
           localStorage.setItem("monitor_selected_company", selectedCompanyId);
         }
       } else {
         // Project route: /dashboard/projects/[id]
-        selectedProjectId = $page.params.id;
+        selectedProjectId = page.params.id;
         if (typeof window !== "undefined") {
           localStorage.setItem("monitor_selected_project", selectedProjectId);
         }
@@ -1164,7 +1164,7 @@
         class="fixed top-0 left-0 w-full h-[500px] bg-gradient-to-b from-cyan-900/10 via-slate-900/5 to-transparent pointer-events-none -z-10"
       ></div>
 
-      <div class="min-h-full p-6 md:p-8 max-w-7xl mx-auto w-full">
+      <div class="min-h-full w-full {currentPath.startsWith('/dashboard/apis') ? '' : 'p-6 md:p-8 max-w-7xl mx-auto'}">
         <slot />
       </div>
     </main>

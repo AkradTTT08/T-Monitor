@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { page } from "$app/stores";
+  import { page } from "$app/state";
   import { onMount } from "svelte";
   import Swal from "sweetalert2";
   import { systemAlert, systemToast } from "$lib/swal-design";
   import { API_BASE_URL } from "$lib/config";
 
-  $: projectId = $page.params.id;
+  $: projectId = page.params.id;
 
   interface User {
     id: string;

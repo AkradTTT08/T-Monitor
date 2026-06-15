@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import { page } from "$app/stores";
+  import { page } from "$app/state";
   import Chart from "chart.js/auto";
   import Swal from "sweetalert2";
   import { API_BASE_URL } from "$lib/config";
@@ -34,7 +34,7 @@
 
   onMount(async () => {
     selectedProjectId =
-      $page.url.searchParams.get("project_id") ||
+      page.url.searchParams.get("project_id") ||
       localStorage.getItem("monitor_selected_project") ||
       "";
     await fetchAllData();

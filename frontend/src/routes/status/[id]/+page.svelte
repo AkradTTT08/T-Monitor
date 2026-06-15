@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import { page } from "$app/stores";
+  import { page } from "$app/state";
   import { API_BASE_URL } from "$lib/config";
 
   let loading = true;
@@ -8,7 +8,7 @@
   let data: any = null;
   let refreshInterval: any;
 
-  const projectId = $page.params.id;
+  const projectId = page.params.id;
 
   async function fetchStatus() {
     try {

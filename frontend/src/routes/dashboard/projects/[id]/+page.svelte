@@ -1,5 +1,5 @@
-<script lang="ts">
-  import { page } from "$app/stores";
+﻿<script lang="ts">
+  import { page } from "$app/state";
   import { onMount, tick } from "svelte";
   import Swal from "sweetalert2";
   import { systemAlert, systemToast } from "$lib/swal-design";
@@ -8,12 +8,12 @@
   import InputWithVariables from "$lib/components/InputWithVariables.svelte";
   import TextareaWithVariables from "$lib/components/TextareaWithVariables.svelte";
 
-  let projectId = $derived($page.params.id);
-  let backUrl = $derived($page.url.searchParams.get('back') || '/dashboard');
+  let projectId = $derived(page.params.id);
+  let backUrl = $derived(page.url.searchParams.get('back') || '/dashboard');
 
-  let project: any = null;
-  let apis: any[] = [];
-  let now = new Date();
+  let project: any = $state(null);
+  let apis: any[] = $state([]);
+  let now = $state(new Date());
 
   onMount(() => {
     const interval = setInterval(() => {
@@ -31,36 +31,36 @@
       return {};
     }
   })());
-  let isLoading = true;
-  let isUploading = false;
+  let isLoading = $state(true);
+  let isUploading = $state(false);
 
   // Bulk Delete State
-  let selectedApiIds: string[] = [];
-  let showBulkDeleteModal = false;
+  let selectedApiIds: string[] = $state([]);
+  let showBulkDeleteModal = $state(false);
 
   // Modals state
-  let showAddApiModal = false;
-  let showEditApiModal = false;
-  let showDeleteApiModal = false;
-  let showImportModeModal = false;
-  let showAddModeModal = false;
-  let showPauseApiModal = false;
-  let pauseDurationHours: number = 1;
-  let pauseMinutes: number = 60;
-  let pauseType: 'duration' | 'indefinite' | 'resume' = 'duration';
+  let showAddApiModal = $state(false);
+  let showEditApiModal = $state(false);
+  let showDeleteApiModal = $state(false);
+  let showImportModeModal = $state(false);
+  let showAddModeModal = $state(false);
+  let showPauseApiModal = $state(false);
+  let pauseDurationHours: number = $state(1);
+  let pauseMinutes: number = $state(60);
+  let pauseType: 'duration' | 'indefinite' | 'resume' = $state('duration');
   
   // Project Members State
-  let projectMembers: any[] = [];
-  let companyMembers: any[] = [];
-  let showMembersModal = false;
-  let isAddingMember = false;
-  let selectedMemberId: string | null = null;
+  let projectMembers: any[] = $state([]);
+  let companyMembers: any[] = $state([]);
+  let showMembersModal = $state(false);
+  let isAddingMember = $state(false);
+  let selectedMemberId: string | null = $state(null);
 
   // API Reference for Edit/Delete
-  let selectedApi: any = null;
+  let selectedApi: any = $state(null);
 
   // Form State for manual ADD/EDIT
-  let apiForm = {
+  let apiForm = $state({
     folder: "",
     name: "",
     method: "GET",
@@ -72,7 +72,7 @@
     interval: 60,
     response_script: "",
     recovery_script: "",
-  };
+  });
 
   // ===== Script Templates =====
   const responseScriptTemplates = [
@@ -280,8 +280,8 @@ if (errorReason && errorReason.includes("401")) {
 
   
   // API Search and Pagination State
-  let apiSearchQuery = "";
-  let apiPage = 1;
+  let apiSearchQuery = $state("");
+  let apiPage = $state(1);
   const apiLimit = 10;
 
   // Reactively filter APIs based on search query
@@ -311,18 +311,19 @@ if (errorReason && errorReason.includes("401")) {
   );
 
   // Reset to first page when search changes
-  $: if (apiSearchQuery !== undefined) {
+  $effect(() => {
+    apiSearchQuery;
     apiPage = 1;
-  }
+  });
 
   // KV Arrays for Form Toggles
-  let headerMode: "json" | "kv" = "json";
-  let bodyMode: "json" | "kv" = "json";
-  let paramMode: "json" | "kv" = "json";
+  let headerMode: "json" | "kv" = $state("json");
+  let bodyMode: "json" | "kv" = $state("json");
+  let paramMode: "json" | "kv" = $state("json");
 
-  let headersKV: { key: string; value: string }[] = [{ key: "", value: "" }];
-  let bodyKV: { key: string; value: string }[] = [{ key: "", value: "" }];
-  let paramsKV: { key: string; value: string }[] = [{ key: "", value: "" }];
+  let headersKV: { key: string; value: string }[] = $state([{ key: "", value: "" }]);
+  let bodyKV: { key: string; value: string }[] = $state([{ key: "", value: "" }]);
+  let paramsKV: { key: string; value: string }[] = $state([{ key: "", value: "" }]);
 
   function parseJSONSafe(str: string): any {
     try {
@@ -422,20 +423,20 @@ if (errorReason && errorReason.includes("401")) {
   // Temp state for handling file before asking import mode
   let pendingFile: File | null = null;
 
-  let customFolders: string[] = [];
-  let showFolderModal = false;
-  let newFolderName = "";
+  let customFolders: string[] = $state([]);
+  let showFolderModal = $state(false);
+  let newFolderName = $state("");
 
   // Folder Edit/Delete state
-  let showEditFolderModal = false;
-  let showDeleteFolderModal = false;
-  let selectedFolderToEdit = "";
-  let selectedFolderToDelete = "";
-  let editFolderName = "";
+  let showEditFolderModal = $state(false);
+  let showDeleteFolderModal = $state(false);
+  let selectedFolderToEdit = $state("");
+  let selectedFolderToDelete = $state("");
+  let editFolderName = $state("");
 
   // Drag & Drop State
-  let draggingApiId: string | null = null;
-  let dragOverItem: { folder: string; index: number } | null = null;
+  let draggingApiId: string | null = $state(null);
+  let dragOverItem: { folder: string; index: number } | null = $state(null);
 
   // Derived state to group APIs by Folder
   let groupedApis = $derived((() => {
@@ -755,11 +756,13 @@ if (errorReason && errorReason.includes("401")) {
   }
 
   // Re-fetch whenever projectId changes
-  $: if (projectId) {
-    console.log("Project ID changed to:", projectId);
-    fetchProjectDetails(projectId);
-    fetchMembersData();
-  }
+  $effect(() => {
+    if (projectId) {
+      console.log("Project ID changed to:", projectId);
+      fetchProjectDetails(projectId);
+      fetchMembersData();
+    }
+  });
 
   async function fetchProjectDetails(id?: string) {
     const targetId = id || projectId;
@@ -957,7 +960,7 @@ if (errorReason && errorReason.includes("401")) {
     (selectedApiIds || []).length > 0 && (selectedApiIds || []).length < (apis || []).length
   );
 
-  let isAnalyzingRCA = false;
+  let isAnalyzingRCA = $state(false);
   function analyzeIncident(_logId: string) {
     // AI feature is coming soon — show a styled modal instead of calling the API
     Swal.fire({
@@ -1112,13 +1115,13 @@ if (errorReason && errorReason.includes("401")) {
   }
 
   // --- Schedule Config Modal Handlers --- //
-  let showScheduleModal = false;
-  let scheduleConfig: any = {
+  let showScheduleModal = $state(false);
+  let scheduleConfig: any = $state({
     mode: "Minute timer",
     value: 1,
     day: "Every day",
     time: "4:00 PM",
-  };
+  });
 
   const scheduleModes = ["Minute timer", "Hour timer", "Week timer"];
   const weekDays = [
@@ -1138,7 +1141,7 @@ if (errorReason && errorReason.includes("401")) {
     return `${hour}:00 ${ampm}`;
   });
 
-  let isBulkSchedule = false;
+  let isBulkSchedule = $state(false);
 
   function openScheduleModal(api: any) {
     isBulkSchedule = false;
@@ -1696,9 +1699,9 @@ if (errorReason && errorReason.includes("401")) {
   }
 
   // --- Env Vars Modal State --- //
-  let showEnvVarsModal = false;
-  let envVarsKV: { key: string; value: string }[] = [{ key: "", value: "" }];
-  let isSavingEnvVars = false;
+  let showEnvVarsModal = $state(false);
+  let envVarsKV: { key: string; value: string }[] = $state([{ key: "", value: "" }]);
+  let isSavingEnvVars = $state(false);
 
   function openEnvVarsModal() {
     let parsed: any = {};
