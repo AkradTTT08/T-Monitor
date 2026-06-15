@@ -15,16 +15,16 @@
 
   // Listen to page changes to auto-select the right project/company ID
   $: {
-    if (page.params.id) {
+    if ($page.params.id) {
       // Company route: /dashboard/companies/[id]
       if (currentPath.startsWith("/dashboard/companies/")) {
-        selectedCompanyId = page.params.id;
+        selectedCompanyId = $page.params.id;
         if (typeof window !== "undefined") {
           localStorage.setItem("monitor_selected_company", selectedCompanyId);
         }
       } else {
         // Project route: /dashboard/projects/[id]
-        selectedProjectId = page.params.id;
+        selectedProjectId = $page.params.id;
         if (typeof window !== "undefined") {
           localStorage.setItem("monitor_selected_project", selectedProjectId);
         }
