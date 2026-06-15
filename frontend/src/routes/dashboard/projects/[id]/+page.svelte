@@ -8,8 +8,8 @@
   import InputWithVariables from "$lib/components/InputWithVariables.svelte";
   import TextareaWithVariables from "$lib/components/TextareaWithVariables.svelte";
 
-  $: projectId = $page.params.id;
-  $: backUrl = $page.url.searchParams.get('back') || '/dashboard';
+  let projectId = $derived($page.params.id);
+  let backUrl = $derived($page.url.searchParams.get('back') || '/dashboard');
 
   let project: any = null;
   let apis: any[] = [];
@@ -23,14 +23,14 @@
   });
 
   // Derive environment variables for highlighting
-  $: envVarDict = (() => {
+  let envVarDict = $derived((() => {
     if (!project || !project.environment_variables) return {};
     try {
       return JSON.parse(project.environment_variables);
     } catch (e) {
       return {};
     }
-  })();
+  })());
   let isLoading = true;
   let isUploading = false;
 
@@ -285,23 +285,29 @@ if (errorReason && errorReason.includes("401")) {
   const apiLimit = 10;
 
   // Reactively filter APIs based on search query
-  $: filteredApisForDisplay = apis.filter(api => {
-    if (!apiSearchQuery.trim()) return true;
-    const q = apiSearchQuery.toLowerCase();
-    return (
-      (api.name || "").toLowerCase().includes(q) ||
-      (api.url || "").toLowerCase().includes(q) ||
-      (api.folder || "").toLowerCase().includes(q)
-    );
-  });
+  let filteredApisForDisplay = $derived(
+    Array.isArray(apis) ? apis.filter(api => {
+      if (!apiSearchQuery.trim()) return true;
+      const q = apiSearchQuery.toLowerCase();
+      return (
+        (api.name || "").toLowerCase().includes(q) ||
+        (api.url || "").toLowerCase().includes(q) ||
+        (api.folder || "").toLowerCase().includes(q)
+      );
+    }) : []
+  );
 
   // Calculate total pages for APIs
-  $: totalApiPages = Math.ceil(filteredApisForDisplay.length / apiLimit);
+  let totalApiPages = $derived(
+    Math.ceil((Array.isArray(filteredApisForDisplay) ? filteredApisForDisplay.length : 0) / apiLimit)
+  );
 
   // Paginate filtered APIs
-  $: paginatedApisForDisplay = filteredApisForDisplay.slice(
-    (apiPage - 1) * apiLimit,
-    apiPage * apiLimit
+  let paginatedApisForDisplay = $derived(
+    Array.isArray(filteredApisForDisplay) ? filteredApisForDisplay.slice(
+      (apiPage - 1) * apiLimit,
+      apiPage * apiLimit
+    ) : []
   );
 
   // Reset to first page when search changes
@@ -432,14 +438,15 @@ if (errorReason && errorReason.includes("401")) {
   let dragOverItem: { folder: string; index: number } | null = null;
 
   // Derived state to group APIs by Folder
-  $: groupedApis = (() => {
+  let groupedApis = $derived((() => {
     const groups: Record<string, any[]> = {};
 
     // Initialize custom folders empty
-    customFolders.forEach((f) => (groups[f] = []));
+    (Array.isArray(customFolders) ? customFolders : []).forEach((f) => (groups[f] = []));
 
     // Use paginated list instead of full apis list
-    paginatedApisForDisplay
+    const safePaginated = Array.isArray(paginatedApisForDisplay) ? paginatedApisForDisplay : [];
+    safePaginated
       .sort((a, b) => a.order_index - b.order_index)
       .forEach((api) => {
         const folder = api.folder || "Uncategorized";
@@ -448,12 +455,12 @@ if (errorReason && errorReason.includes("401")) {
       });
 
     // Make sure 'Uncategorized' defaults first or last
-    if (!groups["Uncategorized"] && Object.keys(groups).length === 0 && paginatedApisForDisplay.length > 0) {
+    if (!groups["Uncategorized"] && Object.keys(groups).length === 0 && safePaginated.length > 0) {
       groups["Uncategorized"] = [];
     }
 
     return groups;
-  })();
+  })());
 
   // Parse cURL Paste
   function handleUrlPaste(e: ClipboardEvent) {
@@ -605,9 +612,10 @@ if (errorReason && errorReason.includes("401")) {
       customFolders = [...customFolders, newName];
     }
 
-    let updatedApis = apis.filter((a) => a.folder === selectedFolderToEdit);
+    const safeApis = Array.isArray(apis) ? apis : [];
+    let updatedApis = safeApis.filter((a) => a.folder === selectedFolderToEdit);
     updatedApis.forEach((a) => (a.folder = newName));
-    apis = [...apis];
+    apis = [...safeApis];
 
     showEditFolderModal = false;
     if (updatedApis.length > 0) {
@@ -617,13 +625,14 @@ if (errorReason && errorReason.includes("401")) {
   }
 
   async function handleDeleteFolderSubmit() {
-    customFolders = customFolders.filter((f) => f !== selectedFolderToDelete);
+    customFolders = Array.isArray(customFolders) ? customFolders.filter((f) => f !== selectedFolderToDelete) : [];
 
-    let updatedApis = apis.filter((a) => a.folder === selectedFolderToDelete);
-    updatedApis.forEach((a) => (a.folder = "Uncategorized"));
+    const safeApis2 = Array.isArray(apis) ? apis : [];
+    let updatedApis2 = safeApis2.filter((a) => a.folder === selectedFolderToDelete);
+    updatedApis2.forEach((a) => (a.folder = "Uncategorized"));
 
-    apis = [...apis];
-    let uncategorizedApis = apis
+    apis = [...safeApis2];
+    let uncategorizedApis = safeApis2
       .filter((a) => a.folder === "Uncategorized")
       .sort((a, b) => a.order_index - b.order_index);
     uncategorizedApis.forEach((fa, idx) => (fa.order_index = idx));
@@ -780,7 +789,8 @@ if (errorReason && errorReason.includes("401")) {
         project = await projRes.json();
         if (project.folders) {
           try {
-            customFolders = JSON.parse(project.folders);
+            const parsed = JSON.parse(project.folders);
+            customFolders = Array.isArray(parsed) ? parsed : [];
           } catch(e) {
             customFolders = [];
           }
@@ -941,10 +951,11 @@ if (errorReason && errorReason.includes("401")) {
   }
 
   // --- Bulk Selection Logic --- //
-  $: allApisList = apis; // Flatted list of all APIs for the project
-  $: allSelected = apis.length > 0 && selectedApiIds.length === apis.length;
-  $: indeterminate =
-    selectedApiIds.length > 0 && selectedApiIds.length < apis.length;
+  let allApisList = $derived(apis || []);
+  let allSelected = $derived((apis || []).length > 0 && (selectedApiIds || []).length === (apis || []).length);
+  let indeterminate = $derived(
+    (selectedApiIds || []).length > 0 && (selectedApiIds || []).length < (apis || []).length
+  );
 
   let isAnalyzingRCA = false;
   function analyzeIncident(_logId: string) {
@@ -982,18 +993,20 @@ if (errorReason && errorReason.includes("401")) {
   }
 
   function toggleAllSelection() {
+    const safeApis = Array.isArray(apis) ? apis : [];
     if (allSelected) {
       selectedApiIds = [];
     } else {
-      selectedApiIds = apis.map((a) => a.id);
+      selectedApiIds = safeApis.map((a) => a.id);
     }
   }
 
   function toggleSelection(id: string) {
-    if (selectedApiIds.includes(id)) {
-      selectedApiIds = selectedApiIds.filter((i) => i !== id);
+    const safeIds = Array.isArray(selectedApiIds) ? selectedApiIds : [];
+    if (safeIds.includes(id)) {
+      selectedApiIds = safeIds.filter((i) => i !== id);
     } else {
-      selectedApiIds = [...selectedApiIds, id];
+      selectedApiIds = [...safeIds, id];
     }
   }
 
@@ -1356,7 +1369,7 @@ if (errorReason && errorReason.includes("401")) {
       if (await handleAuthError(res, "delete this API")) return;
 
       if (res.ok) {
-        apis = apis.filter((a) => a.id !== selectedApi.id);
+        apis = Array.isArray(apis) ? apis.filter((a) => a.id !== selectedApi.id) : [];
         systemToast.fire({ icon: "success", title: "Deleted", text: "API endpoint removed." });
         await fetchProjectDetails();
       } else {
@@ -1531,6 +1544,114 @@ if (errorReason && errorReason.includes("401")) {
     } catch (err) {
       console.error("Bulk delete failed:", err);
       systemAlert.fire({ icon: "error", title: "Network Error", text: "Could not reach the server." });
+    }
+  }
+
+  async function handleBulkPause() {
+    const { value: formValues } = await Swal.fire({
+      background: '#0f172a',
+      color: '#f8fafc',
+      title: `<span style="font-size:16px;font-weight:900;color:#f1f5f9;font-family:monospace;">⏸ Pause ${selectedApiIds.length} API(s)</span>`,
+      html: `
+        <div style="text-align:left;padding:8px 0;font-family:monospace;">
+          <div style="margin-bottom:12px;">
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid rgba(245,158,11,0.3);background:rgba(245,158,11,0.05);margin-bottom:8px;">
+              <input type="radio" name="bulkPauseType" value="duration" id="bp-duration" checked style="accent-color:#f59e0b;width:16px;height:16px;"/>
+              <div>
+                <div style="color:#fbbf24;font-weight:800;font-size:13px;">⏱ Pause ชั่วคราว</div>
+                <div style="color:#94a3b8;font-size:11px;margin-top:2px;">หยุด monitor ชั่วคราว แล้วกลับมา auto</div>
+              </div>
+            </label>
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.05);margin-bottom:8px;">
+              <input type="radio" name="bulkPauseType" value="indefinite" id="bp-indefinite" style="accent-color:#ef4444;width:16px;height:16px;"/>
+              <div>
+                <div style="color:#f87171;font-weight:800;font-size:13px;">🔴 Pause ไม่มีกำหนด</div>
+                <div style="color:#94a3b8;font-size:11px;margin-top:2px;">หยุดถาวรจนกว่าจะ resume เอง</div>
+              </div>
+            </label>
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid rgba(16,185,129,0.3);background:rgba(16,185,129,0.05);">
+              <input type="radio" name="bulkPauseType" value="resume" id="bp-resume" style="accent-color:#10b981;width:16px;height:16px;"/>
+              <div>
+                <div style="color:#34d399;font-weight:800;font-size:13px;">▶ Resume ทั้งหมด</div>
+                <div style="color:#94a3b8;font-size:11px;margin-top:2px;">เปิดการ monitor กลับมาทันที</div>
+              </div>
+            </label>
+          </div>
+          <div id="bp-duration-input" style="padding:12px;background:rgba(15,23,42,0.8);border-radius:10px;border:1px solid rgba(71,85,105,0.4);">
+            <label style="color:#94a3b8;font-size:11px;font-weight:700;display:block;margin-bottom:6px;">ระยะเวลา Pause (นาที)</label>
+            <input id="bp-minutes" type="number" min="1" value="60" style="width:100%;background:#0f172a;border:1px solid rgba(6,182,212,0.4);border-radius:8px;padding:8px 12px;color:#67e8f9;font-size:14px;font-family:monospace;outline:none;"/>
+          </div>
+        </div>
+      `,
+      didOpen: () => {
+        const radios = document.querySelectorAll('input[name="bulkPauseType"]');
+        const durationInput = document.getElementById('bp-duration-input');
+        radios.forEach(r => {
+          r.addEventListener('change', (e: any) => {
+            if (durationInput) durationInput.style.display = e.target.value === 'duration' ? 'block' : 'none';
+          });
+        });
+      },
+      preConfirm: () => {
+        const type = (document.querySelector('input[name="bulkPauseType"]:checked') as HTMLInputElement)?.value || 'duration';
+        const minutes = parseInt((document.getElementById('bp-minutes') as HTMLInputElement)?.value || '60', 10);
+        return { type, minutes: isNaN(minutes) || minutes < 1 ? 60 : minutes };
+      },
+      showCancelButton: true,
+      confirmButtonText: 'ยืนยัน',
+      cancelButtonText: 'ยกเลิก',
+      confirmButtonColor: '#f59e0b',
+    });
+
+    if (!formValues) return;
+
+    const { type, minutes } = formValues;
+    let duration_minutes = 0;
+    let label = '';
+    if (type === 'indefinite') {
+      duration_minutes = -1;
+      label = 'Paused indefinitely';
+    } else if (type === 'duration') {
+      duration_minutes = minutes;
+      label = `Paused for ${minutes} minute(s)`;
+    } else {
+      duration_minutes = 0;
+      label = 'Resumed';
+    }
+
+    try {
+      const token = localStorage.getItem('monitor_token');
+      systemToast.fire({ icon: 'info', title: 'Processing...', text: `Applying to ${selectedApiIds.length} APIs...` });
+
+      const promises = selectedApiIds.map((id) =>
+        fetch(`${API_BASE_URL}/api/v1/apis/${id}/pause`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ duration_minutes }),
+        })
+      );
+
+      const results = await Promise.all(promises);
+      const hasUnauth = results.find((r) => r.status === 401);
+      if (hasUnauth) { await handleAuthError(hasUnauth, 'pause APIs'); return; }
+      const hasForbidden = results.find((r) => r.status === 403);
+      if (hasForbidden) { await handleAuthError(hasForbidden, 'pause APIs'); return; }
+
+      const allOk = results.every((r) => r.ok);
+      if (allOk || results.some((r) => r.ok)) {
+        selectedApiIds = [];
+        await fetchProjectDetails();
+        systemToast.fire({
+          icon: 'success',
+          title: type === 'resume' ? '▶ Resumed' : '⏸ Paused',
+          text: `${allOk ? 'All' : 'Some'} APIs: ${label}`,
+        });
+      } else {
+        systemAlert.fire({ icon: 'error', title: 'Error', text: 'Failed to update pause status.' });
+      }
+    } catch (err) {
+      console.error(err);
+      systemAlert.fire({ icon: 'error', title: 'Network Error', text: 'Could not reach the server.' });
     }
   }
 
@@ -1823,6 +1944,13 @@ if (errorReason && errorReason.includes("401")) {
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
             Set Schedule
+          </button>
+          <button
+            onclick={handleBulkPause}
+            class="bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 hover:text-amber-300 border border-amber-500/30 font-bold py-1.5 px-4 rounded-lg shadow-[0_0_10px_rgba(245,158,11,0.1)] transition-colors text-sm flex items-center gap-2 font-mono tracking-wide"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+            Pause Selected
           </button>
           <button
             onclick={() => (showBulkDeleteModal = true)}
