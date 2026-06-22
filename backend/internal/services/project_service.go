@@ -36,13 +36,19 @@ func (s *projectService) GetProjectsForUser(userID uuid.UUID, role string) ([]mo
 	var projects []models.Project
 	query := s.db.Preload("APIs")
 	
+	var err error
 	if role == "admin" {
-		err := query.Find(&projects).Error
-		return projects, err
+		err = query.Find(&projects).Error
+	} else {
+		err = query.Where("user_id = ? OR id IN (SELECT project_id FROM project_members WHERE user_id = ?)", userID, userID).Find(&projects).Error
+	}
+	if err != nil {
+		return nil, err
 	}
 
-	err := query.Where("user_id = ? OR id IN (SELECT project_id FROM project_members WHERE user_id = ?)", userID, userID).Find(&projects).Error
-	return projects, err
+	s.preloadLatestLogs(&projects)
+
+	return projects, nil
 }
 
 func (s *projectService) GetProjectByID(projectID string, userID uuid.UUID, role string) (*models.Project, error) {
@@ -59,7 +65,52 @@ func (s *projectService) GetProjectByID(projectID string, userID uuid.UUID, role
 		return nil, errors.New("Project not found or unauthorized")
 	}
 
+	// Preload latest log for each API — wrap in slice so pointer mutation works
+	projects := []models.Project{project}
+	s.preloadLatestLogs(&projects)
+	project.APIs = projects[0].APIs
+
 	return &project, nil
+}
+
+// preloadLatestLogs fetches the latest MonitorLog per API and injects it back into the project list.
+func (s *projectService) preloadLatestLogs(projects *[]models.Project) {
+	if projects == nil || len(*projects) == 0 {
+		return
+	}
+
+	// Collect all API IDs across all projects
+	var apiIDs []interface{}
+	for pi := range *projects {
+		for _, a := range (*projects)[pi].APIs {
+			apiIDs = append(apiIDs, a.ID)
+		}
+	}
+	if len(apiIDs) == 0 {
+		return
+	}
+
+	var latestLogs []models.MonitorLog
+	s.db.Raw(`
+		SELECT DISTINCT ON (api_id) *
+		FROM monitor_logs
+		WHERE api_id IN (?)
+		  AND deleted_at IS NULL
+		ORDER BY api_id, checked_at DESC
+	`, apiIDs).Scan(&latestLogs)
+
+	logMap := make(map[string]models.MonitorLog)
+	for _, log := range latestLogs {
+		logMap[log.ApiID.String()] = log
+	}
+
+	for pi := range *projects {
+		for ai := range (*projects)[pi].APIs {
+			if log, ok := logMap[(*projects)[pi].APIs[ai].ID.String()]; ok {
+				(*projects)[pi].APIs[ai].Logs = []models.MonitorLog{log}
+			}
+		}
+	}
 }
 
 func (s *projectService) CreateProject(project *models.Project) error {

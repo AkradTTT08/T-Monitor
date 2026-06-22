@@ -1,4 +1,4 @@
-﻿<script lang="ts">
+<script lang="ts">
   import { page } from "$app/state";
   import { onMount, tick } from "svelte";
   import Swal from "sweetalert2";
@@ -776,7 +776,7 @@ if (errorReason && errorReason.includes("401")) {
         fetch(`${API_BASE_URL}/api/v1/projects/${targetId}`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        fetch(`${API_BASE_URL}/api/v1/apis?project_id=${targetId}`, {
+        fetch(`${API_BASE_URL}/api/v1/apis?project_id=${targetId}&limit=10000`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
       ]);

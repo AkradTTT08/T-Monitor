@@ -7,7 +7,6 @@
   let apis: any[] = [];
   let projects: any[] = [];
   let isLoading = true;
-  let selectedProjectId = "";
 
   // Doc layout state
   let selectedDocApi: any = null;
@@ -20,7 +19,8 @@
   let totalItems = 0;
   let itemsPerPage = 100;
   let searchTimeout: any;
-  let isProjectDropdownOpen = false;
+  // Silent project filter — read from URL param or localStorage, no UI dropdown
+  let selectedProjectId = "";
 
   $: totalPages = Math.ceil(totalItems / itemsPerPage);
 
@@ -112,6 +112,7 @@
   })();
 
   onMount(async () => {
+    // Read project_id from URL param or localStorage (set by project page navigation)
     selectedProjectId =
       page.url.searchParams.get("project_id") ||
       localStorage.getItem("monitor_selected_project") ||
@@ -182,16 +183,6 @@
     fetchAPIs();
   }
 
-  function handleFilterChange() {
-    currentPage = 1;
-    isProjectDropdownOpen = false;
-    fetchAPIs();
-  }
-
-  function selectProject(id: string) {
-    selectedProjectId = id;
-    handleFilterChange();
-  }
 
   function replaceVariables(input: string, envVars: any): string {
     if (!input) return "";
@@ -199,6 +190,40 @@
       const trimmedKey = key.trim();
       return envVars[trimmedKey] !== undefined ? envVars[trimmedKey] : match;
     });
+  }
+
+  // Strip // single-line and /* */ multi-line comments from JSON-like strings
+  function stripJSONComments(str: string): string {
+    let result = '';
+    let inString = false;
+    let i = 0;
+    while (i < str.length) {
+      const ch = str[i];
+      // Toggle string context (handle escaped quotes)
+      if (ch === '"' && (i === 0 || str[i - 1] !== '\\')) {
+        inString = !inString;
+        result += ch;
+        i++;
+        continue;
+      }
+      if (!inString) {
+        // Single-line comment
+        if (ch === '/' && str[i + 1] === '/') {
+          while (i < str.length && str[i] !== '\n') i++;
+          continue;
+        }
+        // Multi-line comment
+        if (ch === '/' && str[i + 1] === '*') {
+          i += 2;
+          while (i < str.length && !(str[i] === '*' && str[i + 1] === '/')) i++;
+          i += 2;
+          continue;
+        }
+      }
+      result += ch;
+      i++;
+    }
+    return result;
   }
 
   async function executeApiTest() {
@@ -284,7 +309,7 @@
           method: reqMethod,
           url: finalUrl,
           headers: parsedHeaders,
-          body: processedBody,
+          body: stripJSONComments(processedBody),
         }),
       });
 
@@ -320,27 +345,7 @@
         class="bg-slate-900 border border-slate-700 rounded-lg px-8 py-1.5 text-xs text-slate-300 font-mono focus:outline-none focus:border-cyan-500/50 w-52 placeholder:text-slate-600"/>
       <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
     </div>
-    <!-- Project selector -->
-    <div class="relative">
-      <button on:click={() => (isProjectDropdownOpen = !isProjectDropdownOpen)}
-        class="flex items-center gap-2 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-cyan-400 font-mono hover:border-cyan-500/40 transition-all min-w-[160px] justify-between">
-        <span class="truncate">{selectedProjectId ? (projects.find(p => p.id === selectedProjectId)?.name || 'All Projects') : 'All Projects'}</span>
-        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="{isProjectDropdownOpen ? 'rotate-180' : ''} transition-transform"><path d="m6 9 6 6 6-6"/></svg>
-      </button>
-      {#if isProjectDropdownOpen}
-        <div class="absolute top-full left-0 mt-1 w-full min-w-[200px] bg-slate-900 border border-slate-700 rounded-xl z-50 shadow-2xl overflow-hidden">
-          <div class="max-h-[280px] overflow-y-auto p-1">
-            <button on:click={() => { selectedProjectId=''; handleFilterChange(); }}
-              class="w-full text-left px-3 py-2 rounded-lg text-xs font-mono hover:bg-slate-800 {selectedProjectId==='' ? 'text-cyan-400 font-black' : 'text-slate-400'}">All Projects</button>
-            {#each projects as p}
-              <button on:click={() => { selectedProjectId = p.id; handleFilterChange(); }}
-                class="w-full text-left px-3 py-2 rounded-lg text-xs font-mono hover:bg-slate-800 {selectedProjectId===p.id ? 'text-cyan-400 font-black' : 'text-slate-400'}">{p.name}</button>
-            {/each}
-          </div>
-        </div>
-        <div class="fixed inset-0 z-40" role="button" tabindex="-1" aria-label="close" on:click={() => (isProjectDropdownOpen=false)} on:keydown={(e) => e.key==='Escape' && (isProjectDropdownOpen=false)}></div>
-      {/if}
-    </div>
+
   </div>
 
   <!-- ── MAIN 3-COLUMN AREA ── -->

@@ -66,14 +66,26 @@ func BuildRequest(api models.API, envVars map[string]string) (*http.Request, err
 			}
 		}
 
-		// Apply parameters: Path variables first, then Query string
+		// Apply parameters: Path variables first ({id}, {{id}}, :id styles), then Query string
 		if len(allParams) > 0 {
 			queryParams := url.Values{}
 			for _, p := range allParams {
-				pathVarPlaceholder := ":" + p.Key
-				if strings.Contains(targetURL, pathVarPlaceholder) {
-					targetURL = strings.ReplaceAll(targetURL, pathVarPlaceholder, url.PathEscape(p.Value))
+				escaped := url.PathEscape(p.Value)
+				// Support {{key}} style (double-brace, Postman-like)
+				doubleBrace := "{{" + p.Key + "}}"
+				// Support {key} style (single-brace, OpenAPI/Swagger-like)
+				singleBrace := "{" + p.Key + "}"
+				// Support :key style (Express/Fiber-like)
+				colonStyle := ":" + p.Key
+
+				if strings.Contains(targetURL, doubleBrace) {
+					targetURL = strings.ReplaceAll(targetURL, doubleBrace, escaped)
+				} else if strings.Contains(targetURL, singleBrace) {
+					targetURL = strings.ReplaceAll(targetURL, singleBrace, escaped)
+				} else if strings.Contains(targetURL, colonStyle) {
+					targetURL = strings.ReplaceAll(targetURL, colonStyle, escaped)
 				} else {
+					// Not a path variable → append as query param
 					queryParams.Add(p.Key, p.Value)
 				}
 			}
@@ -98,7 +110,7 @@ func BuildRequest(api models.API, envVars map[string]string) (*http.Request, err
 	// 4. Create HTTP Request
 	var reqBody []byte
 	if bodyStr != "" {
-		reqBody = []byte(bodyStr)
+		reqBody = []byte(stripJSONComments(bodyStr))
 	}
 
 	req, err := http.NewRequest(api.Method, targetURL, bytes.NewBuffer(reqBody))
@@ -136,4 +148,45 @@ func BuildRequest(api models.API, envVars map[string]string) (*http.Request, err
 	}
 
 	return req, nil
+}
+
+// stripJSONComments removes // single-line and /* */ multi-line comments from a string,
+// while correctly ignoring comment syntax inside quoted JSON string values.
+func stripJSONComments(input string) string {
+	runes := []rune(input)
+	n := len(runes)
+	var result []rune
+	inString := false
+	i := 0
+	for i < n {
+		ch := runes[i]
+		// Track string boundaries, respecting backslash escapes
+		if ch == '"' && (i == 0 || runes[i-1] != '\\') {
+			inString = !inString
+			result = append(result, ch)
+			i++
+			continue
+		}
+		if !inString {
+			// Single-line comment: // ... \n
+			if i+1 < n && ch == '/' && runes[i+1] == '/' {
+				for i < n && runes[i] != '\n' {
+					i++
+				}
+				continue
+			}
+			// Multi-line comment: /* ... */
+			if i+1 < n && ch == '/' && runes[i+1] == '*' {
+				i += 2
+				for i+1 < n && !(runes[i] == '*' && runes[i+1] == '/') {
+					i++
+				}
+				i += 2 // skip closing */
+				continue
+			}
+		}
+		result = append(result, ch)
+		i++
+	}
+	return string(result)
 }
