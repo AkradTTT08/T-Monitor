@@ -468,14 +468,30 @@
             </div>
             {#if testResult && !testResult.error}
               {#if testResult.is_json && testResult.response}
-                {#each Object.entries(testResult.response) as [key, val]}
-                  <div class="border-t border-slate-800/60 py-3">
-                    <div class="flex items-center gap-3">
-                      <code class="font-black text-slate-300 text-sm">{key}</code>
-                      <span class="text-slate-600 text-xs font-mono">{Array.isArray(val) ? 'list of objects' : typeof val}</span>
-                    </div>
+                {#if Array.isArray(testResult.response)}
+                  <!-- Array response: show badge + keys from first element -->
+                  <div class="border-t border-slate-800/60 py-3 flex items-center gap-2">
+                    <span class="px-2 py-0.5 text-[10px] font-black rounded border bg-blue-950 border-blue-500/40 text-blue-400">ARRAY</span>
+                    <span class="text-slate-500 text-xs font-mono">{testResult.response.length} items</span>
                   </div>
-                {/each}
+                  {#each Object.entries(testResult.response[0] ?? {}) as [key, val]}
+                    <div class="border-t border-slate-800/60 py-3">
+                      <div class="flex items-center gap-3">
+                        <code class="font-black text-slate-300 text-sm">{key}</code>
+                        <span class="text-slate-600 text-xs font-mono">{Array.isArray(val) ? 'array' : typeof val}</span>
+                      </div>
+                    </div>
+                  {/each}
+                {:else}
+                  {#each Object.entries(testResult.response) as [key, val]}
+                    <div class="border-t border-slate-800/60 py-3">
+                      <div class="flex items-center gap-3">
+                        <code class="font-black text-slate-300 text-sm">{key}</code>
+                        <span class="text-slate-600 text-xs font-mono">{Array.isArray(val) ? 'array' : typeof val}</span>
+                      </div>
+                    </div>
+                  {/each}
+                {/if}
               {/if}
             {:else}
               <div class="border-t border-slate-800/60 py-3">
