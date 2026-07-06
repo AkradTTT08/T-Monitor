@@ -143,6 +143,7 @@ func checkAPIs() {
 	for projectID, group := range projectGroups {
 		mode := execModeMap[projectID]
 		groupCopy := group // capture for goroutine
+		pidCopy := projectID
 
 		if mode == "parallel" {
 			// Parallel: fire all APIs in the project simultaneously
@@ -150,15 +151,54 @@ func checkAPIs() {
 				go RunPing(ctx.api, ctx.vars, ctx.projectName, ctx.companyName)
 			}
 		} else {
-			// Sequential (default): wait for each API to finish before starting next
-			// Sort by order_index to respect user-defined order
-			go func(items []apiWithContext) {
-				for _, ctx := range items {
-					RunPing(ctx.api, ctx.vars, ctx.projectName, ctx.companyName)
+			// Sequential (default): wait for each API to finish before starting next.
+			// Pinned APIs (is_pinned=true) always run first regardless of order_index,
+			// so e.g. a Login API can refresh a token before other APIs use it.
+			// Re-fetch envVars from DB between each call so that setenv() results
+			// (e.g. a fresh auth token) are available to subsequent APIs.
+			go func(items []apiWithContext, projID uuid.UUID) {
+				// Sort: pinned first, then by order_index ascending
+				sorted := make([]apiWithContext, len(items))
+				copy(sorted, items)
+				for i := 0; i < len(sorted); i++ {
+					for j := i + 1; j < len(sorted); j++ {
+						iPin := sorted[i].api.IsPinned
+						jPin := sorted[j].api.IsPinned
+						if !iPin && jPin {
+							sorted[i], sorted[j] = sorted[j], sorted[i]
+						} else if iPin == jPin && sorted[i].api.OrderIndex > sorted[j].api.OrderIndex {
+							sorted[i], sorted[j] = sorted[j], sorted[i]
+						}
+					}
 				}
-			}(groupCopy)
+
+				currentVars := sorted[0].vars // start with the snapshot loaded earlier
+				for i, ctx := range sorted {
+					RunPing(ctx.api, currentVars, ctx.projectName, ctx.companyName)
+					// After each API, reload env from DB so the next API picks up
+					// freshly-saved values (e.g. token written by setenv()).
+					if i < len(sorted)-1 {
+						currentVars = reloadEnvVars(projID)
+					}
+				}
+			}(groupCopy, pidCopy)
 		}
 	}
+}
+
+// reloadEnvVars fetches the latest environment_variables for a project from DB.
+func reloadEnvVars(projectID uuid.UUID) map[string]string {
+	var result struct {
+		EnvironmentVariables string
+	}
+	database.DB.Model(&models.Project{}).Select("environment_variables").
+		Where("id = ?", projectID).Scan(&result)
+
+	vars := make(map[string]string)
+	if result.EnvironmentVariables != "" && result.EnvironmentVariables != "{}" {
+		importJSON(result.EnvironmentVariables, &vars)
+	}
+	return vars
 }
 
 
@@ -169,7 +209,7 @@ func RunPing(api models.API, envVars map[string]string, projectName string, comp
 	// 1. Build Request
 	req, err := BuildRequest(api, envVars)
 	if err != nil {
-		handleResult(api, nil, "", err, 0, projectName, companyName)
+		handleResult(api, nil, "", err, 0, projectName, companyName, envVars)
 		return
 	}
 
@@ -186,12 +226,17 @@ func RunPing(api models.API, envVars map[string]string, projectName string, comp
 		resp.Body.Close()
 	}
 
-	// 3. Evaluate & Handle Result
-	handleResult(api, resp, bodyStr, err, duration, projectName, companyName)
+	// 3. Evaluate & Handle Result (pass envVars so setenv() updates can be persisted)
+	handleResult(api, resp, bodyStr, err, duration, projectName, companyName, envVars)
 }
 
-func handleResult(api models.API, resp *http.Response, bodyStr string, reqErr error, duration time.Duration, projectName string, companyName string) {
-	isSuccess, errorMessage := EvaluateResult(api, resp, bodyStr, reqErr, duration)
+func handleResult(api models.API, resp *http.Response, bodyStr string, reqErr error, duration time.Duration, projectName string, companyName string, envVars map[string]string) {
+	isSuccess, errorMessage, envUpdates := EvaluateResultWithEnv(api, resp, bodyStr, reqErr, duration)
+
+	// Persist any setenv() updates back to the project's environment_variables
+	if len(envUpdates) > 0 {
+		applyEnvUpdates(api.ProjectID, envVars, envUpdates)
+	}
 
 	statusCode := 0
 	if resp != nil {
@@ -255,6 +300,41 @@ func handleResult(api models.API, resp *http.Response, bodyStr string, reqErr er
 			log.Printf("[Recovery] Running recovery script for API %s", api.Name)
 		}
 	}
+}
+
+// applyEnvUpdates merges setenv() results from a script back into the project's
+// environment_variables column so subsequent API checks in the same project can
+// pick up the updated values (e.g. a fresh auth token).
+func applyEnvUpdates(projectID uuid.UUID, currentVars map[string]string, updates map[string]string) {
+	merged := make(map[string]string)
+	for k, v := range currentVars {
+		merged[k] = v
+	}
+	for k, v := range updates {
+		merged[k] = v
+		log.Printf("[Env] 🔑 setenv(%q) saved for project_id=%s", k, projectID)
+	}
+
+	jsonBytes, err := json.Marshal(merged)
+	if err != nil {
+		log.Printf("[Env] ❌ Failed to marshal env updates: %v", err)
+		return
+	}
+
+	if dbErr := database.DB.Model(&models.Project{}).Where("id = ?", projectID).
+		Update("environment_variables", string(jsonBytes)).Error; dbErr != nil {
+		log.Printf("[Env] ❌ Failed to save env updates to DB: %v", dbErr)
+	} else {
+		log.Printf("[Env] ✅ ENV updated in DB for project_id=%s keys=%v", projectID, keys(updates))
+	}
+}
+
+func keys(m map[string]string) []string {
+	ks := make([]string, 0, len(m))
+	for k := range m {
+		ks = append(ks, k)
+	}
+	return ks
 }
 
 func importJSON(s string, v interface{}) {

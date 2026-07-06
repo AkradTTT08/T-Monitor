@@ -20,14 +20,24 @@ import (
 
 // DispatchAlerts handles sending notifications to configured channels
 func DispatchAlerts(api models.API, errorMsg string, projectName string, companyName string) {
+	log.Printf("[Dispatch] 🔔 Triggered for API=%s project_id=%s", api.Name, api.ProjectID)
+
 	var config models.NotificationConfig
 	if err := database.DB.First(&config, "project_id = ?", api.ProjectID).Error; err != nil {
-		return // No config found
+		log.Printf("[Dispatch] ❌ No notification config found for project_id=%s: %v", api.ProjectID, err)
+		return
 	}
+
+	log.Printf("[Dispatch] ✅ Config found — enable_telegram=%v token_len=%d chat_id=%q",
+		config.EnableTelegram, len(config.TelegramBotToken), config.TelegramChatID)
 
 	// Telegram
 	if config.EnableTelegram && config.TelegramBotToken != "" && config.TelegramChatID != "" {
+		log.Printf("[Dispatch] 📨 Sending Telegram alert to chat_id=%s", config.TelegramChatID)
 		go sendTelegramAlert(config.TelegramBotToken, config.TelegramChatID, api.Name, errorMsg, projectName)
+	} else {
+		log.Printf("[Dispatch] ⚠️  Telegram skipped — enable=%v token_empty=%v chatid_empty=%v",
+			config.EnableTelegram, config.TelegramBotToken == "", config.TelegramChatID == "")
 	}
 
 	// LINE
@@ -47,12 +57,13 @@ func DispatchAlerts(api models.API, errorMsg string, projectName string, company
 }
 
 func sendTelegramAlert(botToken, chatID, apiName, errorMsg, projectName string) {
-	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", botToken)
-	
+	tgURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", botToken)
+	log.Printf("[Telegram] 📤 Calling API url=https://api.telegram.org/bot<token>/sendMessage chat_id=%s", chatID)
+
 	safeProjectName := html.EscapeString(projectName)
 	safeApiName := html.EscapeString(apiName)
 	safeErrorMsg := html.EscapeString(errorMsg)
-	
+
 	message := fmt.Sprintf("🚨 <b>API Alert</b>\n\n<b>Project:</b> %s\n<b>API:</b> %s\n<b>Error:</b> <code>%s</code>\n\n<i>Powered by T-Monitor</i>", safeProjectName, safeApiName, safeErrorMsg)
 
 	payload := map[string]string{
@@ -62,15 +73,17 @@ func sendTelegramAlert(botToken, chatID, apiName, errorMsg, projectName string) 
 	}
 	jsonPayload, _ := json.Marshal(payload)
 
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonPayload))
+	resp, err := http.Post(tgURL, "application/json", bytes.NewBuffer(jsonPayload))
 	if err != nil {
-		log.Printf("[Telegram] Failed to send alert: %v", err)
+		log.Printf("[Telegram] ❌ HTTP error: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("[Telegram] ❌ API error (Status %d): %s", resp.StatusCode, string(bodyBytes))
 	} else {
-		if resp.StatusCode != http.StatusOK {
-			bodyBytes, _ := io.ReadAll(resp.Body)
-			log.Printf("[Telegram] Error from API (Status %d): %s", resp.StatusCode, string(bodyBytes))
-		}
-		resp.Body.Close()
+		log.Printf("[Telegram] ✅ Alert sent successfully to chat_id=%s", chatID)
 	}
 }
 

@@ -30,6 +30,7 @@ type APIInput struct {
 	ResponseScript     string    `json:"response_script"`
 	RecoveryScript     string    `json:"recovery_script"`
 	OrderIndex         int       `json:"order_index"`
+	IsPinned           bool      `json:"is_pinned"`
 }
 
 func CreateAPI(c *fiber.Ctx) error {
@@ -220,6 +221,9 @@ func UpdateAPI(c *fiber.Ctx) error {
 	}
 	if _, ok := body["recovery_script"]; ok {
 		updateData["recovery_script"] = input.RecoveryScript
+	}
+	if _, ok := body["is_pinned"]; ok {
+		updateData["is_pinned"] = input.IsPinned
 	}
 
 	svc := services.NewAPIService(nil)

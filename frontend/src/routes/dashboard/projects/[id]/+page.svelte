@@ -853,6 +853,34 @@ if (errorReason && errorReason.includes("401")) {
     }
   }
 
+  // ===== Toggle Pin: ยิงก่อนเสมอใน Sequential mode =====
+  async function handleTogglePin(api: any) {
+    const newPinned = !api.is_pinned;
+    try {
+      const token = localStorage.getItem('monitor_token');
+      const res = await fetch(`${API_BASE_URL}/api/v1/apis/${api.id}`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ is_pinned: newPinned }),
+      });
+      if (res.ok) {
+        apis = apis.map((a: any) => a.id === api.id ? { ...a, is_pinned: newPinned } : a);
+        systemToast.fire({
+          icon: 'success',
+          title: newPinned ? '📌 ปักหมุดแล้ว' : '📌 ยกเลิกการปักหมุด',
+          text: newPinned
+            ? `${api.name} จะยิงก่อน API อื่นๆ เสมอ`
+            : `${api.name} กลับไปเรียงตาม order_index ปกติ`,
+        });
+      }
+    } catch (err) {
+      console.error('Failed to toggle pin:', err);
+    }
+  }
+
   async function fetchMembersData() {
     if (!projectId) return;
     try {
@@ -2151,7 +2179,18 @@ if (errorReason && errorReason.includes("401")) {
                   <td
                     class="p-3 md:p-4 text-cyan-50 truncate max-w-[150px] md:max-w-xs"
                   >
-                    <span class="font-bold">{api.name}</span>
+                    <div class="flex items-center gap-2">
+                      {#if api.is_pinned}
+                        <span
+                          class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider bg-amber-950/60 border border-amber-500/50 text-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.3)] shrink-0"
+                          title="ปักหมุด: ยิงก่อนทุก API"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/></svg>
+                          FIRST
+                        </span>
+                      {/if}
+                      <span class="font-bold">{api.name}</span>
+                    </div>
                   </td>
                   <td
                     class="p-3 md:p-4 text-slate-500 text-sm truncate max-w-[150px] md:max-w-xs"
@@ -2233,6 +2272,22 @@ if (errorReason && errorReason.includes("401")) {
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
                       </button>
                     {/if}
+                    <!-- Pin Button: ยิงก่อน API อื่นในโหมด Sequential -->
+                    <button
+                      onclick={() => handleTogglePin(api)}
+                      class="transition-colors p-1.5 rounded-lg border hover:bg-slate-900 hover:shadow-[0_0_10px_rgba(245,158,11,0.25)]
+                        {api.is_pinned
+                          ? 'text-amber-400 border-amber-500/40 bg-amber-950/30 shadow-[0_0_8px_rgba(245,158,11,0.2)]'
+                          : 'text-cyan-500/50 border-transparent hover:text-amber-400 hover:border-amber-500/30'}"
+                      title={api.is_pinned ? 'ยกเลิกการปักหมุด (ยิงก่อนเสมอ)' : 'ปักหมุด: ให้ API นี้ยิงก่อน API อื่นๆ เสมอ'}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                        fill={api.is_pinned ? 'currentColor' : 'none'}
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                      >
+                        <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/>
+                      </svg>
+                    </button>
                     <button
                       onclick={() => openEditApiModal(api)}
                       class="text-cyan-500/80 hover:text-cyan-400 transition-colors p-1.5 rounded-lg hover:bg-slate-900 border border-transparent hover:border-cyan-500/30 hover:shadow-[0_0_10px_rgba(6,182,212,0.2)]"

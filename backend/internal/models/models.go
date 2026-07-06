@@ -126,6 +126,7 @@ type API struct {
 	RecoveryScript     string         `gorm:"type:text" json:"recovery_script"` // JavaScript for self-healing/auto-retry
 	OrderIndex         int            `gorm:"default:0" json:"order_index"`
 	IsActive           bool           `gorm:"default:true" json:"is_active"`
+	IsPinned           bool           `gorm:"default:false" json:"is_pinned"` // Pinned APIs run first in sequential mode
 	PausedUntil        *time.Time     `json:"paused_until"` // Added for pause feature
 	Logs               []MonitorLog   `gorm:"foreignKey:ApiID" json:"logs,omitempty"`
 	CreatedAt          time.Time      `json:"created_at"`
