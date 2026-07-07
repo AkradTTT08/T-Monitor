@@ -73,6 +73,12 @@
   let isTestingApi = false;
   let testResult: any = null;
 
+  // ── Run All state ──
+  let isRunningAll = false;
+  let showRunAllModal = false;
+  let runAllResults: { api: any; status: number | null; latency: number | null; passed: boolean; error: string | null }[] = [];
+  let runAllProgress = 0;
+
   // Editable request fields
   let reqUrl = "";
   let reqMethod = "";
@@ -398,6 +404,69 @@
       isTestingApi = false;
     }
   }
+
+  // ── Run All Tests ──
+  async function runAllTests() {
+    if (!apis.length || isRunningAll) return;
+    isRunningAll = true;
+    showRunAllModal = true;
+    runAllResults = [];
+    runAllProgress = 0;
+
+    const token = localStorage.getItem('monitor_token');
+
+    // Helper to get env for a given project_id
+    function getEnvForProject(projectId: string): Record<string, string> {
+      const proj = projects.find((p: any) => p.id === projectId);
+      if (!proj || !proj.environment_variables) return {};
+      try { return JSON.parse(proj.environment_variables); } catch { return {}; }
+    }
+
+    // Helper to build parsedHeaders
+    function buildHeaders(api: any, env: Record<string, string>): Record<string, string> {
+      try {
+        const raw = JSON.parse(api.headers || '[]');
+        const list: any[] = Array.isArray(raw) ? raw : Object.entries(raw).map(([k, v]) => ({ key: k, value: v }));
+        const out: Record<string, string> = {};
+        list.forEach((h: any) => { if (h.key?.trim()) out[h.key.trim()] = replaceVariables(String(h.value ?? ''), env); });
+        return out;
+      } catch { return {}; }
+    }
+
+    // Run all in parallel
+    const promises = apis.map(async (api: any) => {
+      const env = getEnvForProject(api.project_id);
+      const url = replaceVariables(api.url, env);
+      const headers = buildHeaders(api, env);
+      const body = stripJSONComments(replaceVariables(api.body || '', env));
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/v1/apis/test`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ method: api.method, url, headers, body }),
+        });
+        const data = await res.json();
+        const expected = api.expected_status_code ?? 200;
+        const passed = !data.error && data.status >= 200 && data.status < 400 && data.status === expected;
+        runAllResults = [...runAllResults, { api, status: data.status ?? null, latency: data.latency ?? null, passed, error: data.error || null }];
+      } catch (e: any) {
+        runAllResults = [...runAllResults, { api, status: null, latency: null, passed: false, error: e.message }];
+      } finally {
+        runAllProgress += 1;
+      }
+    });
+
+    await Promise.all(promises);
+
+    // Sort: failed first, then by api name
+    runAllResults = [...runAllResults].sort((a, b) => {
+      if (a.passed !== b.passed) return a.passed ? 1 : -1;
+      return (a.api.name || '').localeCompare(b.api.name || '');
+    });
+
+    isRunningAll = false;
+  }
 </script>
 
 <!-- ========== 3-COLUMN API DOC LAYOUT ========== -->
@@ -419,7 +488,24 @@
         class="bg-slate-900 border border-slate-700 rounded-lg px-8 py-1.5 text-xs text-slate-300 font-mono focus:outline-none focus:border-cyan-500/50 w-52 placeholder:text-slate-600"/>
       <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
     </div>
-
+    <!-- Run All button -->
+    {#if apis.length > 0}
+      <button on:click={runAllTests} disabled={isRunningAll}
+        class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-widest transition-all border
+          {isRunningAll
+            ? 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed'
+            : 'bg-emerald-600/20 border-emerald-500/40 text-emerald-400 hover:bg-emerald-600/30 hover:border-emerald-500/60 shadow-[0_0_12px_rgba(52,211,153,0.15)]'}"
+        title="ยิง API ทั้งหมดพร้อมกัน">
+        {#if isRunningAll}
+          <svg class="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+          RUNNING {runAllProgress}/{apis.length}
+        {:else}
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          RUN ALL
+          <span class="bg-emerald-500/20 text-emerald-300 px-1.5 py-px rounded text-[9px] font-black">{apis.length}</span>
+        {/if}
+      </button>
+    {/if}
   </div>
 
   <!-- ── MAIN 3-COLUMN AREA ── -->
@@ -732,6 +818,152 @@
     </div>
   </div>
 </div>
+
+<!-- ── RUN ALL RESULTS MODAL ── -->
+{#if showRunAllModal}
+  <div class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(0,0,0,0.75);backdrop-filter:blur(6px);">
+    <div class="bg-slate-900 border border-slate-700/60 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
+
+      <!-- Modal header -->
+      <div class="flex items-center justify-between px-5 py-4 border-b border-slate-800">
+        <div class="flex items-center gap-3">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-emerald-400"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          <span class="font-black text-slate-100 tracking-tight">Run All Results</span>
+          {#if isRunningAll}
+            <span class="text-[10px] font-mono text-slate-500 animate-pulse">กำลังยิง {runAllProgress}/{apis.length} APIs...</span>
+          {:else}
+            <!-- Summary badges -->
+            {@const passed = runAllResults.filter(r => r.passed).length}
+            {@const failed = runAllResults.filter(r => !r.passed).length}
+            <span class="px-2 py-0.5 text-[10px] font-black rounded-full bg-emerald-950 border border-emerald-500/40 text-emerald-400">{passed} PASS</span>
+            <span class="px-2 py-0.5 text-[10px] font-black rounded-full bg-red-950 border border-red-500/40 text-red-400">{failed} FAIL</span>
+          {/if}
+        </div>
+        <button on:click={() => { if (!isRunningAll) showRunAllModal = false; }}
+          class="text-slate-500 hover:text-slate-300 transition-colors p-1 rounded" title="ปิด">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <!-- Progress bar -->
+      {#if isRunningAll}
+        <div class="h-0.5 bg-slate-800">
+          <div class="h-full bg-gradient-to-r from-cyan-500 to-emerald-500 transition-all duration-300"
+            style="width: {apis.length ? (runAllProgress / apis.length) * 100 : 0}%"></div>
+        </div>
+      {/if}
+
+      <!-- Results list -->
+      <div class="flex-1 overflow-y-auto custom-scrollbar">
+        {#if runAllResults.length === 0 && isRunningAll}
+          <div class="flex items-center justify-center py-12 gap-3 text-slate-600">
+            <svg class="animate-spin h-5 w-5 text-cyan-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+            <span class="text-sm font-mono">กำลังยิง APIs...</span>
+          </div>
+        {:else}
+          <!-- Column headers -->
+          <div class="grid grid-cols-[1fr_auto_auto_auto] gap-3 px-5 py-2 border-b border-slate-800/60 bg-slate-950/40">
+            <span class="text-[9px] font-black uppercase tracking-widest text-slate-600">API</span>
+            <span class="text-[9px] font-black uppercase tracking-widest text-slate-600 w-14 text-center">STATUS</span>
+            <span class="text-[9px] font-black uppercase tracking-widest text-slate-600 w-16 text-right">LATENCY</span>
+            <span class="text-[9px] font-black uppercase tracking-widest text-slate-600 w-12 text-center">RESULT</span>
+          </div>
+          {#each runAllResults as r}
+            <div class="grid grid-cols-[1fr_auto_auto_auto] gap-3 items-center px-5 py-3 border-b border-slate-800/40
+              hover:bg-slate-800/30 transition-colors cursor-pointer
+              {r.passed ? 'hover:bg-emerald-950/10' : 'hover:bg-red-950/10'}"
+              on:click={() => selectDocApi(r.api)} role="button" tabindex="0"
+              on:keydown={(e) => e.key === 'Enter' && selectDocApi(r.api)}>
+
+              <!-- API name + folder -->
+              <div class="flex items-center gap-2 min-w-0">
+                <span class="text-[8px] font-black px-1 py-0.5 rounded border shrink-0 {methodColor(r.api.method)}">{r.api.method}</span>
+                <div class="min-w-0">
+                  <p class="text-[11px] font-mono text-slate-300 truncate">{r.api.name}</p>
+                  {#if r.error}
+                    <p class="text-[9px] font-mono text-red-400/70 truncate">{r.error}</p>
+                  {:else}
+                    <p class="text-[9px] font-mono text-slate-600 truncate">{r.api.folder || 'Uncategorized'}</p>
+                  {/if}
+                </div>
+              </div>
+
+              <!-- Status code -->
+              <div class="w-14 flex justify-center">
+                {#if r.status}
+                  <span class="text-[10px] font-black font-mono px-1.5 py-0.5 rounded border
+                    {r.status >= 200 && r.status < 300 ? 'bg-emerald-950 border-emerald-500/40 text-emerald-400'
+                    : r.status >= 400 ? 'bg-red-950 border-red-500/40 text-red-400'
+                    : 'bg-slate-800 border-slate-600 text-slate-400'}">{r.status}</span>
+                {:else}
+                  <span class="text-[10px] font-mono text-slate-600">—</span>
+                {/if}
+              </div>
+
+              <!-- Latency -->
+              <div class="w-16 text-right">
+                {#if r.latency !== null}
+                  <span class="text-[10px] font-mono
+                    {r.latency < 500 ? 'text-emerald-400' : r.latency < 2000 ? 'text-amber-400' : 'text-red-400'}">{r.latency}ms</span>
+                {:else}
+                  <span class="text-[10px] font-mono text-slate-600">—</span>
+                {/if}
+              </div>
+
+              <!-- Pass/Fail badge -->
+              <div class="w-12 flex justify-center">
+                {#if r.passed}
+                  <span class="flex items-center gap-1 text-[9px] font-black text-emerald-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                    PASS
+                  </span>
+                {:else}
+                  <span class="flex items-center gap-1 text-[9px] font-black text-red-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    FAIL
+                  </span>
+                {/if}
+              </div>
+
+            </div>
+          {/each}
+          <!-- Loading rows for pending requests -->
+          {#each {length: Math.max(0, apis.length - runAllResults.length)} as _}
+            <div class="grid grid-cols-[1fr_auto_auto_auto] gap-3 items-center px-5 py-3 border-b border-slate-800/40">
+              <div class="flex items-center gap-2">
+                <div class="w-8 h-4 rounded bg-slate-800 animate-pulse"></div>
+                <div class="h-3 w-40 rounded bg-slate-800 animate-pulse"></div>
+              </div>
+              <div class="w-14 flex justify-center"><div class="h-3 w-8 rounded bg-slate-800 animate-pulse"></div></div>
+              <div class="w-16"><div class="h-3 w-10 rounded bg-slate-800 animate-pulse ml-auto"></div></div>
+              <div class="w-12 flex justify-center"><div class="h-3 w-8 rounded bg-slate-800 animate-pulse"></div></div>
+            </div>
+          {/each}
+        {/if}
+      </div>
+
+      <!-- Footer -->
+      {#if !isRunningAll && runAllResults.length > 0}
+        <div class="flex items-center justify-between px-5 py-3 border-t border-slate-800 bg-slate-950/40">
+          {@const passed = runAllResults.filter(r => r.passed).length}
+          {@const total = runAllResults.length}
+          <span class="text-[11px] font-mono text-slate-500">{passed}/{total} APIs ผ่าน</span>
+          <div class="flex gap-2">
+            <button on:click={runAllTests}
+              class="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border border-slate-700 text-slate-400 hover:border-slate-600 hover:text-slate-300 transition-colors">
+              Re-run All
+            </button>
+            <button on:click={() => showRunAllModal = false}
+              class="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 transition-colors">
+              Close
+            </button>
+          </div>
+        </div>
+      {/if}
+
+    </div>
+  </div>
+{/if}
 
 <style>
   .custom-scrollbar::-webkit-scrollbar { width: 4px; }
