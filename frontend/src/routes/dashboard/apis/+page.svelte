@@ -226,11 +226,77 @@
     return result;
   }
 
+  // Logs collected from script execution
+  let scriptLogs: { type: 'log' | 'error' | 'warn'; msg: string }[] = [];
+  let envUpdates: Record<string, string> = {};
+
+  async function runResponseScript(script: string, responseBody: string, status: number) {
+    if (!script || !script.trim()) return;
+
+    scriptLogs = [];
+    envUpdates = {};
+
+    const currentEnv: Record<string, string> = { ...activeProjectEnvVars };
+
+    const sandboxSetEnv = (key: string, value: string) => {
+      currentEnv[key] = value;
+      envUpdates[key] = value;
+    };
+
+    const sandboxGetEnv = (key: string): string => {
+      return currentEnv[key] ?? '';
+    };
+
+    const sandboxConsole = {
+      log: (...args: any[]) => scriptLogs = [...scriptLogs, { type: 'log', msg: args.map(String).join(' ') }],
+      error: (...args: any[]) => scriptLogs = [...scriptLogs, { type: 'error', msg: args.map(String).join(' ') }],
+      warn: (...args: any[]) => scriptLogs = [...scriptLogs, { type: 'warn', msg: args.map(String).join(' ') }],
+    };
+
+    const responseObj = {
+      status,
+      body: responseBody,
+      headers: {},
+    };
+
+    try {
+      const fn = new Function('response', 'setEnv', 'getEnv', 'console', `return (async () => { ${script} })()`);
+      await fn(responseObj, sandboxSetEnv, sandboxGetEnv, sandboxConsole);
+    } catch (e: any) {
+      scriptLogs = [...scriptLogs, { type: 'error', msg: '❌ Script error: ' + e.message }];
+    }
+
+    // Persist ENV updates to backend if any setEnv() was called
+    if (Object.keys(envUpdates).length > 0 && selectedDocApi?.project_id) {
+      await persistEnvUpdates(selectedDocApi.project_id, currentEnv);
+    }
+  }
+
+  async function persistEnvUpdates(projectId: string, newEnv: Record<string, string>) {
+    try {
+      const token = localStorage.getItem("monitor_token");
+      await fetch(`${API_BASE_URL}/api/v1/projects/${projectId}`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ environment_variables: JSON.stringify(newEnv) }),
+      });
+      // Refresh projects so activeProjectEnvVars reactive var reflects new ENV
+      await fetchProjects();
+    } catch (err) {
+      console.error("Failed to persist ENV updates", err);
+    }
+  }
+
   async function executeApiTest() {
     if (!selectedDocApi) return;
 
     isTestingApi = true;
     testResult = null;
+    scriptLogs = [];
+    envUpdates = {};
 
     const envVars = activeProjectEnvVars;
 
@@ -315,6 +381,14 @@
 
       const data = await res.json();
       testResult = data;
+
+      // ── Run response_script if present ──
+      if (selectedDocApi.response_script && testResult && !testResult.error) {
+        const rawBody = testResult.is_json
+          ? JSON.stringify(testResult.response)
+          : (testResult.response ?? '');
+        await runResponseScript(selectedDocApi.response_script, rawBody, testResult.status ?? 200);
+      }
     } catch (err: any) {
       testResult = {
         error: err.message || "Failed to connect to monitoring engine proxy",
@@ -603,6 +677,45 @@
                 <pre class="text-slate-300 font-mono text-[11px] whitespace-pre-wrap break-words">{testResult.response||'Empty response'}</pre>
               {/if}
             </div>
+
+            <!-- ENV Update Banner -->
+            {#if Object.keys(envUpdates).length > 0}
+              <div class="mx-4 mb-3 rounded-lg border border-emerald-500/40 bg-emerald-950/50 px-3 py-2.5">
+                <div class="flex items-center gap-2 mb-1.5">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-emerald-400 shrink-0"><polyline points="20 6 9 17 4 12"/></svg>
+                  <span class="text-[10px] font-black text-emerald-400 uppercase tracking-widest">ENV Updated</span>
+                </div>
+                {#each Object.entries(envUpdates) as [k, v]}
+                  <div class="flex items-start gap-2 mt-1">
+                    <code class="text-[10px] font-mono text-amber-300 shrink-0">{k}</code>
+                    <span class="text-slate-600 text-[10px]">=</span>
+                    <code class="text-[10px] font-mono text-slate-400 truncate" title={v}>{v.length > 32 ? v.slice(0, 32) + '…' : v}</code>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+
+            <!-- Script Console Logs -->
+            {#if scriptLogs.length > 0}
+              <div class="mx-4 mb-4 rounded-lg border border-slate-700/60 bg-slate-900/60 overflow-hidden">
+                <div class="flex items-center gap-2 px-3 py-1.5 border-b border-slate-700/60 bg-slate-800/40">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-500"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                  <span class="text-[9px] font-black uppercase tracking-widest text-slate-500">Script Console</span>
+                </div>
+                <div class="p-2 space-y-0.5 max-h-32 overflow-y-auto custom-scrollbar">
+                  {#each scriptLogs as log}
+                    <div class="flex items-start gap-1.5">
+                      <span class="text-[9px] font-mono shrink-0 mt-px
+                        {log.type === 'error' ? 'text-red-500' : log.type === 'warn' ? 'text-amber-400' : 'text-slate-500'}">
+                        {log.type === 'error' ? '✖' : log.type === 'warn' ? '⚠' : '›'}
+                      </span>
+                      <pre class="text-[10px] font-mono whitespace-pre-wrap break-words leading-relaxed
+                        {log.type === 'error' ? 'text-red-400' : log.type === 'warn' ? 'text-amber-300' : 'text-slate-300'}">{log.msg}</pre>
+                    </div>
+                  {/each}
+                </div>
+              </div>
+            {/if}
           {:else}
             <div class="flex flex-col items-center justify-center h-full gap-3 text-slate-700 py-12">
               <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="opacity-30"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
