@@ -81,9 +81,18 @@ func runResponseScriptWithEnv(script string, statusCode int, body string, respon
 	envUpdates := make(map[string]string)
 
 	// Provide response data to the JS environment
+	// Flat variables (original API)
 	vm.Set("statusCode", statusCode)
 	vm.Set("body", body)
 	vm.Set("responseTime", responseTime.Milliseconds())
+
+	// response object — allows scripts to use response.body, response.status, response.responseTime
+	responseObj := vm.NewObject()
+	responseObj.Set("body", body)
+	responseObj.Set("status", statusCode)
+	responseObj.Set("statusCode", statusCode)
+	responseObj.Set("responseTime", responseTime.Milliseconds())
+	vm.Set("response", responseObj)
 
 	// setenv(key, value) — lets scripts persist values back to project ENV variables
 	vm.Set("setenv", func(call goja.FunctionCall) goja.Value {
