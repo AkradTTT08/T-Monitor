@@ -759,13 +759,6 @@
                <InputWithVariables bind:value={reqUrl} variables={activeProjectEnvVars} placeholder="https://api.example.com"/>
              </div>
           </div>
-          <!-- Live URL preview when params are active -->
-          {#if displayUrl !== reqUrl}
-            <div class="flex items-start gap-2">
-              <span class="text-[9px] font-black text-slate-600 uppercase tracking-widest mt-0.5 shrink-0">Preview</span>
-              <span class="text-[10px] font-mono text-cyan-400/60 break-all leading-relaxed">{displayUrl}</span>
-            </div>
-          {/if}
           <!-- Method selector row -->
           <div class="flex items-center gap-3 w-full">
             <select bind:value={reqMethod} class="bg-slate-950/50 border border-slate-700/50 rounded-lg text-xs font-mono font-bold text-slate-300 px-3 py-2.5 focus:outline-none focus:border-cyan-500/40 shadow-inner w-28 cursor-pointer hover:bg-slate-800 transition-colors">
@@ -808,60 +801,81 @@
 
           <!-- PARAMS TAB -->
           {#if activeTab === 'params'}
-            <div class="flex flex-col gap-3">
+            <div class="flex flex-col gap-3 py-1">
 
-              <!-- Path Parameters -->
+              <!-- ── Section 1: PATH PARAMETERS ── -->
               {#if Object.keys(pathParamsValues).length > 0}
-                <div>
-                  <span class="text-[9px] font-black uppercase tracking-widest text-amber-500/70">PATH PARAMETERS</span>
-                  <div class="mt-1.5 flex flex-col gap-1.5">
+                <div class="rounded-xl border border-amber-500/20 bg-amber-950/10 p-3">
+                  <div class="flex items-center gap-2 mb-2.5">
+                    <div class="w-1.5 h-1.5 rounded-full bg-amber-500/70"></div>
+                    <span class="text-[9px] font-black uppercase tracking-widest text-amber-500/80">Path Parameters</span>
+                    <span class="text-[9px] font-mono text-amber-500/40">({'{'}param{'}'})</span>
+                  </div>
+                  <div class="flex flex-col gap-1.5">
                     {#each Object.entries(pathParamsValues) as [pname, pval]}
-                      <div class="flex items-center gap-1.5">
-                        <div class="flex-1 bg-slate-950/60 border border-amber-500/20 rounded px-2.5 py-1.5 text-[11px] font-mono text-amber-400/70">{pname}</div>
-                        <input
-                          type="text"
-                          placeholder="value"
-                          value={pval}
+                      <div class="flex items-center gap-2">
+                        <div class="w-[38%] bg-slate-950/80 border border-amber-500/25 rounded px-2 py-1.5 text-[11px] font-mono text-amber-400/80 truncate">{pname}</div>
+                        <input type="text" value={pval} placeholder="value"
                           on:input={(e) => { pathParamsValues = { ...pathParamsValues, [pname]: (e.target as HTMLInputElement).value }; }}
-                          class="flex-[2] bg-slate-950/60 border border-slate-700/50 rounded px-2.5 py-1.5 text-[11px] font-mono text-slate-300 focus:outline-none focus:border-amber-500/40 placeholder:text-slate-700"
-                        />
+                          class="flex-1 bg-slate-950/80 border border-slate-700/60 rounded px-2 py-1.5 text-[11px] font-mono text-slate-200 focus:outline-none focus:border-amber-500/50 placeholder:text-slate-700 transition-colors" />
                       </div>
                     {/each}
                   </div>
                 </div>
+              {:else}
+                <!-- No path params: show muted indicator -->
+                <div class="flex items-center gap-2 px-1">
+                  <div class="w-1.5 h-1.5 rounded-full bg-slate-700"></div>
+                  <span class="text-[9px] font-black uppercase tracking-widest text-slate-700">Path Parameters</span>
+                  <span class="text-[9px] font-mono text-slate-700">— none in URL</span>
+                </div>
               {/if}
 
-              <!-- Query Parameters -->
-              <div>
-                <span class="text-[9px] font-black uppercase tracking-widest text-cyan-500/70">QUERY PARAMETERS</span>
-                <div class="mt-1.5 flex flex-col gap-1">
+              <!-- ── Divider ── -->
+              <div class="border-t border-slate-800/60"></div>
+
+              <!-- ── Section 2: QUERY PARAMETERS ── -->
+              <div class="rounded-xl border border-cyan-500/20 bg-cyan-950/10 p-3">
+                <div class="flex items-center justify-between mb-2.5">
+                  <div class="flex items-center gap-2">
+                    <div class="w-1.5 h-1.5 rounded-full bg-cyan-500/70"></div>
+                    <span class="text-[9px] font-black uppercase tracking-widest text-cyan-500/80">Query Parameters</span>
+                    <span class="text-[9px] font-mono text-cyan-500/40">(?key=value)</span>
+                  </div>
+                  <button on:click={addQueryParam}
+                    class="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-cyan-600 hover:text-cyan-400 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Add
+                  </button>
+                </div>
+                <div class="flex flex-col gap-1.5">
                   {#each queryParams as param, i}
                     <div class="flex items-center gap-1.5 group">
-                      <input
-                        type="text"
-                        placeholder="key"
-                        bind:value={param.key}
-                        class="flex-1 bg-slate-950/60 border border-slate-700/50 rounded px-2.5 py-1.5 text-[11px] font-mono text-slate-300 focus:outline-none focus:border-cyan-500/40 placeholder:text-slate-700 min-w-0"
-                      />
-                      <input
-                        type="text"
-                        placeholder="value"
-                        bind:value={param.value}
-                        class="flex-[2] bg-slate-950/60 border border-slate-700/50 rounded px-2.5 py-1.5 text-[11px] font-mono text-slate-300 focus:outline-none focus:border-cyan-500/40 placeholder:text-slate-700 min-w-0"
-                      />
+                      <input type="text" placeholder="key" bind:value={param.key}
+                        class="w-[38%] bg-slate-950/80 border border-slate-700/60 rounded px-2 py-1.5 text-[11px] font-mono text-slate-200 focus:outline-none focus:border-cyan-500/50 placeholder:text-slate-700 transition-colors" />
+                      <input type="text" placeholder="value" bind:value={param.value}
+                        class="flex-1 bg-slate-950/80 border border-slate-700/60 rounded px-2 py-1.5 text-[11px] font-mono text-slate-200 focus:outline-none focus:border-cyan-500/50 placeholder:text-slate-700 transition-colors" />
                       <button on:click={() => removeQueryParam(i)}
-                        class="text-slate-700 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 shrink-0 p-0.5">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        aria-label="Remove"
+                        class="text-slate-700 hover:text-red-400 p-1 opacity-0 group-hover:opacity-100 transition-all shrink-0 rounded hover:bg-red-950/30">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                       </button>
                     </div>
                   {/each}
-                  <button on:click={addQueryParam}
-                    class="self-start mt-0.5 text-[9px] font-black uppercase tracking-widest text-cyan-600 hover:text-cyan-400 transition-colors flex items-center gap-1">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                    ADD PARAM
-                  </button>
                 </div>
+
+                <!-- Live URL Preview -->
+                {#if queryParams.some(p => p.key.trim())}
+                  <div class="mt-3 pt-2.5 border-t border-cyan-500/15">
+                    <div class="flex items-center gap-1.5 mb-1">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-cyan-500/50"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                      <span class="text-[8px] font-black uppercase tracking-widest text-cyan-500/50">URL Preview</span>
+                    </div>
+                    <p class="text-[10px] font-mono text-cyan-300/60 break-all leading-relaxed">{displayUrl}</p>
+                  </div>
+                {/if}
               </div>
+
             </div>
 
           <!-- HEADERS TAB -->
