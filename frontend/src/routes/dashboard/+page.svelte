@@ -12,6 +12,20 @@
   let selectedProjectId = "all";
   let projects: any[] = [];
   let isProjectDropdownOpen = false;
+  let dropdownTrigger: HTMLElement;
+  let dropdownX = 0;
+  let dropdownY = 0;
+  let dropdownW = 200;
+
+  function toggleDropdown() {
+    if (!isProjectDropdownOpen && dropdownTrigger) {
+      const rect = dropdownTrigger.getBoundingClientRect();
+      dropdownX = rect.left;
+      dropdownY = rect.bottom + 8;
+      dropdownW = Math.max(rect.width, 200);
+    }
+    isProjectDropdownOpen = !isProjectDropdownOpen;
+  }
 
   async function fetchProjects() {
     try {
@@ -118,10 +132,11 @@
         <div class="mt-4 flex items-center gap-4">
           <label for="project-filter" class="text-cyan-400 font-mono text-[10px] tracking-widest uppercase opacity-70">Filter by Project:</label>
           
-          <div class="relative">
+          <div class="relative" style="position: relative;">
             <button 
               id="project-filter"
-              on:click={() => (isProjectDropdownOpen = !isProjectDropdownOpen)}
+              bind:this={dropdownTrigger}
+              on:click={toggleDropdown}
               class="flex items-center gap-3 bg-slate-900/60 border border-slate-700/50 rounded-xl px-4 py-2 text-xs text-cyan-400 font-mono hover:border-cyan-500/50 transition-all min-w-[160px] justify-between group shadow-lg shadow-black/20"
             >
               <span class="truncate uppercase">
@@ -137,8 +152,10 @@
             </button>
 
             {#if isProjectDropdownOpen}
+              <!-- Fixed-position dropdown — escapes all parent stacking contexts -->
               <div 
-                class="absolute top-full left-0 mt-2 w-full min-w-[200px] bg-slate-900/90 backdrop-blur-xl border border-slate-700/50 rounded-xl overflow-hidden z-[100] shadow-2xl animate-in fade-in zoom-in-95 duration-200"
+                style="position: fixed; top: {dropdownY}px; left: {dropdownX}px; width: {dropdownW}px; z-index: 9999;"
+                class="min-w-[200px] bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-xl overflow-hidden shadow-2xl"
               >
                 <div class="max-h-[250px] overflow-y-auto custom-scrollbar p-1">
                   <button 
@@ -160,7 +177,8 @@
 
               <!-- Click outside overlay -->
               <div 
-                class="fixed inset-0 z-[90]" 
+                class="fixed inset-0" 
+                style="z-index: 9998;"
                 on:click={() => (isProjectDropdownOpen = false)}
                 on:keydown={(e) => e.key === 'Escape' && (isProjectDropdownOpen = false)}
                 role="button"
