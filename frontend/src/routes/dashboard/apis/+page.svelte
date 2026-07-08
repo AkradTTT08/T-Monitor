@@ -42,7 +42,18 @@
     try { reqHeaders = api.headers && api.headers !== '{}' ? JSON.stringify(JSON.parse(api.headers), null, 2) : '{\n}'; } catch { reqHeaders = api.headers || '{\n}'; }
     reqBody = api.body || '';
     try { reqParams = api.parameters && api.parameters !== '{}' ? JSON.stringify(JSON.parse(api.parameters), null, 2) : '{\n}'; } catch { reqParams = api.parameters || '{\n}'; }
+    // Reset query/path params
+    queryParams = [{ key: '', value: '' }];
+    pathParamsValues = {};
+    // Pre-populate query params from saved parameters if it's an array
+    try {
+      const saved = api.parameters ? JSON.parse(api.parameters) : null;
+      if (Array.isArray(saved) && saved.length > 0) {
+        queryParams = [...saved.map((p: any) => ({ key: p.key || '', value: String(p.value ?? '') })), { key: '', value: '' }];
+      }
+    } catch {}
     testResult = null;
+    activeTab = 'params';
   }
 
   function generateCurl(api: any, envVars: any): string {
@@ -85,6 +96,60 @@
   let reqHeaders = "";
   let reqBody = "";
   let reqParams = "";
+
+  // ── Params state ──
+  // Query params: array of {key, value}
+  let queryParams: { key: string; value: string }[] = [{ key: '', value: '' }];
+  // Path params: object keyed by param name extracted from URL
+  let pathParamsValues: Record<string, string> = {};
+
+  // Active tab in right test panel: 'headers' | 'body' | 'params'
+  let activeTab: 'headers' | 'body' | 'params' = 'params';
+
+  // Extract path param names from URL like {id} or :id
+  function extractPathParams(url: string): string[] {
+    const matches = url.match(/\{([^}]+)\}/g) || [];
+    return matches.map(m => m.slice(1, -1));
+  }
+
+  // Build URL with path params replaced and query params appended
+  $: displayUrl = (() => {
+    let url = reqUrl;
+    // Replace path params
+    Object.entries(pathParamsValues).forEach(([k, v]) => {
+      if (v) url = url.replace(new RegExp(`\\{${k}\\}`, 'g'), encodeURIComponent(v));
+    });
+    // Append query params
+    const qp = queryParams.filter(p => p.key.trim());
+    if (qp.length) {
+      try {
+        const base = new URL(url);
+        qp.forEach(p => base.searchParams.append(p.key.trim(), p.value));
+        url = base.toString();
+      } catch {
+        const sep = url.includes('?') ? '&' : '?';
+        url += sep + qp.map(p => `${encodeURIComponent(p.key.trim())}=${encodeURIComponent(p.value)}`).join('&');
+      }
+    }
+    return url;
+  })();
+
+  // Extract path params from URL whenever reqUrl changes
+  $: {
+    const names = extractPathParams(reqUrl);
+    // Add new keys, preserve existing values
+    const updated: Record<string, string> = {};
+    names.forEach(n => { updated[n] = pathParamsValues[n] ?? ''; });
+    pathParamsValues = updated;
+  }
+
+  function addQueryParam() {
+    queryParams = [...queryParams, { key: '', value: '' }];
+  }
+  function removeQueryParam(i: number) {
+    queryParams = queryParams.filter((_, idx) => idx !== i);
+    if (queryParams.length === 0) queryParams = [{ key: '', value: '' }];
+  }
 
   // Custom copy feedback state
   let copyFeedback: Record<string, boolean> = {};
@@ -306,11 +371,16 @@
 
     const envVars = activeProjectEnvVars;
 
-    // Apply regex replacement
-    const processedUrl = replaceVariables(reqUrl, envVars);
+    // Apply variable replacement
+    let processedUrl = replaceVariables(reqUrl, envVars);
     const processedHeaders = replaceVariables(reqHeaders, envVars);
     const processedBody = replaceVariables(reqBody, envVars);
-    const processedParams = replaceVariables(reqParams, envVars);
+
+    // Replace path params in URL
+    Object.entries(pathParamsValues).forEach(([k, v]) => {
+      const val = replaceVariables(v, envVars);
+      if (val) processedUrl = processedUrl.replace(new RegExp(`\\{${k}\\}`, 'g'), encodeURIComponent(val));
+    });
 
     // Parse headers if valid JSON
     let parsedHeaders: any = {};
@@ -337,36 +407,21 @@
       return;
     }
 
-    // Construct final URL with URL-encoded parameters if they exist
+    // Construct final URL with query params appended
     let finalUrl = processedUrl;
-    try {
-      if (
-        processedParams.trim() &&
-        processedParams.trim() !== "{}" &&
-        processedParams.trim() !== "{\n}" &&
-        processedParams.trim() !== "[]"
-      ) {
-        const parsedParams = JSON.parse(processedParams);
+    const activeQP = queryParams.filter(p => p.key.trim());
+    if (activeQP.length) {
+      try {
         const urlObj = new URL(finalUrl);
-        if (Array.isArray(parsedParams)) {
-          parsedParams.forEach((item) => {
-            if (item.key && item.key.trim())
-              urlObj.searchParams.append(item.key.trim(), item.value);
-          });
-        } else {
-          Object.keys(parsedParams).forEach((key) => {
-            urlObj.searchParams.append(key, parsedParams[key]);
-          });
-        }
+        activeQP.forEach(p => {
+          const val = replaceVariables(p.value, envVars);
+          urlObj.searchParams.append(p.key.trim(), val);
+        });
         finalUrl = urlObj.toString();
+      } catch {
+        const sep = finalUrl.includes('?') ? '&' : '?';
+        finalUrl += sep + activeQP.map(p => `${encodeURIComponent(p.key.trim())}=${encodeURIComponent(replaceVariables(p.value, envVars))}`).join('&');
       }
-    } catch (e) {
-      testResult = {
-        error: "Invalid JSON format in Parameters or Invalid Base URL",
-        is_json: false,
-      };
-      isTestingApi = false;
-      return;
     }
 
     try {
@@ -695,7 +750,7 @@
 
         <!-- Test controls -->
         <div class="px-4 py-4 border-b border-slate-800/60 bg-slate-900/40 shrink-0 flex flex-col gap-3 w-full">
-          <!-- URL override -->
+          <!-- URL preview (with path + query params applied) -->
           <div class="w-full bg-slate-950/50 border border-slate-700/50 rounded-lg overflow-hidden relative shadow-inner">
              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500 font-bold text-[10px] tracking-widest z-30">
                URL
@@ -704,6 +759,13 @@
                <InputWithVariables bind:value={reqUrl} variables={activeProjectEnvVars} placeholder="https://api.example.com"/>
              </div>
           </div>
+          <!-- Live URL preview when params are active -->
+          {#if displayUrl !== reqUrl}
+            <div class="flex items-start gap-2">
+              <span class="text-[9px] font-black text-slate-600 uppercase tracking-widest mt-0.5 shrink-0">Preview</span>
+              <span class="text-[10px] font-mono text-cyan-400/60 break-all leading-relaxed">{displayUrl}</span>
+            </div>
+          {/if}
           <!-- Method selector row -->
           <div class="flex items-center gap-3 w-full">
             <select bind:value={reqMethod} class="bg-slate-950/50 border border-slate-700/50 rounded-lg text-xs font-mono font-bold text-slate-300 px-3 py-2.5 focus:outline-none focus:border-cyan-500/40 shadow-inner w-28 cursor-pointer hover:bg-slate-800 transition-colors">
@@ -723,6 +785,104 @@
               {/if}
             </button>
           </div>
+
+          <!-- ── TABS: Params / Headers / Body ── -->
+          <div class="flex border-b border-slate-800 -mx-4 px-4">
+            {#each [['params','Params'],['headers','Headers'],['body','Body']] as [tab, label]}
+              <button on:click={() => activeTab = tab as any}
+                class="text-[10px] font-black uppercase tracking-widest px-3 py-1.5 border-b-2 transition-colors
+                  {activeTab === tab
+                    ? 'border-cyan-500 text-cyan-400'
+                    : 'border-transparent text-slate-600 hover:text-slate-400'}">
+                {label}
+                {#if tab === 'params'}
+                  {@const qCount = queryParams.filter(p=>p.key.trim()).length}
+                  {@const pCount = Object.keys(pathParamsValues).length}
+                  {#if qCount + pCount > 0}
+                    <span class="ml-1 px-1 py-px rounded-full bg-cyan-500/20 text-cyan-400 text-[8px] font-black">{qCount + pCount}</span>
+                  {/if}
+                {/if}
+              </button>
+            {/each}
+          </div>
+
+          <!-- PARAMS TAB -->
+          {#if activeTab === 'params'}
+            <div class="flex flex-col gap-3">
+
+              <!-- Path Parameters -->
+              {#if Object.keys(pathParamsValues).length > 0}
+                <div>
+                  <span class="text-[9px] font-black uppercase tracking-widest text-amber-500/70">PATH PARAMETERS</span>
+                  <div class="mt-1.5 flex flex-col gap-1.5">
+                    {#each Object.entries(pathParamsValues) as [pname, pval]}
+                      <div class="flex items-center gap-1.5">
+                        <div class="flex-1 bg-slate-950/60 border border-amber-500/20 rounded px-2.5 py-1.5 text-[11px] font-mono text-amber-400/70">{pname}</div>
+                        <input
+                          type="text"
+                          placeholder="value"
+                          value={pval}
+                          on:input={(e) => { pathParamsValues = { ...pathParamsValues, [pname]: (e.target as HTMLInputElement).value }; }}
+                          class="flex-[2] bg-slate-950/60 border border-slate-700/50 rounded px-2.5 py-1.5 text-[11px] font-mono text-slate-300 focus:outline-none focus:border-amber-500/40 placeholder:text-slate-700"
+                        />
+                      </div>
+                    {/each}
+                  </div>
+                </div>
+              {/if}
+
+              <!-- Query Parameters -->
+              <div>
+                <span class="text-[9px] font-black uppercase tracking-widest text-cyan-500/70">QUERY PARAMETERS</span>
+                <div class="mt-1.5 flex flex-col gap-1">
+                  {#each queryParams as param, i}
+                    <div class="flex items-center gap-1.5 group">
+                      <input
+                        type="text"
+                        placeholder="key"
+                        bind:value={param.key}
+                        class="flex-1 bg-slate-950/60 border border-slate-700/50 rounded px-2.5 py-1.5 text-[11px] font-mono text-slate-300 focus:outline-none focus:border-cyan-500/40 placeholder:text-slate-700 min-w-0"
+                      />
+                      <input
+                        type="text"
+                        placeholder="value"
+                        bind:value={param.value}
+                        class="flex-[2] bg-slate-950/60 border border-slate-700/50 rounded px-2.5 py-1.5 text-[11px] font-mono text-slate-300 focus:outline-none focus:border-cyan-500/40 placeholder:text-slate-700 min-w-0"
+                      />
+                      <button on:click={() => removeQueryParam(i)}
+                        class="text-slate-700 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 shrink-0 p-0.5">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                      </button>
+                    </div>
+                  {/each}
+                  <button on:click={addQueryParam}
+                    class="self-start mt-0.5 text-[9px] font-black uppercase tracking-widest text-cyan-600 hover:text-cyan-400 transition-colors flex items-center gap-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    ADD PARAM
+                  </button>
+                </div>
+              </div>
+            </div>
+
+          <!-- HEADERS TAB -->
+          {:else if activeTab === 'headers'}
+            <div class="w-full bg-slate-950/50 border border-slate-700/50 rounded-lg overflow-hidden shadow-inner">
+              <textarea bind:value={reqHeaders} rows="6"
+                class="w-full bg-transparent px-3 py-2.5 text-[11px] font-mono text-slate-300 focus:outline-none resize-none placeholder:text-slate-700"
+                placeholder="{&#10;  &quot;Authorization&quot;: &quot;Bearer ...&quot;&#10;}"
+              ></textarea>
+            </div>
+
+          <!-- BODY TAB -->
+          {:else if activeTab === 'body'}
+            <div class="w-full bg-slate-950/50 border border-slate-700/50 rounded-lg overflow-hidden shadow-inner">
+              <textarea bind:value={reqBody} rows="6"
+                class="w-full bg-transparent px-3 py-2.5 text-[11px] font-mono text-slate-300 focus:outline-none resize-none placeholder:text-slate-700"
+                placeholder="{&#10;  &quot;key&quot;: &quot;value&quot;&#10;}"
+              ></textarea>
+            </div>
+          {/if}
+
         </div>
 
         <!-- Response result -->
