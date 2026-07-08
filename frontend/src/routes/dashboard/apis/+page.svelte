@@ -869,7 +869,7 @@
             <div class="w-full bg-slate-950/50 border border-slate-700/50 rounded-lg overflow-hidden shadow-inner">
               <textarea bind:value={reqHeaders} rows="6"
                 class="w-full bg-transparent px-3 py-2.5 text-[11px] font-mono text-slate-300 focus:outline-none resize-none placeholder:text-slate-700"
-                placeholder="{&#10;  &quot;Authorization&quot;: &quot;Bearer ...&quot;&#10;}"
+                placeholder={`{\n  "Authorization": "Bearer ..."\n}`}
               ></textarea>
             </div>
 
@@ -878,7 +878,7 @@
             <div class="w-full bg-slate-950/50 border border-slate-700/50 rounded-lg overflow-hidden shadow-inner">
               <textarea bind:value={reqBody} rows="6"
                 class="w-full bg-transparent px-3 py-2.5 text-[11px] font-mono text-slate-300 focus:outline-none resize-none placeholder:text-slate-700"
-                placeholder="{&#10;  &quot;key&quot;: &quot;value&quot;&#10;}"
+                placeholder={`{\n  "key": "value"\n}`}
               ></textarea>
             </div>
           {/if}
