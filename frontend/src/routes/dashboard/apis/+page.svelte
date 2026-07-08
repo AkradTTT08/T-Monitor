@@ -1104,9 +1104,9 @@
 
       <!-- Footer -->
       {#if !isRunningAll && runAllResults.length > 0}
+        {@const passed = runAllResults.filter(r => r.passed).length}
+        {@const total = runAllResults.length}
         <div class="flex items-center justify-between px-5 py-3 border-t border-slate-800 bg-slate-950/40">
-          {@const passed = runAllResults.filter(r => r.passed).length}
-          {@const total = runAllResults.length}
           <span class="text-[11px] font-mono text-slate-500">{passed}/{total} APIs ผ่าน</span>
           <div class="flex gap-2">
             <button on:click={runAllTests}
