@@ -113,7 +113,10 @@
   }
 
   // Build URL with path params replaced and query params appended
+  // NOTE: we stringify queryParams to force Svelte to re-run this when any item's value mutates
   $: displayUrl = (() => {
+    // Touch every item so Svelte tracks deep changes
+    void JSON.stringify(queryParams);
     let url = reqUrl;
     // Replace path params
     Object.entries(pathParamsValues).forEach(([k, v]) => {
@@ -750,7 +753,7 @@
 
         <!-- Test controls -->
         <div class="px-4 py-4 border-b border-slate-800/60 bg-slate-900/40 shrink-0 flex flex-col gap-3 w-full">
-          <!-- URL preview (with path + query params applied) -->
+          <!-- URL input -->
           <div class="w-full bg-slate-950/50 border border-slate-700/50 rounded-lg overflow-hidden relative shadow-inner">
              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500 font-bold text-[10px] tracking-widest z-30">
                URL
@@ -759,6 +762,13 @@
                <InputWithVariables bind:value={reqUrl} variables={activeProjectEnvVars} placeholder="https://api.example.com"/>
              </div>
           </div>
+          <!-- Live URL preview — appears when query/path params are active -->
+          {#if displayUrl !== reqUrl}
+            <div class="flex items-start gap-2 bg-cyan-950/30 border border-cyan-500/25 rounded-lg px-3 py-2">
+              <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-cyan-400/70 shrink-0 mt-0.5"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+              <p class="text-[10px] font-mono text-cyan-300/80 break-all leading-relaxed">{displayUrl}</p>
+            </div>
+          {/if}
           <!-- Method selector row -->
           <div class="flex items-center gap-3 w-full">
             <select bind:value={reqMethod} class="bg-slate-950/50 border border-slate-700/50 rounded-lg text-xs font-mono font-bold text-slate-300 px-3 py-2.5 focus:outline-none focus:border-cyan-500/40 shadow-inner w-28 cursor-pointer hover:bg-slate-800 transition-colors">
@@ -823,11 +833,14 @@
                   </div>
                 </div>
               {:else}
-                <!-- No path params: show muted indicator -->
-                <div class="flex items-center gap-2 px-1">
-                  <div class="w-1.5 h-1.5 rounded-full bg-slate-700"></div>
-                  <span class="text-[9px] font-black uppercase tracking-widest text-slate-700">Path Parameters</span>
-                  <span class="text-[9px] font-mono text-slate-700">— none in URL</span>
+                <!-- No path params: subtle card to keep layout consistent -->
+                <div class="rounded-xl border border-slate-800 bg-slate-900/30 p-3">
+                  <div class="flex items-center gap-2">
+                    <div class="w-1.5 h-1.5 rounded-full bg-slate-600"></div>
+                    <span class="text-[9px] font-black uppercase tracking-widest text-slate-600">Path Parameters</span>
+                    <span class="text-[9px] font-mono text-amber-500/30">({'{'}param{'}'})</span>
+                  </div>
+                  <p class="text-[10px] font-mono text-slate-600 mt-1.5 italic">ไม่มี path param ใน URL — ใส่ <span class="text-amber-500/50 not-italic">{'{'}param{'}'}</span> ใน URL เพื่อใช้</p>
                 </div>
               {/if}
 
@@ -851,9 +864,11 @@
                 <div class="flex flex-col gap-1.5">
                   {#each queryParams as param, i}
                     <div class="flex items-center gap-1.5 group">
-                      <input type="text" placeholder="key" bind:value={param.key}
+                      <input type="text" placeholder="key" value={param.key}
+                        on:input={(e) => { queryParams = queryParams.map((p, idx) => idx === i ? { ...p, key: (e.target as HTMLInputElement).value } : p); }}
                         class="w-[38%] bg-slate-950/80 border border-slate-700/60 rounded px-2 py-1.5 text-[11px] font-mono text-slate-200 focus:outline-none focus:border-cyan-500/50 placeholder:text-slate-700 transition-colors" />
-                      <input type="text" placeholder="value" bind:value={param.value}
+                      <input type="text" placeholder="value" value={param.value}
+                        on:input={(e) => { queryParams = queryParams.map((p, idx) => idx === i ? { ...p, value: (e.target as HTMLInputElement).value } : p); }}
                         class="flex-1 bg-slate-950/80 border border-slate-700/60 rounded px-2 py-1.5 text-[11px] font-mono text-slate-200 focus:outline-none focus:border-cyan-500/50 placeholder:text-slate-700 transition-colors" />
                       <button on:click={() => removeQueryParam(i)}
                         aria-label="Remove"
@@ -864,16 +879,6 @@
                   {/each}
                 </div>
 
-                <!-- Live URL Preview -->
-                {#if queryParams.some(p => p.key.trim())}
-                  <div class="mt-3 pt-2.5 border-t border-cyan-500/15">
-                    <div class="flex items-center gap-1.5 mb-1">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-cyan-500/50"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-                      <span class="text-[8px] font-black uppercase tracking-widest text-cyan-500/50">URL Preview</span>
-                    </div>
-                    <p class="text-[10px] font-mono text-cyan-300/60 break-all leading-relaxed">{displayUrl}</p>
-                  </div>
-                {/if}
               </div>
 
             </div>
